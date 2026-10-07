@@ -843,16 +843,12 @@ def tr_dissolve(c, A, B, p, leak=False, **kw):
 
 
 def tr_zoom(c, A, B, p, focus=(W / 2, H / 2), leak=True, **kw):
-    """Zoom-through: the outgoing shot pushes into a focus point, the next settles in."""
+    """Zoom-through: the outgoing shot pushes into a focus point while the next one settles in."""
     fx, fy = focus
-    q = e_io_cubic(p)
-    draw_scaled(c, A, 1 + 0.9 * e_in_expo(p) * 0.6 + 0.08 * p, fx, fy, 1.0)
-    # velocity blur on the incoming plate: ghosted scales (directional, radial)
-    sb = lerp(1.18, 1.0, e_out_expo(p))
-    for i, (ds, aa) in enumerate(((0.0, 1.0), (0.03, 0.35), (0.06, 0.18))):
-        draw_scaled(c, B, sb + ds * (1 - p), fx, fy, q * aa)
+    draw_scaled(c, A, 1 + 0.32 * e_in_cubic(p), fx, fy, 1.0)
+    draw_scaled(c, B, lerp(1.14, 1.0, e_out_cubic(p)), fx, fy, e_io_sine(p))
     if leak:
-        light_leak(c, p, amount=0.22)
+        light_leak(c, p, amount=0.2)
 
 
 def tr_whip(c, A, B, p, direction=-1, **kw):

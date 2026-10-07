@@ -32,7 +32,7 @@ def mtof(m):
 
 def env_adsr(n, a, r, sr=SR):
     e = np.ones(n, np.float32)
-    na, nr = int(a * sr), int(r * sr)
+    na, nr = min(int(a * sr), n // 2), min(int(r * sr), n // 2)
     if na:
         e[:na] = np.linspace(0, 1, na) ** 2
     if nr:
@@ -235,15 +235,15 @@ def build_mix(path):
     narr *= db(-3) / (np.abs(narr).max() + 1e-9)
 
     tl = np.arange(total) / SR
-    music = pad(total) * db(-14)
+    music = pad(total) * db(-5)
     arp_off = [(58.0, 62.6), (102.4, 120)]
-    music += pluck_arp(total, 13.1, arp_off) * db(-20)
-    music += sub(total, 17.2, [(102.4, 120)]) * db(-19)
-    music += shaker(total, 40.6, 97.4) * db(-36)
-    music += shaker(total, 97.4, 102.4) * db(-31)
+    music += pluck_arp(total, 13.1, arp_off) * db(-12)
+    music += sub(total, 17.2, [(102.4, 120)]) * db(-11)
+    music += shaker(total, 40.6, 97.4) * db(-30)
+    music += shaker(total, 97.4, 102.4) * db(-25)
     # arrangement dynamics
-    dyn = np.interp(tl, [0, 3, 13, 17, 40, 58, 62.6, 68, 91, 97.4, 102.4, 104.6, 109.5],
-                    [0.0, 0.7, 0.8, 0.9, 1.0, 0.9, 1.1, 1.0, 1.05, 1.15, 0.7, 0.85, 0.0])
+    dyn = np.interp(tl, [0, 3, 13, 17, 40, 58, 62.6, 68, 91, 97.4, 102.4, 104.6, 107.6, 109.5],
+                    [0.0, 0.7, 0.8, 0.9, 1.0, 0.9, 1.1, 1.0, 1.05, 1.15, 0.75, 1.3, 1.1, 0.0])
     music *= dyn[:, None].astype(np.float32)
 
     sfx = np.zeros((total, 2), np.float32)
@@ -255,7 +255,7 @@ def build_mix(path):
                 "L21", "CAUSE", "CTX"):
         sfx += tick(total, S.CUE[cue], 0.35)
     sfx += impact(total, S.CUE["L32"] - 0.12)
-    sfx *= db(-24)
+    sfx *= db(-17)
 
     # sidechain duck music + sfx under the voice
     env = rms_env(narr)

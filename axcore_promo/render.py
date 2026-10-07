@@ -96,7 +96,7 @@ def _init(seed, chaos, plates):
 def _render_chunk(job):
     k, f0, f1, path = job
     cmd = ["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (E.W, E.H),
-           "-r", str(E.FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p",
+           "-r", str(E.FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p",
            "-g", "48", "-bf", "2", "-movflags", "+faststart", path]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     t = time.time()
@@ -173,6 +173,12 @@ def main():
                                "1:a", "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-shortest",
                                "-movflags", "+faststart", args.out])
         os.remove(video)
+        # delivery copy: bitrate-capped H.264 for web players / uploads
+        web = args.out.replace(".mp4", "_web.mp4")
+        subprocess.check_call(["ffmpeg", "-loglevel", "error", "-y", "-i", args.out, "-c:v", "libx264", "-preset", "slow",
+                               "-b:v", "6500k", "-maxrate", "9000k", "-bufsize", "13000k", "-pix_fmt", "yuv420p",
+                               "-profile:v", "high", "-level", "4.1", "-g", "48", "-c:a", "copy",
+                               "-movflags", "+faststart", web])
         if args.webm:
             webm = args.out.replace(".mp4", ".webm")
             subprocess.check_call(["ffmpeg", "-loglevel", "error", "-y", "-i", args.out, "-c:v", "libvpx-vp9",

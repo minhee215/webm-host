@@ -970,7 +970,7 @@ class Finish:
     - soft focusing vignette
     - fine grain gated to shadows/midtones so highlights and white UI stay clean."""
 
-    def __init__(self, grain=0.035, vignette=0.22, ca=1.0013):
+    def __init__(self, grain=0.024, vignette=0.22, ca=1.0013):
         self.grain_amt = grain
         self.ca = ca
         yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)

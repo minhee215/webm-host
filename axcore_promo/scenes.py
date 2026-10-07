@@ -329,16 +329,16 @@ def sc05_expand_rect(T):
 # ============================================================ SC07 docs / AXpoint
 def sc07(c, T, t, d):
     cam = draw_plate(c, "07_docs", t, d, s=(1.06, 1.13), x=(18, -18), grade=GRADE_DAY)
-    # highlight rows on the paper being analysed (tracked)
+    # highlight rows on the paper being analysed (tracked; paper rows rise to the right)
     for i in range(4):
         t0 = 26.5 + i * 0.28
         g = e_out_expo(prog(T, t0, 0.5))
         if g <= 0:
             continue
-        u0, v = 0.62 + i * 0.012, 0.47 + i * 0.055
-        p0, p1 = cam.map(u0, v), cam.map(u0 + 0.16 * g, v - 0.035)
-        c.drawLine(p0[0], p0[1], p1[0], p1[1], paint_stroke(CYAN, 0.35, 16, blend=skia.BlendMode.kScreen))
-        c.drawLine(p0[0], p0[1], p1[0], p1[1], paint_stroke(CYAN, 0.9, 1.6))
+        u0, v = 0.505 + i * 0.005, 0.517 + i * 0.022
+        p0, p1 = cam.map(u0, v), cam.map(u0 + 0.12 * g, v - 0.041 * g)
+        c.drawLine(p0[0], p0[1], p1[0], p1[1], paint_stroke(CYAN, 0.3, 11, blend=skia.BlendMode.kScreen))
+        c.drawLine(p0[0], p0[1], p1[0], p1[1], paint_stroke(CYAN, 0.9, 1.4))
     # diagonal scan across the documents
     sp = prog(T, 26.2, 1.8)
     if 0 < sp < 1:
@@ -739,8 +739,10 @@ def sc12(c, T, t, d):
 
 
 # ============================================================ SC13 files -> data, handwriting -> OCR
-SC13_OCR = [((0.36, 0.33, 0.58, 0.385), "Line 3 · Torque 42 Nm"), ((0.35, 0.40, 0.60, 0.455), "Lot A-2041 · OK"),
-            ((0.37, 0.47, 0.62, 0.525), "Temp 68 °C · Check"), ((0.44, 0.535, 0.64, 0.59), "Inspector · Signed")]
+# handwriting blocks on the clipboard: (u0, v0, du, h); rows descend to the right (paper is rotated)
+SC13_OCR = [((0.385, 0.300, 0.140, 0.050), "Torque 42 Nm  ·  3/4 turn"), ((0.315, 0.420, 0.130, 0.050), "Valve check  ·  4 pcs"),
+            ((0.330, 0.470, 0.130, 0.050), "Lot A-2041  ·  OK"), ((0.445, 0.555, 0.095, 0.045), "Inspector  ·  Signed")]
+SC13_SLOPE = 0.533  # dv per du for a 0.3 px slope on the 16:9 plate
 SC13_FILES = [("XLSX", "bars"), ("PDF", "doc"), ("DOCX", "doc"), ("CSV", "db")]
 
 
@@ -778,17 +780,19 @@ def sc13(c, T, t, d):
     # OCR on handwriting (tracked)
     sp = prog(T, CUE["OCR"] + 0.05, 1.3)
     if 0 < sp < 1:
-        a0 = cam.map(0.3, lerp(0.28, 0.62, e_io_sine(sp)))
-        a1 = cam.map(0.68, lerp(0.28, 0.62, e_io_sine(sp)))
+        vv = lerp(0.24, 0.6, e_io_sine(sp))
+        a0 = cam.map(0.28, vv)
+        a1 = cam.map(0.62, vv + 0.34 * SC13_SLOPE)
         c.drawLine(a0[0], a0[1], a1[0], a1[1], paint_stroke(CYAN, 0.6, 12, blur=10, blend=skia.BlendMode.kScreen))
         c.drawLine(a0[0], a0[1], a1[0], a1[1], paint_stroke(WHITE, 0.9, 1.4))
-    for i, ((u0, v0, u1, v1), txt) in enumerate(SC13_OCR):
+    for i, ((u0, v0, du, hh), txt) in enumerate(SC13_OCR):
         t0 = CUE["OCR"] + 0.35 + i * 0.32
         k = enter(T, t0, 0.45)
         if k <= 0:
             continue
         a = clamp(k)
-        pts = [cam.map(u0, v0), cam.map(u1, v0 - 0.02), cam.map(u1, v1 - 0.02), cam.map(u0, v1)]
+        dv = du * SC13_SLOPE
+        pts = [cam.map(u0, v0), cam.map(u0 + du, v0 + dv), cam.map(u0 + du, v0 + dv + hh), cam.map(u0, v0 + hh)]
         c.drawPath(poly(pts, True), paint_fill(CYAN, 0.12 * a, blend=skia.BlendMode.kScreen))
         c.drawPath(poly(pts, True), paint_stroke(CYAN, a, 1.8))
         ex = (pts[1][0] + 8, (pts[1][1] + pts[2][1]) / 2)

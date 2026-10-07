@@ -1,0 +1,27 @@
+{
+  "_note": "Nano Banana Pro (Higgsfield) generated scene plates, 2752x1536. Prompts: see PLAN.md",
+  "base": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/",
+  "plates": {
+    "01_skyline":     "hf_20261007_081427_2a192800-b5c2-44ae-a257-0c3c829f39e8.png",
+    "02_tower":       "hf_20261007_081428_faf97bbe-c6b1-48c9-8ef7-5fd247566e1e.png",
+    "03_facade":      "hf_20261007_081427_82eb149b-b566-451c-a8a4-0102457c6f11.png",
+    "04_table":       "hf_20261007_081427_65b110d4-f08a-4cc0-9495-daf859933ec6.png",
+    "05_warehouse":   "hf_20261007_081427_e5b078d5-6f3c-44be-b64b-b6fdbc344433.png",
+    "06_line":        "hf_20261007_081428_76f163ae-cb42-41c9-8767-b312fdfe71b1.png",
+    "07_docs":        "hf_20261007_081427_e5323c77-85bc-44c2-9be1-25997eed912f.png",
+    "08_navycards":   "hf_20261007_081427_8c919d8a-860b-403f-b45e-7fed2fbcf77f.png",
+    "09_handraise":   "hf_20261007_082234_919cbafe-dd04-4a7c-8d7d-473f8073b634.png",
+    "10_datacenter":  "hf_20261007_082234_8b24b681-2cd7-4ec7-8262-2178b1acace5.png",
+    "11_tablet":      "hf_20261007_082234_ed42fcf1-455c-4001-9f13-41101998c44d.png",
+    "12_handwritten": "hf_20261007_082234_247d62c5-b79a-4bd1-a786-9df5593be8de.png",
+    "13_navystage":   "hf_20261007_082234_8adefc52-34e2-4c1b-a00b-22e4f6072e6c.png",
+    "14_monitors":    "hf_20261007_082234_e565a814-1ac0-480d-a4cc-b09986af94f5.png",
+    "15_whitedesk":   "hf_20261007_082234_a2cc1aa2-c5e0-40bb-a5d5-cc6d19074b46.png",
+    "16_retail":      "hf_20261007_082234_980d3682-d12b-4092-a739-44d149676f36.png",
+    "17_robot":       "hf_20261007_082548_0ac46e11-3f07-45be-a1e1-ab2e6de3dfbc.png",
+    "18_factory":     "hf_20261007_082547_341b17df-5bb2-49ac-b17a-d53a6c53e2af.png",
+    "19_aerial":      "hf_20261007_082547_e27e59b1-de8d-4ded-ac79-f7b027359ad7.png",
+    "20_team":        "hf_20261007_082547_7444a7c9-4810-44d9-aa86-fbc34c6b8051.png",
+    "21_tablet_hold": "hf_20261007_082547_d4741d90-1401-41ea-886f-c239b255f16b.png"
+  }
+}

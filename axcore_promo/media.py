@@ -74,7 +74,7 @@ class ClipReader:
             self.proc.kill()
             self.proc.wait()
         self.proc = subprocess.Popen(
-            ["ffmpeg", "-loglevel", "error", "-ss", "%.4f" % (fi / FPS), "-i", self.path, "-f", "rawvideo",
+            ["ffmpeg", "-loglevel", "error", "-threads", "2", "-ss", "%.4f" % (fi / FPS), "-i", self.path, "-f", "rawvideo",
              "-pix_fmt", "rgba", "-"], stdout=subprocess.PIPE, bufsize=CW * CH * 4 * 2)
         self.cur = fi - 1
 
@@ -86,6 +86,13 @@ class ClipReader:
         self.img = skia.Image.fromarray(arr.copy(), colorType=skia.ColorType.kRGBA_8888_ColorType)
         self.cur += 1
         return True
+
+    def close(self):
+        if self.proc:
+            self.proc.kill()
+            self.proc.wait()
+            self.proc = None
+        self.img = None
 
     def get(self, fi):
         if self.img is not None and fi == self.cur:
@@ -99,13 +106,19 @@ class ClipReader:
 
 
 _READERS = {}
+MAX_READERS = 2  # each 1080p decoder holds ~0.6 GB; keep only the clips in use (cut / transition)
 
 
 def frame(name, t):
     """skia.Image of the clip at scene-local time t (and the clip frame index)."""
     fi = clip_index(name, t)
     if name not in _READERS:
+        while len(_READERS) >= MAX_READERS:
+            old = next(iter(_READERS))
+            _READERS.pop(old).close()
         _READERS[name] = ClipReader(name)
+    else:
+        _READERS[name] = _READERS.pop(name)  # most recently used goes last
     return _READERS[name].get(fi), fi
 
 

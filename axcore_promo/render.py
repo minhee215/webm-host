@@ -95,6 +95,9 @@ def _init(seed, chaos, plates):
 
 def _render_chunk(job):
     k, f0, f1, path = job
+    if os.path.exists(path):  # finished in an earlier run (chunks are written to .part, then renamed)
+        return k, 0, 0.0
+    final, path = path, path + ".part.mp4"
     cmd = ["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (E.W, E.H),
            "-r", str(E.FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p",
            "-g", "48", "-bf", "2", "-movflags", "+faststart", path]
@@ -104,6 +107,7 @@ def _render_chunk(job):
         proc.stdin.write(_R.frame(f).tobytes())
     proc.stdin.close()
     proc.wait()
+    os.replace(path, final)
     return k, f1 - f0, time.time() - t
 
 
@@ -148,6 +152,9 @@ def main():
     bounds = np.linspace(f0, f1, nchunks + 1).astype(int)
     cdir = os.path.join(OUT, "chunks")
     os.makedirs(cdir, exist_ok=True)
+    for fn in os.listdir(cdir):
+        if fn.endswith(".part.mp4"):
+            os.remove(os.path.join(cdir, fn))
     jobs = [(k, bounds[k], bounds[k + 1], os.path.join(cdir, "c%03d.mp4" % k)) for k in range(nchunks)]
     start = time.time()
     done = 0

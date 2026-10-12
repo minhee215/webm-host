@@ -201,6 +201,21 @@
      ]
     }
    }
+  },
+  "34_ocr_lab": {
+   "file": "https://raw.githubusercontent.com/minhee215/webm-host/claude/axcore-promo-video-g3ar0z/axcore_promo/assets/media/ocr_lab.mp4",
+   "pre": 0.0,
+   "speed": 0.95,
+   "track": {
+    "regions": {
+     "paper": [
+      0.0,
+      0.62,
+      0.72,
+      0.92
+     ]
+    }
+   }
   }
  }
 }

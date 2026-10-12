@@ -131,6 +131,7 @@ def main():
     ap.add_argument("--out", default=os.path.join(OUT, "axcore_promo.mp4"))
     ap.add_argument("--no-audio", action="store_true")
     ap.add_argument("--webm", action="store_true", help="also export a VP9 webm")
+    ap.add_argument("--audio", default=None, help="use this finished soundtrack (e.g. axcore_audio_v6.mp3) instead of the built-in mix")
     args = ap.parse_args()
 
     seed = int(np.random.SeedSequence().entropy % 2 ** 31) if args.seed == "new" else int(args.seed)
@@ -173,9 +174,12 @@ def main():
     if args.no_audio or args.range is not None:
         os.replace(video, args.out)
     else:
-        import audio
-        wav = os.path.join(OUT, "mix.wav")
-        audio.build_mix(wav)
+        if args.audio:
+            wav = args.audio
+        else:
+            import audio
+            wav = os.path.join(OUT, "mix.wav")
+            audio.build_mix(wav)
         subprocess.check_call(["ffmpeg", "-loglevel", "error", "-y", "-i", video, "-i", wav, "-map", "0:v", "-map",
                                "1:a", "-c:v", "copy", "-c:a", "aac", "-b:a", "256k", "-shortest",
                                "-movflags", "+faststart", args.out])

@@ -149,8 +149,10 @@ SC03_LIT = (0.409, 0.436, 0.591, 0.556)
 
 
 def sc03(c, T, t, d):
-    cam = draw_plate(c, "03_facade", t, d, s=(1.04, 1.12), grade=GRADE_COOL,
-                     beats=[(CUE["L03b"] + 0.15 - 7.95, 0.05)])
+    cue = CUE["L03b"]
+    # decisive push-in onto the lit meeting room as the line lands
+    cam = draw_plate(c, "03_facade", t, d, s=(1.04, 1.10), grade=GRADE_COOL,
+                     beats=[(cue + 0.05 - 7.95, 0.14), (cue + 1.2 - 7.95, 0.06)])
     # "where to change": selection brackets hop across candidate windows
     for i, wnd in enumerate(SC03_WINDOWS):
         t0 = 9.05 + i * 0.32
@@ -159,28 +161,64 @@ def sc03(c, T, t, d):
             r = cam.rect(*wnd).makeInset(6, 6)
             k = clamp(enter(T, t0, 0.35))
             corner_brackets(c, r.makeOutset(12 * (1 - k), 12 * (1 - k)), 22, WHITE, a * 0.9, 2.0)
-    # "where to apply AI": lock onto the lit meeting room, cyan lines run across the facade
+    # "where to apply AI": everything else falls into shadow, the room becomes the only light
     lr = cam.rect(*SC03_LIT)
-    k = enter(T, CUE["L03b"] + 0.1, 0.6)
-    if k > 0:
-        rr = lr.makeOutset(26 * (1 - clamp(k)) + 6, 26 * (1 - clamp(k)) + 6)
-        corner_brackets(c, rr, 26, CYAN, clamp(k), 2.4)
-        g = e_out_expo(prog(T, CUE["L03b"] + 0.45, 1.4))
-        L, Tp, Rr, B = lr.left() - 6, lr.top() - 6, lr.right() + 6, lr.bottom() + 6
-        segs = [((L, Tp), (L - W, Tp)), ((Rr, B), (Rr + W, B)), ((L, B), (L, B + H)), ((Rr, Tp), (Rr, Tp - H)),
-                ((L, B), (L - W, B)), ((Rr, Tp), (Rr + W, Tp))]
-        for i, (p0, p1) in enumerate(segs):
-            gi = e_out_expo(prog(T, CUE["L03b"] + 0.45 + i * 0.08, 1.3))
-            line(c, poly([p0, p1]), CYAN, 0.95, 2.0, (0, gi * 0.6), glow=0.9, glow_w=7)
-        c.drawRect(skia.Rect.MakeLTRB(L, Tp, Rr, B), paint_stroke(CYAN, g * 0.9, 2.2, blur=10,
-                                                                 blend=skia.BlendMode.kScreen))
-        radial(c, lr.centerX(), lr.centerY(), 260, CYAN, 0.18 * g)
+    k = enter(T, cue + 0.1, 0.6)
+    if k <= 0:
+        return
+    g = e_out_expo(prog(T, cue + 0.45, 1.4))
+    spot = e_io_sine(prog(T, cue, 0.9))
+    if spot > 0:
+        hole = skia.Path()
+        hole.addRect(R(-10, -10, W + 20, H + 20))
+        inner = skia.Path()
+        inner.addRect(lr.makeOutset(10, 10))
+        shade = skia.Op(hole, inner, skia.PathOp.kDifference_PathOp)
+        c.drawPath(shade, paint_fill(NAVY_950, 0.52 * spot, blur=26))
+    L, Tp, Rr, B = lr.left() - 6, lr.top() - 6, lr.right() + 6, lr.bottom() + 6
+    segs = [((L, Tp), (L - W, Tp)), ((Rr, B), (Rr + W, B)), ((L, B), (L, B + H)), ((Rr, Tp), (Rr, Tp - H)),
+            ((L, B), (L - W, B)), ((Rr, Tp), (Rr + W, Tp)), ((L, Tp), (L, Tp - H)), ((Rr, B), (Rr, B + H))]
+    for i, (p0, p1) in enumerate(segs):
+        gi = e_out_expo(prog(T, cue + 0.35 + i * 0.06, 1.2))
+        line(c, poly([p0, p1]), CYAN, 0.95, 2.2, (0, gi), glow=1.0, glow_w=8)
+        # light runs along each line into the room
+        inward = poly([p1, p0])
+        pulse(c, inward, ((T - cue - 0.9 - i * 0.11) * 0.75) % 1.0 if T > cue + 0.9 else 0, CYAN, 0.9, 14, 0.18, 2.4)
+    # line particles converge on the room from both sides
+    cy_t, cy_b = Tp, B
+    for j, (y0, side) in enumerate(((cy_t, -1), (cy_b, 1), (cy_t, 1), (cy_b, -1))):
+        x0 = -200 if side < 0 else W + 200
+        x1 = L if side < 0 else Rr
+        pts = [(x0, y0 + 60 * side), ((x0 + x1) / 2, y0 + 18 * side), (x1, y0)]
+        head = e_io_sine(prog(T, cue + 0.15 + j * 0.18, 1.3)) * 1.25
+        line_flow(c, pts, head, 0.6, n=12, spread=10, twist=1.2, width=1.8, color=CYAN, key="s03f%d" % j, tsec=T)
+    # the room: lock-on brackets, edge glow, bloom, scan, AI tag
+    rr = lr.makeOutset(26 * (1 - clamp(k)) + 8, 26 * (1 - clamp(k)) + 8)
+    corner_brackets(c, rr, 30, CYAN, clamp(k), 3.0)
+    c.drawRect(skia.Rect.MakeLTRB(L, Tp, Rr, B), paint_stroke(CYAN, g * 0.95, 2.6, blur=12, blend=skia.BlendMode.kScreen))
+    c.drawRect(skia.Rect.MakeLTRB(L, Tp, Rr, B), paint_stroke(CYAN_SOFT, g, 1.4))
+    radial(c, lr.centerX(), lr.centerY(), 420, CYAN, 0.26 * g)
+    ph = ((T - cue) * 0.8) % 1.0
+    if T > cue + 0.6:
+        c.drawRect(lr.makeOutset(10 + 50 * ph, 10 + 50 * ph), paint_stroke(CYAN, (1 - ph) * 0.6 * g, 1.6))
+    sp = prog(T, cue + 0.5, 1.0)
+    if 0 < sp < 1:
+        x = lerp(L, Rr, e_io_sine(sp))
+        c.drawLine(x, Tp, x, B, paint_stroke(WHITE, 0.8, 1.6))
+        c.drawRect(skia.Rect.MakeLTRB(L, Tp, x, B), paint_fill(CYAN, 0.10, blend=skia.BlendMode.kScreen))
+    tk = settle(prog(T, cue + 0.55, 0.5))
+    if tk > 0:
+        tw = 74
+        tr = R(lr.centerX() - tw / 2, Tp - 64 - 10 * (1 - clamp(tk)), tw, 40)
+        rrect(c, tr, 20, CYAN, clamp(tk))
+        text(c, "AI", tr.centerX(), tr.top() + 29, 24, "Bold", NAVY_950, clamp(tk), "center")
+        c.drawLine(tr.centerX(), tr.bottom(), tr.centerX(), Tp, paint_stroke(CYAN, clamp(tk), 2.0))
 
 
 # ============================================================ SC04 table (top-down)
-SC04_PAPERS = [(0.414, 0.11, 0.56, 0.31, "공정"), (0.21, 0.33, 0.34, 0.61, "업무 흐름"),
-               (0.64, 0.33, 0.75, 0.56, "보고서"), (0.56, 0.64, 0.72, 0.89, "데이터"),
-               (0.43, 0.67, 0.55, 0.94, "규정"), (0.12, 0.02, 0.23, 0.28, "사양")]
+SC04_PAPERS = [(0.414, 0.11, 0.56, 0.31, "Process"), (0.21, 0.33, 0.34, 0.61, "Workflow"),
+               (0.64, 0.33, 0.75, 0.56, "Report"), (0.56, 0.64, 0.72, 0.89, "Data"),
+               (0.43, 0.67, 0.55, 0.94, "Policy"), (0.12, 0.02, 0.23, 0.28, "Spec")]
 
 
 def sc04(c, T, t, d):
@@ -226,7 +264,7 @@ SC05_TILES = [  # name, rect(x,y,w,h), label, depth, tag, focus
     ("07_docs", (1560, 520, 230, 150), "재무", 0.9, "DX", (0.7, 0.5)),
 ]
 SC05_T0 = 17.25
-TAG_KO = {"DX": "디지털 전환", "AX": "AI 전환"}
+TAG_KO = {"DX": "DX", "AX": "AX"}
 FLOW = [("진단", "07_docs", (0.7, 0.55)), ("분석", "08_navycards", (0.5, 0.5)),
         ("설계", "09_handraise", (0.45, 0.45)), ("실행", "17_robot", (0.7, 0.5))]
 
@@ -236,23 +274,35 @@ def sc05_cam(T):
     s = lerp(1.0, 1.05, drift(t, 8.5))
     ox = lerp(26, -26, drift(t, 8.5))
     oy = lerp(10, -8, drift(t, 8.5))
-    push = e_io_cubic(prog(T, 24.75, 1.2))
-    return s, ox, oy, push
+    return s, ox, oy
+
+
+# the camera rides along the flow: close on each stage in turn, then pulls back to reveal one line
+SC05_FLOWCAM = [(22.15, (960, 540), 1.0), (22.95, (360, 560), 1.55), (23.5, (760, 560), 1.55),
+                (24.05, (1160, 560), 1.55), (24.6, (1560, 560), 1.55), (25.65, (960, 575), 0.94),
+                (27.2, (960, 575), 1.0)]
+
+
+def sc05_flowcam(T):
+    K = SC05_FLOWCAM
+    if T <= K[0][0]:
+        return K[0][1][0], K[0][1][1], 1.0
+    for (t0, p0, z0), (t1, p1, z1) in zip(K, K[1:]):
+        if T <= t1:
+            q = e_io_cubic((T - t0) / (t1 - t0))
+            return lerp(p0[0], p1[0], q), lerp(p0[1], p1[1], q), math.exp(lerp(math.log(z0), math.log(z1), q))
+    return K[-1][1][0], K[-1][1][1], K[-1][2]
 
 
 def sc05_xf(T, x, y, z=1.0):
-    """2.5D layout transform for the white-grid scene: drift + parallax by depth z,
-    then a decisive push-in that lands on the hero card (Diagnose)."""
-    s, ox, oy, push = sc05_cam(T)
+    """2.5D layout transform for the white-grid scene: drift + parallax by depth z, then the flow camera."""
+    s, ox, oy = sc05_cam(T)
     bx = W / 2 + (x - W / 2) * s + ox * z
     by = H / 2 + (y - H / 2) * s + oy * z
-    fx0, fy0 = FLOW_CARD_CENTER(0)
-    fx = W / 2 + (fx0 - W / 2) * s + ox
-    fy = H / 2 + (fy0 - H / 2) * s + oy
-    Z = lerp(1.0, 1.35, push)
-    X = fx + (bx - fx) * Z + (W / 2 - fx) * push * 0.55
-    Y = fy + (by - fy) * Z + (H / 2 - fy) * push * 0.55
-    return X, Y, s * Z
+    tx, ty, Z = sc05_flowcam(T)
+    TX = W / 2 + (tx - W / 2) * s + ox
+    TY = H / 2 + (ty - H / 2) * s + oy
+    return W / 2 + (bx - TX) * Z, H / 2 + (by - TY) * Z, s * Z
 
 
 def FLOW_CARD_CENTER(i):
@@ -267,7 +317,7 @@ def flow_card_rect(T, i):
 
 def sc05(c, T, t, d):
     c.clear(col(WARM_W))
-    s, ox, oy, push = sc05_cam(T)
+    s, ox, oy = sc05_cam(T)
     dot_grid(c, 44, STEEL_400, 0.38, 1.25, ox * 0.6, oy * 0.6, s)
     # faint guide lines (reference-like)
     gl = e_out_expo(prog(T, 17.4, 1.6))
@@ -326,16 +376,52 @@ def sc05(c, T, t, d):
             line(c, poly([(rect.right(), rect.top() + 12), (sx, sy)]), NAVY, 0.45 * a, 1.0, (0, ln))
             square(c, sx, sy, 8, NAVY, a * ln)
 
-    # flow: diagnose -> execute
+    # flow: diagnose -> execute (the camera travels along it; light and line particles run with it)
     if T > 22.3:
-        p0 = flow_card_rect(T, 0)
-        p3 = flow_card_rect(T, 3)
-        ly = p0.centerY()
-        lg = e_out_expo(prog(T, 23.0, 1.4))
-        fl = poly([(p0.left() - 60, ly), (p3.right() + 60, ly)])
-        line(c, fl, NAVY, 0.9, 2.0, (0, lg))
+        ly = FLOW_CARD_CENTER(0)[1]
+        A_ = sc05_xf(T, -200, ly)
+        B_ = sc05_xf(T, W + 200, ly)
+        lg = e_out_expo(prog(T, 22.6, 2.4))
+        fl = poly([A_[:2], B_[:2]])
+        line(c, fl, NAVY, 0.35, 2.0)
+        line(c, fl, BLUE, 1.0, 3.2, (0, lg), glow=0.6, glow_w=10)
+        # decorative orbit arcs from stage to stage (above and below the line)
+        for i in range(3):
+            g = e_out_expo(prog(T, 23.05 + i * 0.55, 0.7))
+            if g <= 0:
+                continue
+            x0, x1 = FLOW_CARD_CENTER(i)[0], FLOW_CARD_CENTER(i + 1)[0]
+            up = -1 if i % 2 == 0 else 1
+            pts = [sc05_xf(T, lerp(x0, x1, q), ly + up * 190 * math.sin(math.pi * q))[:2] for q in np.linspace(0, 1, 24)]
+            arc = poly(pts)
+            dash = paint_stroke(BLUE, 0.55, 1.4)
+            dash.setPathEffect(skia.DashPathEffect.Make([5, 6], -T * 30))
+            c.drawPath(path_seg(arc, 0, g), dash)
+            if g >= 1:
+                pulse(c, arc, ((T - 23.6 - i * 0.55) * 0.7) % 1.0, BLUE, 0.9, 10, 0.15, 1.8)
+            mx, my, _ = sc05_xf(T, (x0 + x1) / 2, ly)
+            k = e_out_expo(prog(T, 23.2 + i * 0.55, 0.4))
+            ch = poly([(mx - 9, my - 14), (mx + 5, my), (mx - 9, my + 14)])
+            c.drawPath(ch, paint_stroke(BLUE, k, 3.0))
+        # floating squares (parallax)
+        rq = rng("s05q")
+        for j in range(18):
+            qx, qy = rq.uniform(-100, 2020), rq.uniform(200, 900)
+            if abs(qy - ly) < 140:
+                qy += 260 if qy > ly else -260
+            X, Y, sc = sc05_xf(T, qx, qy, rq.uniform(0.6, 1.4))
+            qa = e_out_expo(prog(T, 22.6 + rq.uniform(0, 2.0), 0.5)) * 0.8
+            square(c, X, Y, rq.uniform(7, 16) * sc, BLUE if j % 4 == 0 else NAVY, qa)
+        # line particles: one bundle rides with the camera, a wide one sweeps the whole flow on the pull-back
+        pts = [sc05_xf(T, x, ly + dy)[:2] for x, dy in ((-300, 40), (400, -20), (1000, 25), (1600, -15), (2300, 30))]
+        line_flow(c, pts, e_io_sine(prog(T, 22.5, 2.6)) * 1.45, 0.45, n=12, spread=16, twist=1.4, width=1.6,
+                  color=BLUE, alpha=0.9, key="s05a", glow=0.0, sparks=12, tsec=T, blend="normal", core=BLUE)
+        pts = [sc05_xf(T, x, ly + dy)[:2] for x, dy in ((-300, -60), (300, 30), (960, -30), (1600, 35), (2300, -50))]
+        line_flow(c, pts, e_io_sine(prog(T, 25.0, 1.8)) * 1.5, 0.5, n=16, spread=42, twist=1.6, width=1.5,
+                  color=BLUE, alpha=0.85, key="s05b", glow=0.0, sparks=16, tsec=T, blend="normal", core=BLUE)
         for i, (lab, name, foc) in enumerate(FLOW):
-            k = enter(T, 22.55 + i * 0.22, 0.6)
+            t_in = 22.75 + i * 0.55
+            k = enter(T, t_in, 0.6)
             if k <= 0:
                 continue
             r = flow_card_rect(T, i)
@@ -343,20 +429,32 @@ def sc05(c, T, t, d):
             r = skia.Rect.MakeXYWH(r.centerX() - r.width() * sc / 2, r.centerY() - r.height() * sc / 2,
                                    r.width() * sc, r.height() * sc)
             a = clamp(k)
+            lit = e_out_expo(prog(T, t_in + 0.25, 0.5))
             c.drawRect(r.makeOffset(0, 14), paint_fill(NAVY_950, 0.18 * a, blur=22))
             c.drawRect(r, paint_fill(WHITE, a))
             th = r.height() * 0.62
             draw_image_cover(c, name, R(r.left(), r.top(), r.width(), th), a, 1.0, foc, 0, GRADE_TILE, t=T)
-            hero = i == 0
-            square(c, r.left() + 18, r.top() + th + 26, 10, BLUE if hero else NAVY, a)
+            c.drawRect(R(r.left(), r.top(), r.width() * lit, 5 * r.width() / 300), paint_fill(BLUE, a))
             ss = r.width() / 300
-            text(c, "0%d" % (i + 1), r.left() + 34 * ss, r.top() + th + 31 * ss, 15 * ss, "SemiBold", STEEL_400, a)
+            square(c, r.left() + 18 * ss, r.top() + th + 26 * ss, 10 * ss, BLUE if lit > 0.5 else NAVY, a)
+            text(c, "0%d" % (i + 1), r.left() + 34 * ss, r.top() + th + 31 * ss, 15 * ss, "SemiBold", BLUE, a * (0.5 + 0.5 * lit))
             text(c, lab, r.left() + 62 * ss, r.top() + th + 31 * ss, 20 * ss, "SemiBold", INK, a)
-            line_a = 0.9 if hero else 0.0
-            if hero:
-                c.drawRect(r.makeOutset(4, 4), paint_stroke(BLUE, a * line_a * e_out_expo(prog(T, 24.2, 0.6)), 2,
-                                                            cap=skia.Paint.kSquare_Cap))
-        pulse(c, fl, prog(T, 23.6, 1.6), BLUE, 0.9, 16, 0.12)
+            c.drawRect(r.makeOutset(4, 4), paint_stroke(BLUE, a * 0.9 * lit, 2, cap=skia.Paint.kSquare_Cap))
+            # activation burst
+            q = prog(T, t_in + 0.25, 0.8)
+            if 0 < q < 1:
+                e = e_out_cubic(q)
+                c.drawRect(r.makeOutset(6 + 40 * e, 6 + 40 * e), paint_stroke(BLUE, (1 - q) * 0.7, 2.0))
+            # node on the line under the card
+            nx_, ny_, _ = sc05_xf(T, FLOW_CARD_CENTER(i)[0], ly + 150)
+            c.drawLine(r.centerX(), r.bottom() + 6, nx_, ny_ - 10, paint_stroke(BLUE, 0.6 * lit, 1.2))
+            c.drawCircle(nx_, ny_, 9 * ss, paint_fill(BLUE if lit > 0.5 else NAVY, a))
+            c.drawCircle(nx_, ny_, (16 + 8 * math.sin(T * 4 + i)) * ss, paint_stroke(BLUE, 0.4 * lit, 1.4))
+        pulse(c, fl, prog(T, 25.2, 1.5), BLUE, 1.0, 18, 0.14, 3.0)
+        # the stage nodes sit on a second, lower rail that forms one continuous line
+        R0 = sc05_xf(T, -200, ly + 150)
+        R1 = sc05_xf(T, W + 200, ly + 150)
+        line(c, poly([R0[:2], R1[:2]]), BLUE, 0.5, 1.2, (0, e_out_expo(prog(T, 22.9, 2.2))))
 
 
 def sc05_expand_rect(T):
@@ -388,12 +486,10 @@ def ap_stage(T, t0, t1):
 
 
 def ap_header(c, x, y, w, T, a):
-    c.drawCircle(x + 26, y + 30, 22, paint_fill(BLUE, a))
-    icon(c, "spark", x + 26, y + 30, 22, WHITE, a)
-    text(c, "AXpoint", x + 62, y + 41, 28, "Bold", INK, a)
+    text(c, "AXpoint", x + 4, y + 41, 28, "Bold", INK, a)
     pw = text_w("AI 컨설턴트", 14, "SemiBold") + 24
-    rrect(c, R(x + 186, y + 15, pw, 30), 15, "#E6EEFF", a)
-    text(c, "AI 컨설턴트", x + 198, y + 35, 14, "SemiBold", BLUE, a)
+    rrect(c, R(x + 132, y + 15, pw, 30), 15, "#E6EEFF", a)
+    text(c, "AI 컨설턴트", x + 144, y + 35, 14, "SemiBold", BLUE, a)
     # stepper
     cur = 0 + (T > AP_A + 1.2) + (T > AP_B) + (T > AP_C)
     sx0, step = x + w - 760, 150
@@ -792,10 +888,9 @@ def sc09(c, T, t, d):
 
 
 # ============================================================ SC10 one connected work environment (no logo)
-SC10_TILES = [("18_factory", (110, 110, 290, 175), "공장", 0.8), ("14_monitors", (1510, 105, 290, 175), "사무실", 0.9),
-              ("05_warehouse", (70, 520, 250, 155), "물류센터", 1.1), ("16_retail", (1610, 500, 250, 155), "매장", 1.05),
-              ("10_datacenter", (300, 830, 280, 165), "사내 시스템", 0.9), ("19_aerial", (1330, 840, 280, 165), "현장", 0.85)]
-SC10_HUB_ICONS = ["factory", "chart", "box", "user", "db", "doc"]
+SC10_TILES = [("18_factory", (110, 110, 290, 175), "Factory", 0.8), ("14_monitors", (1510, 105, 290, 175), "Office", 0.9),
+              ("05_warehouse", (70, 520, 250, 155), "Warehouse", 1.1), ("16_retail", (1610, 500, 250, 155), "Store", 1.05),
+              ("10_datacenter", (300, 830, 280, 165), "Systems", 0.9), ("19_aerial", (1330, 840, 280, 165), "Field", 0.85)]
 
 
 def sc10(c, T, t, d):
@@ -810,7 +905,7 @@ def sc10(c, T, t, d):
 
     hx, hy = xf(960, 540, 0.6)
     hk = enter(T, 40.75, 0.7)
-    hub = R(hx - 230 * s, hy - 150 * s, 460 * s, 300 * s)
+    rad = 150 * s
     for i, (name, (x, y, w, h), lab, z) in enumerate(SC10_TILES):
         t0 = CUE["L13b"] - 0.4 + i * 0.12
         k = enter(T, t0, 0.6)
@@ -820,7 +915,8 @@ def sc10(c, T, t, d):
         sw, sh = w * s * (0.88 + 0.12 * clamp(k)), h * s * (0.88 + 0.12 * clamp(k))
         rect = R(X - sw / 2, Y - sh / 2, sw, sh)
         a = clamp(k)
-        hp = (hub.left() if X < W / 2 else hub.right(), clamp(Y, hub.top() + 40, hub.bottom() - 40))
+        ang = math.atan2(Y - hy, X - hx)
+        hp = (hx + math.cos(ang) * rad * 1.35, hy + math.sin(ang) * rad * 1.35)
         tx = rect.right() + 4 if X < W / 2 else rect.left() - 4
         ty = rect.centerY()
         mid = ((hp[0] + tx) / 2, ty)
@@ -829,23 +925,32 @@ def sc10(c, T, t, d):
         line(c, pth, NAVY, 0.75, 1.4, (0, g))
         square(c, tx, ty, 9, NAVY, a)
         square(c, mid[0], mid[1], 9, NAVY, g)
-        pulse(c, pth, prog(T, t0 + 1.0 + i * 0.05, 1.1), BLUE, 0.85, 12, 0.18)
+        for j_ in range(2):
+            pulse(c, pth, ((T - t0 - 0.9) * 0.8 + j_ * 0.5) % 1.0 if T > t0 + 0.9 else 0, BLUE, 0.85, 12, 0.18)
         photo_tile(c, name, rect, a, lab, (0.5, 0.5), 1.0, 0, None, 0, t=T + i * 0.5)
+        # arrival wave on the hub when this place connects
+        q = prog(T, t0 + 1.0, 0.9)
+        if 0 < q < 1:
+            c.drawCircle(hx, hy, rad * (1.0 + 0.9 * e_out_cubic(q)), paint_stroke(BLUE, (1 - q) * 0.6, 1.6))
     if hk > 0:
         a = clamp(hk)
-        r = R(hub.centerX() - hub.width() * clamp(hk, 0, 1.04) / 2, hub.centerY() - hub.height() * clamp(hk, 0, 1.04) / 2,
-              hub.width() * clamp(hk, 0, 1.04), hub.height() * clamp(hk, 0, 1.04))
-        glass(c, r, 26, a, tint=WHITE, tint_a=0.9, blur=20, border=0.9, shadow=0.22, highlight=0.14,
-              glow=e_out_expo(prog(T, 42.3, 0.6)) * 0.7, glow_col=BLUE)
-        for j, ic in enumerate(SC10_HUB_ICONS):
-            q = clamp(enter(T, 41.0 + j * 0.08, 0.4))
-            cx_ = r.left() + r.width() * (0.2 + 0.3 * (j % 3))
-            cy_ = r.top() + r.height() * (0.3 + 0.3 * (j // 3))
-            rr = R(cx_ - 34 * s, cy_ - 30 * s, 68 * s, 60 * s)
-            rrect(c, rr, 12, "#EEF3FF", a * q)
-            icon(c, ic, cx_, cy_, 28 * s, BLUE if j == 0 else NAVY, a * q)
-        lk = e_out_expo(prog(T, 41.9, 0.5))
-        text(c, "하나로 연결된 업무 환경", r.centerX(), r.bottom() - 26 * s, 21 * s, "SemiBold", INK, a * lk, "center")
+        sk = clamp(hk, 0, 1.05)
+        # one connected core, drawn only with lines, rings and squares
+        c.drawCircle(hx, hy, rad * 1.35 * sk, paint_fill(WHITE, 0.85 * a, blur=6))
+        for k_, (rr_, wd, dash_, spd) in enumerate(((1.35, 1.4, [4, 7], 18), (1.0, 2.0, None, -26), (0.66, 1.4, [3, 5], 40))):
+            p = paint_stroke(NAVY if k_ != 1 else BLUE, a * (0.9 if k_ == 1 else 0.6), wd)
+            if dash_:
+                p.setPathEffect(skia.DashPathEffect.Make(dash_, T * spd))
+            c.drawCircle(hx, hy, rad * rr_ * sk, p)
+        for k_, (rr_, n_, spd) in enumerate(((1.35, 6, 0.25), (1.0, 4, -0.4), (0.66, 3, 0.7))):
+            for m_ in range(n_):
+                ang = T * spd + m_ * 2 * math.pi / n_ + k_
+                square(c, hx + math.cos(ang) * rad * rr_ * sk, hy + math.sin(ang) * rad * rr_ * sk,
+                       (11 - 2 * k_) * s, BLUE if (m_ + k_) % 3 == 0 else NAVY, a)
+        c.drawArc(R(hx - rad, hy - rad, 2 * rad, 2 * rad), (T * 70) % 360, 80, False, paint_stroke(BLUE, a, 4.0))
+        glow_dot(c, hx, hy, 70 * s, BLUE, 0.35 * a)
+        c.drawCircle(hx, hy, 26 * s * sk, paint_fill(BLUE, a))
+        c.drawCircle(hx, hy, 26 * s * sk + 8 + 6 * math.sin(T * 3), paint_stroke(BLUE, 0.4 * a, 1.4))
 
 
 # ============================================================ SC12 personal: pull your own tools in
@@ -938,18 +1043,19 @@ def sc12(c, T, t, d):
         text(c, lab, SC12_WP.left() + 26, SC12_WP.bottom() + 100, 15, "SemiBold", NAVY, k)
 
 
-# ============================================================ SC13 files -> data, handwriting -> OCR (underlined)
-# Korean work log (작업일보) on a light oak desk; recognised rows are underlined on the paper and their
-# values appear as structured chips.
-SC13_SLOPE = 0.446       # paper rows fall to the right: dv per du (frame uv)
-SC13_ROWS = [((0.505, 0.36), "3라인 용접 점검", "수량 120"), ((0.493, 0.428), "자재 입고 확인", "수량 45"),
-             ((0.482, 0.482), "설비 W-07 정비", "진행중"), ((0.474, 0.548), "품질 검사 완료", "수량 8")]
+# ============================================================ SC13 files -> data, handwriting -> OCR
+# Supplied stock: a hand writing on a clipboard in a lab. Files become a data table; on "OCR" a scan of
+# light passes over the paper and the handwritten entries lift off it as recognised data chips.
+SC13_SPOTS = [(0.20, 0.79), (0.33, 0.76), (0.46, 0.78), (0.58, 0.74)]   # handwriting on the clipboard (frame uv)
+SC13_ROWS = [("3라인 용접 점검", "수량 120"), ("자재 입고 확인", "수량 45"), ("설비 W-07 정비", "진행중"),
+             ("품질 검사 완료", "수량 8")]
 SC13_FILES = [("XLSX", "bars"), ("PDF", "doc"), ("DOCX", "doc"), ("HWP", "doc")]
+SC13_PAPER = [(-0.02, 0.70), (0.70, 0.66), (0.72, 0.86), (-0.02, 0.92)]
 
 
 def sc13(c, T, t, d):
-    cam = draw_plate(c, "33_ocr", t, d, s=(1.03, 1.09), x=(10, -18), grade=GRADE_DAY)
-    tb = R(70, 300, 470, 300)
+    cam = draw_plate(c, "34_ocr_lab", t, d, s=(1.02, 1.07), x=(10, -14), grade=GRADE_DAY)
+    tb = R(70, 96, 470, 300)
     for i, (ext, ic) in enumerate(SC13_FILES):
         t0 = CUE["FILES"] + i * 0.18
         k = enter(T, t0, 0.5)
@@ -958,15 +1064,15 @@ def sc13(c, T, t, d):
             continue
         a = clamp(k) * (1 - conv)
         x = lerp(90 + i * 112, tb.left() + 30 + i * 110, conv)
-        y = lerp(640, tb.top() + 80, conv)
+        y = lerp(470, tb.top() + 80, conv)
         r = R(x, y, 92, 116)
-        glass(c, r, 10, a, tint=WHITE, tint_a=0.8, blur=12, border=0.9, shadow=0.2)
+        glass(c, r, 10, a, tint=WHITE, tint_a=0.85, blur=12, border=0.9, shadow=0.2)
         icon(c, ic, r.centerX(), r.top() + 48, 32, BLUE, a)
         text(c, ext, r.centerX(), r.bottom() - 20, 15, "SemiBold", INK, a, "center")
     tk = enter(T, CUE["FILES"] + 0.6, 0.6)
     if tk > 0:
         a = clamp(tk)
-        glass(c, tb, 16, a, tint=WHITE, tint_a=0.86, blur=20, border=0.9, shadow=0.22)
+        glass(c, tb, 16, a, tint=WHITE, tint_a=0.9, blur=20, border=0.9, shadow=0.22)
         text(c, "데이터 테이블", tb.left() + 28, tb.top() + 44, 20, "Bold", INK, a)
         icon(c, "db", tb.right() - 40, tb.top() + 36, 22, BLUE, a)
         for rr_ in range(5):
@@ -976,34 +1082,48 @@ def sc13(c, T, t, d):
             for cc in range(4):
                 w = 50 + (rr_ * 37 + cc * 53) % 44
                 rrect(c, R(tb.left() + 28 + cc * 104, y + 13, w, 12), 6, BLUE if (rr_ == 0) else STEEL_200, ra)
-    # OCR: each recognised row is underlined on the paper (tracked), then becomes a data chip
-    hk = vis(T, CUE["OCR"] + 0.2, 0.5)
-    hx, hy0 = 1560, 300
+    # OCR: a band of light scans the paper (tracked surface)
+    oc = CUE["OCR"]
+    sp = prog(T, oc + 0.05, 1.1)
+    if 0 < sp < 1:
+        u = lerp(-0.05, 0.75, e_io_sine(sp))
+        band = [cam.map(u - 0.05, 0.64, "paper"), cam.map(u, 0.64, "paper"), cam.map(u + 0.02, 0.93, "paper"),
+                cam.map(u - 0.03, 0.93, "paper")]
+        c.drawPath(poly(band, True), paint_fill(CYAN, 0.28, blur=10, blend=skia.BlendMode.kScreen))
+        a0, a1 = cam.map(u, 0.64, "paper"), cam.map(u + 0.02, 0.93, "paper")
+        c.drawLine(a0[0], a0[1], a1[0], a1[1], paint_stroke(WHITE, 0.9, 1.6))
+    pk = vis(T, oc + 0.05, 0.4, oc + 1.3, 0.5)
+    if pk > 0:
+        c.drawPath(poly([cam.map(u_, v_, "paper") for u_, v_ in SC13_PAPER], True),
+                   paint_fill(CYAN, 0.07 * pk, blend=skia.BlendMode.kScreen))
+    hk = vis(T, oc + 0.2, 0.5)
+    hx, hy0 = 1380, 170
     if hk > 0:
         rrect(c, R(hx, hy0 - 44, 136, 34), 17, NAVY, hk * 0.92)
         icon(c, "scan", hx + 24, hy0 - 27, 16, CYAN_SOFT, hk)
         text(c, "OCR 인식", hx + 42, hy0 - 21, 15, "SemiBold", WHITE, hk)
-    for i, ((cu, cv), txt, val) in enumerate(SC13_ROWS):
-        t0 = CUE["OCR"] + 0.3 + i * 0.34
-        g = e_io_cubic(prog(T, t0, 0.5))
+    for i, ((u, v), (txt, val)) in enumerate(zip(SC13_SPOTS, SC13_ROWS)):
+        t0 = oc + 0.25 + i * 0.3
+        g = e_out_expo(prog(T, t0, 0.35))
         if g <= 0:
             continue
-        hu = 0.056
-        u0, u1 = cu - hu, cu - hu + 2 * hu * g
-        v0 = cv - hu * SC13_SLOPE + 0.03
-        p0 = cam.map(u0, v0, "paper")
-        p1 = cam.map(u1, v0 + (u1 - u0) * SC13_SLOPE, "paper")
-        c.drawLine(p0[0], p0[1], p1[0], p1[1], paint_stroke(BLUE, 0.35, 7, blur=5))
-        c.drawLine(p0[0], p0[1], p1[0], p1[1], paint_stroke(BLUE, 0.95, 2.6))
-        if g < 1:
-            glow_dot(c, p1[0], p1[1], 14, CYAN, 0.9)
-        ex = p1
+        px, py = cam.map(u, v, "paper")
+        # recognised spot: soft glow + small particles lifting off the paper
+        ph = prog(T, t0, 0.9)
+        glow_dot(c, px, py, 30, CYAN, 0.8 * (1 - ph * 0.6))
+        rr = rng("ocrp%d" % i)
+        for j in range(7):
+            q = clamp((T - t0 - rr.uniform(0, 0.4)) / 0.8)
+            if 0 < q < 1:
+                c.drawCircle(px + rr.uniform(-40, 40), py - 90 * e_out_cubic(q), rr.uniform(1.2, 2.6),
+                             paint_fill(CYAN_SOFT, (1 - q) * 0.9, blend=skia.BlendMode.kScreen))
         cx_, cy_ = hx, hy0 + 30 + i * 84
-        lg = e_out_expo(prog(T, t0 + 0.45, 0.55))
-        if lg > 0:
-            pth = poly([(ex[0] + 6, ex[1]), (lerp(ex[0], cx_ - 24, 0.6), ex[1]), (cx_ - 24, cy_), (cx_, cy_)])
-            line(c, pth, BLUE, 0.75, 1.4, (0, lg), dash=[5, 4])
-        ck = enter(T, t0 + 0.75, 0.45)
+        pth = curve((px, py), (cx_ - 8, cy_), 0.45, False)
+        lg = e_out_expo(prog(T, t0 + 0.15, 0.6))
+        line(c, pth, CYAN, 0.85, 1.6, (0, lg), glow=0.7)
+        if lg > 0.6:
+            pulse(c, pth, prog(T, t0 + 0.15, 0.7), WHITE, 0.9, 10, 0.2)
+        ck = enter(T, t0 + 0.6, 0.45)
         if ck > 0:
             a = clamp(ck)
             w = text_w(txt, 17, "SemiBold") + text_w(val, 15, "Medium") + 74
@@ -1087,7 +1207,8 @@ ON_REL = [("자재", "공정", "투입"), ("설비", "공정", "가동"), ("공�
           ("사람", "공정", "작업"), ("사람", "업무", "관리"), ("설비", "자재", "사용")]
 ON_FLOW = [("수주", "업무"), ("생산 계획", "사람"), ("자재 구매", "자재"), ("생산", "공정"), ("품질 검사", "제품"),
            ("출하", "업무")]
-ON_FLOW_Z = 3.15
+ON_FLOW_Z = 4.75          # lane runs in front of the platform, below it (clear of every other line)
+ON_FLOW_Y = -0.55
 ON_SRC = [("ERP", -5.5), ("MES", -3.0), ("문서", -0.4), ("센서", 2.2), ("메일", 4.8)]
 ON_LINE = "#7FA6FF"
 ON_PULSE0, ON_PULSE1 = 62.75, 2.0
@@ -1176,23 +1297,30 @@ def sc14(c, T, t, d):
     lit = {n: 0.0 for n in ON_ENT}
     pp = prog(T, ON_PULSE0, ON_PULSE1)
     # business flow along the front edge: 시작 -> 끝
-    xs = [lerp(-5.4, 5.4, i / (len(ON_FLOW) - 1)) for i in range(len(ON_FLOW))]
-    st, en = P(-6.7, 0, ON_FLOW_Z), P(6.7, 0, ON_FLOW_Z)
-    stops = [P(x, 0, ON_FLOW_Z) for x in xs]
+    xs = [lerp(-5.3, 5.3, i / (len(ON_FLOW) - 1)) for i in range(len(ON_FLOW))]
+    fy_, fz_ = ON_FLOW_Y, ON_FLOW_Z
+    st, en = P(-6.9, fy_, fz_), P(6.9, fy_, fz_)
+    stops = [P(x, fy_, fz_) for x in xs]
     flow = poly([st[:2]] + [p[:2] for p in stops] + [en[:2]])
     fg = e_out_expo(prog(T, 58.8, 1.4))
-    line(c, flow, WHITE, 0.55, 2.0, (0, fg))
-    line(c, flow, CYAN, 0.95, 3.0, (0, pp), glow=1.0, glow_w=9)
+    # lane backing so it reads clearly over the stage
+    band = poly([P(-7.4, fy_, fz_ - 0.45)[:2], P(7.4, fy_, fz_ - 0.45)[:2], P(7.4, fy_, fz_ + 0.75)[:2],
+                 P(-7.4, fy_, fz_ + 0.75)[:2]], True)
+    c.drawPath(band, paint_fill(NAVY_950, 0.45 * fg, blur=8))
+    line(c, flow, WHITE, 0.8, 3.0, (0, fg))
+    line(c, flow, CYAN, 1.0, 4.4, (0, pp), glow=1.0, glow_w=12)
     if 0 < pp < 1:
-        pulse(c, flow, pp, CYAN, 1.0, 22, 0.08, 3.0)
+        pulse(c, flow, pp, CYAN, 1.0, 26, 0.08, 4.0)
     for lab, p, t0 in (("시작", st, 58.9), ("끝", en, 59.6)):
         k = clamp(enter(T, t0, 0.5))
         done = lab == "끝" and pp >= 1
-        tw = text_w(lab, 16, "Bold") + 30
-        r = R(p[0] - tw / 2, p[1] + 18, tw, 32)
-        rrect(c, r, 16, CYAN if done or lab == "시작" else NAVY_700, k)
-        text(c, lab, p[0], p[1] + 40, 16, "Bold", NAVY_950 if (done or lab == "시작") else WHITE, k, "center")
-        square(c, p[0], p[1], 14, CYAN if done or lab == "시작" else WHITE, k)
+        on = done or lab == "시작"
+        tw = text_w(lab, 20, "Bold") + 36
+        r = R(p[0] - tw / 2, p[1] + 22, tw, 40)
+        rrect(c, r, 20, CYAN if on else NAVY_700, k)
+        rrect_stroke(c, r, 20, CYAN, k, 1.6)
+        text(c, lab, p[0], p[1] + 49, 20, "Bold", NAVY_950 if on else WHITE, k, "center")
+        square(c, p[0], p[1], 18, CYAN if on else WHITE, k)
     for i, (lab, ent) in enumerate(ON_FLOW):
         f = (i + 1) / (len(ON_FLOW) + 1)
         h = clamp((pp - f) * 7) * (1 - clamp((pp - f - 0.3) * 3)) if pp > 0 else 0.0
@@ -1201,13 +1329,18 @@ def sc14(c, T, t, d):
             lit["설비"] = max(lit["설비"], h)
         k = clamp(enter(T, 59.0 + i * 0.12, 0.5))
         sx, sy, sk_ = stops[i]
-        square(c, sx, sy, 10, CYAN if pp > f else WHITE, k)
-        text(c, "%d" % (i + 1), sx, sy - 16, 13, "SemiBold", CYAN_SOFT, k * 0.9, "center")
-        text(c, lab, sx, sy + 36, 17, "SemiBold", WHITE, k, "center")
+        passed = pp > f
+        square(c, sx, sy, 14, CYAN if passed else WHITE, k)
+        tw = text_w(lab, 18, "Bold") + 28
+        r = R(sx - tw / 2, sy + 20, tw, 36)
+        rrect(c, r, 18, "#16306E" if not passed else "#1E4FC0", k * 0.95)
+        rrect_stroke(c, r, 18, CYAN if passed else "#6F9BFF", k, 1.4)
+        text(c, lab, sx, sy + 44, 18, "Bold", WHITE, k, "center")
+        text(c, "%d" % (i + 1), sx, sy - 18, 14, "Bold", CYAN_SOFT, k, "center")
         if h > 0.02:
             (ex, ez), _, _ = ON_ENT[ent]
             q = P(ex, 0.05, ez)
-            line(c, curve((sx, sy), q[:2], 0.3, False), CYAN, 0.9 * h, 1.8, glow=0.8 * h)
+            line(c, curve((sx, sy - 10), q[:2], 0.3, False), CYAN, 0.9 * h, 2.0, glow=0.8 * h)
     # relations: dashed links with label pills (on the platform)
     for (s_, d_, lab) in ON_REL:
         t0 = max(CUE[ON_ENT[s_][1]], CUE[ON_ENT[d_][1]]) + 0.15
@@ -1283,11 +1416,11 @@ def sc14(c, T, t, d):
         a = clamp(k)
         L = logo()
         lw = 330
-        tw = text_w("온톨로지", 52, "Medium")
+        tw = text_w("Ontology", 52, "Light")
         x0 = W / 2 - (lw + 28 + tw) / 2
         y0 = 122 + 14 * (1 - a)
         L.draw(c, x0 + lw / 2, y0, lw, e_io_cubic(prog(T, CUE["ONTO"] - 0.1, 0.6)), a, (a, a, a), True, a)
-        text(c, "온톨로지", x0 + lw + 28, y0 + 26, 52, "Medium", WHITE, a)
+        text(c, "Ontology", x0 + lw + 28, y0 + 22, 52, "Light", WHITE, a)
 
 
 # ============================================================ SC15 too many systems -> one

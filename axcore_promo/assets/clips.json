@@ -1,0 +1,70 @@
+{
+  "_note": "Kling 3.0 Pro image-to-video clips; each starts from the Nano Banana Pro plate of the same name. Prompts: PLAN.md",
+  "base": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/",
+  "clips": {
+    "22_city": {
+      "file": "hf_20261012_013900_90abc482-5ba7-4bc0-b72b-43f7616cf180.mp4",
+      "pre": 0.2
+    },
+    "02_tower": {
+      "file": "hf_20261012_013859_70e08c50-659f-4969-9f67-ec812380434a.mp4"
+    },
+    "03_facade": {
+      "file": "hf_20261012_013915_68a49bed-0659-4700-b507-4bd14743a5cc.mp4",
+      "track": {}
+    },
+    "04_table": {
+      "file": "hf_20261012_013900_14427db8-5af0-4985-97f7-61ab4e09765c.mp4",
+      "track": {}
+    },
+    "07_docs": {
+      "file": "hf_20261012_013915_8da00e14-343c-4335-9b69-31ecac48250f.mp4",
+      "track": {
+        "regions": {
+          "paper": [
+            0.4,
+            0.35,
+            0.9,
+            0.85
+          ]
+        }
+      }
+    },
+    "08_navycards": {
+      "file": "hf_20261012_013915_b5b0c292-bec2-4139-825c-30ae28aa50e7.mp4"
+    },
+    "09_handraise": {
+      "file": "hf_20261012_013915_31ae921e-58ad-412c-ad38-2a5e3cdef8b1.mp4",
+      "pre": 0.0,
+      "track": {
+        "hand": true
+      }
+    },
+    "10_datacenter": {
+      "file": "hf_20261012_013859_bbdb2d85-788a-4725-93a3-56743c171660.mp4"
+    },
+    "12_handwritten": {
+      "file": "hf_20261012_013900_d48ac24e-6899-469e-b518-11e5a757f7ab.mp4",
+      "track": {
+        "regions": {
+          "paper": [
+            0.1,
+            0.2,
+            0.75,
+            0.75
+          ]
+        }
+      }
+    },
+    "13_navystage": {
+      "file": "hf_20261012_013859_e85b19f0-3832-428e-b6e4-2fcb9ca0fb2f.mp4",
+      "pre": 0.0
+    },
+    "14_monitors": {
+      "file": "hf_20261012_013900_14de046e-a753-4bcb-af6f-b390aa16fb13.mp4"
+    },
+    "16_retail": {
+      "file": "hf_20261012_014007_1318380f-0b70-492e-a5ff-2ecf1481f259.mp4"
+    }
+  }
+}

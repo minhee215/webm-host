@@ -159,6 +159,7 @@ def drift(t, dur):
 
 
 # ------------------------------------------------------------------- fonts
+# Pretendard (gothic) for Korean and Latin. Letter-spacing is always 0 %.
 FONT_DIR = os.path.join(HERE, "fonts")
 _TF = {}
 _FONTS = {}
@@ -166,7 +167,7 @@ _FONTS = {}
 
 def typeface(w="Medium"):
     if w not in _TF:
-        _TF[w] = skia.Typeface.MakeFromFile(os.path.join(FONT_DIR, "Inter-%s.otf" % w))
+        _TF[w] = skia.Typeface.MakeFromFile(os.path.join(FONT_DIR, "Pretendard-%s.otf" % w))
     return _TF[w]
 
 
@@ -181,29 +182,20 @@ def font(size, w="Medium"):
     return _FONTS[k]
 
 
-def text_w(s, size, w="Medium", tracking=0.0):
-    f = font(size, w)
-    if not tracking:
-        return f.measureText(s)
-    return sum(f.measureText(ch) for ch in s) + tracking * size * max(0, len(s) - 1)
+def text_w(s, size, w="Medium"):
+    return font(size, w).measureText(s)
 
 
-def text(c, s, x, y, size=20, w="Medium", color=WHITE, alpha=1.0, align="left", tracking=0.0):
+def text(c, s, x, y, size=20, w="Medium", color=WHITE, alpha=1.0, align="left"):
     if alpha <= 0.003 or not s:
         return 0.0
     f = font(size, w)
-    tw = text_w(s, size, w, tracking)
+    tw = f.measureText(s)
     if align == "center":
         x -= tw / 2
     elif align == "right":
         x -= tw
-    p = skia.Paint(AntiAlias=True, Color4f=col(color, clamp(alpha)))
-    if not tracking:
-        c.drawString(s, x, y, f, p)
-    else:
-        for ch in s:
-            c.drawString(ch, x, y, f, p)
-            x += f.measureText(ch) + tracking * size
+    c.drawString(s, x, y, f, skia.Paint(AntiAlias=True, Color4f=col(color, clamp(alpha))))
     return tw
 
 
@@ -457,8 +449,9 @@ def placeholder_plate(name):
 
 
 class Cam:
-    """2.5D camera for a plate: scale s (1 = cover fit), screen offset (ox, oy), roll in degrees.
-    map(u, v) converts plate-normalized coordinates to screen pixels so overlays stay tracked."""
+    """2.5D camera for a plate or clip frame: scale s (1 = cover fit), screen offset (ox, oy),
+    roll in degrees. map(u, v) converts frame-0 normalized coordinates to screen pixels; for
+    clips it first follows the tracked surface (homography) so overlays stay locked."""
 
     def __init__(self, img, s=1.0, ox=0.0, oy=0.0, rot=0.0):
         self.iw, self.ih = img.width(), img.height()
@@ -470,15 +463,42 @@ class Cam:
         m.preTranslate(-self.iw / 2, -self.ih / 2)
         self.m = m
         self.s = s
+        self.trk = None
+        self.fi = 0
 
-    def map(self, u, v):
+    def attach(self, trk, fi):
+        self.trk, self.fi = trk, fi
+        return self
+
+    def screen(self, u, v):
         p = self.m.mapXY(u * self.iw, v * self.ih)
         return p.x(), p.y()
 
-    def rect(self, u0, v0, u1, v1):
-        x0, y0 = self.map(u0, v0)
-        x1, y1 = self.map(u1, v1)
-        return skia.Rect.MakeLTRB(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
+    def map(self, u, v, region=None):
+        if self.trk is not None:
+            u, v = self.trk.apply(region or "global", self.fi, u, v)
+        return self.screen(u, v)
+
+    def rect(self, u0, v0, u1, v1, region=None):
+        pts = [self.map(u, v, region) for u, v in ((u0, v0), (u1, v0), (u1, v1), (u0, v1))]
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        return skia.Rect.MakeLTRB(min(xs), min(ys), max(xs), max(ys))
+
+    def hand(self, lm=8, dt=0):
+        """Screen position of a tracked hand landmark and pinch strength, or None."""
+        if self.trk is None:
+            return None
+        h = self.trk.hand(self.fi + dt, lm)
+        if h is None:
+            return None
+        x, y = self.screen(h[0], h[1])
+        return x, y, h[2]
+
+    def point(self, name):
+        if self.trk is None:
+            return None
+        p = self.trk.point(name, self.fi)
+        return None if p is None else self.screen(*p)
 
 
 def grade_filter(bright=1.0, contrast=1.0, sat=1.0, tint=(0.0, 0.0, 0.0)):
@@ -497,16 +517,24 @@ def grade_filter(bright=1.0, contrast=1.0, sat=1.0, tint=(0.0, 0.0, 0.0)):
     return skia.ColorFilters.Matrix([float(v) for v in rows])
 
 
-def draw_plate(c, name, t, dur, s=(1.04, 1.10), x=(0, 0), y=(0, 0), r=(0, 0), alpha=1.0,
+def draw_plate(c, name, t, dur, s=(1.0, 1.04), x=(0, 0), y=(0, 0), r=(0, 0), alpha=1.0,
                defocus=0.0, grade=None, beats=()):
-    """Draw a plate with a continuous camera drift; returns the Cam for tracked overlays.
+    """Draw the shot: the live-action clip made from this plate when it exists (falls back to
+    the still plate), with a gentle digital drift on top. Returns the Cam for tracked overlays.
     beats: [(time, extra_scale)] decisive push-ins landing on the hero."""
-    img = plate(name)
+    import media
+    fi = 0
+    if media.clip_info(name):
+        img, fi = media.frame(name, t)
+    else:
+        img = plate(name)
     p = drift(t, dur)
     sc = lerp(s[0], s[1], p)
     for bt, amt in beats:
         sc += amt * e_out_expo(prog(t, bt, 0.9))
     cam = Cam(img, sc, lerp(x[0], x[1], p), lerp(y[0], y[1], p), lerp(r[0], r[1], p))
+    if media.clip_info(name):
+        cam.attach(media.track(name), fi)
     if alpha <= 0.003:
         return cam
     paint = skia.Paint(AntiAlias=True)
@@ -517,21 +545,26 @@ def draw_plate(c, name, t, dur, s=(1.04, 1.10), x=(0, 0), y=(0, 0), r=(0, 0), al
     c.concat(cam.m)
     c.drawImage(img, 0, 0, SAMP, paint)
     if defocus > 0.01:
-        bimg = plate(name, True)
         pb = skia.Paint(AntiAlias=True)
         pb.setAlphaf(clamp(alpha * defocus))
+        pb.setImageFilter(skia.ImageFilters.Blur(14, 14, skia.TileMode.kClamp))
         if grade is not None:
             pb.setColorFilter(grade)
-        c.drawImageRect(bimg, skia.Rect.MakeWH(cam.iw, cam.ih), SAMP, pb)
+        c.drawImage(img, 0, 0, SAMP, pb)
     c.restore()
     return cam
 
 
-def draw_image_cover(c, name, rect, alpha=1.0, zoom=1.0, focus=(0.5, 0.5), radius=0.0, grade=None):
-    """Plate cropped into a rect (photo tiles / thumbnails)."""
+def draw_image_cover(c, name, rect, alpha=1.0, zoom=1.0, focus=(0.5, 0.5), radius=0.0, grade=None, t=None):
+    """Plate (or its playing clip proxy when t is given) cropped into a rect: tiles / thumbnails."""
     if alpha <= 0.003 or rect.width() < 1 or rect.height() < 1:
         return
-    img = plate(name)
+    img = None
+    if t is not None:
+        import media
+        img = media.proxy_frame(name, t)
+    if img is None:
+        img = plate(name)
     iw, ih = img.width(), img.height()
     k = max(rect.width() / iw, rect.height() / ih) * zoom
     sw, sh = rect.width() / k, rect.height() / k

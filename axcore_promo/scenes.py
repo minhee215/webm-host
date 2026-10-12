@@ -423,7 +423,7 @@ def sc08(c, T, t, d):
         fv = e_out_expo(prog(T, t0 + 0.3, 1.0)) * val
         rrect(c, R(bar.left(), bar.top(), bar.width() * fv, 6), 3, CYAN if hero else INDIGO, a)
     tk = vis(T, CUE["L10b"] + 0.6, 0.5)
-    text(c, "PRIORITY OF CHANGE", 1180 - par * 0.6, 238, 13, "SemiBold", CYAN_SOFT, tk * 0.9, tracking=0.18)
+    text(c, "PRIORITY OF CHANGE", 1180 - par * 0.6, 238, 13, "SemiBold", CYAN_SOFT, tk * 0.9)
 
 
 # ============================================================ SC09 M-AI Works modules (enterprise)
@@ -628,7 +628,7 @@ def sc11(c, T, t, d):
         c.rotate(45)
         c.drawRect(R(-11, -11, 22, 22), paint_fill(CYAN, a))
         c.restore()
-        text(c, "AXCORE", hub[0], hub[1] + 128, 15, "SemiBold", WHITE, a * 0.9, "center", tracking=0.2)
+        text(c, "AXCORE", hub[0], hub[1] + 128, 15, "SemiBold", WHITE, a * 0.9, "center")
     for i, (abbr, full, ic, key) in enumerate(SC11_CARDS):
         t0 = CUE[key] - 0.05
         k = enter(T, t0, 0.6)
@@ -802,7 +802,7 @@ def sc13(c, T, t, d):
         if g > 0.6:
             w = label_chip(c, cx_ - 20, cy_, txt, clamp((g - 0.6) * 2.5), True, 17, "scan", CYAN)
     hk = vis(T, CUE["OCR"] + 0.2, 0.5)
-    text(c, "OCR", 1272, 272, 14, "SemiBold", CYAN_SOFT, hk, tracking=0.25)
+    text(c, "OCR", 1272, 272, 14, "SemiBold", CYAN_SOFT, hk)
 
 
 # ============================================================ SC14 AXCORE Ontology (2.5D graph)
@@ -866,7 +866,7 @@ def sc14(c, T, t, d):
     for lab, p in (("START", start), ("END", end)):
         k = clamp(enter(T, 58.3 if lab == "START" else 59.3, 0.5))
         square(c, p[0], p[1], 14, CYAN if lab == "END" and pp >= 1 else WHITE, k)
-        text(c, lab, p[0], p[1] + 34, 13, "SemiBold", CYAN_SOFT, k, "center", tracking=0.2)
+        text(c, lab, p[0], p[1] + 34, 13, "SemiBold", CYAN_SOFT, k, "center")
     # edges (entity -> stage, entity -> entity)
     lit = {}
     for i, (n, x) in enumerate(ON_STAGES):
@@ -1096,7 +1096,7 @@ def sc16(c, T, t, d):
         rrect(c, r, 16, WHITE, a)
         rrect_stroke(c, r, 16, STEEL_200, a, 1)
         c.drawRect(R(r.left(), r.top() + 18, 4, r.height() - 36), paint_fill(BLUE if i == 1 else INDIGO, a))
-        text(c, title.upper(), r.left() + 30, r.top() + 42, 13, "SemiBold", BLUE if i == 1 else INDIGO, a, tracking=0.16)
+        text(c, title.upper(), r.left() + 30, r.top() + 42, 13, "SemiBold", BLUE if i == 1 else INDIGO, a)
         n = int(len(body) * clamp(prog(T, CUE[cue] + 0.1, 0.7)))
         text(c, body[:n], r.left() + 30, r.top() + 82, 23, "Medium", INK, a)
         if i == 0:
@@ -1165,7 +1165,7 @@ def sc18(c, T, t, d):
         lab = "ANOMALY  0.91" if bad else "OK  0.9%d" % (7 - i % 3)
         tw = text_w(lab, 12, "SemiBold") + 18
         c.drawRect(R(r.left(), r.top() - 24, tw, 20), paint_fill(BLUE if bad else NAVY_900, a * 0.85))
-        text(c, lab, r.left() + 9, r.top() - 9.5, 12, "SemiBold", WHITE, a, tracking=0.05)
+        text(c, lab, r.left() + 9, r.top() - 9.5, 12, "SemiBold", WHITE, a)
         if bad:
             ph = (T - 82.5) % 1.1 / 1.1
             c.drawRect(r.makeOutset(10 * ph, 10 * ph), paint_stroke(CYAN, (1 - ph) * 0.8, 2))
@@ -1223,7 +1223,7 @@ def sc19(c, T, t, d):
         bar = R(r.left() + 84, r.top() + 66, 300, 5)
         rrect(c, bar, 2.5, WHITE, a * 0.18)
         rrect(c, R(bar.left(), bar.top(), bar.width() * pr, 5), 2.5, CYAN, a)
-        text(c, "AUTO-RUN", r.right() - 104, r.top() + 46, 12, "SemiBold", CYAN_SOFT, a * 0.9, tracking=0.15)
+        text(c, "AUTO-RUN", r.right() - 104, r.top() + 46, 12, "SemiBold", CYAN_SOFT, a * 0.9)
         ck = e_out_expo(prog(T, t0 + 1.1, 0.35))
         c.drawCircle(r.right() - 42, r.top() + 72, 15, paint_fill(CYAN, a * ck))
         icon(c, "check", r.right() - 42, r.top() + 72, 18, NAVY_900, a * ck, 2.6)

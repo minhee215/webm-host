@@ -1,123 +1,206 @@
 {
-  "_note": "Kling 3.0 Pro image-to-video clips; each starts from the Nano Banana Pro plate of the same name. Prompts: PLAN.md",
-  "base": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/",
-  "clips": {
-    "22_city": {
-      "file": "hf_20261012_013900_90abc482-5ba7-4bc0-b72b-43f7616cf180.mp4",
-      "pre": 0.2
-    },
-    "02_tower": {
-      "file": "hf_20261012_013859_70e08c50-659f-4969-9f67-ec812380434a.mp4"
-    },
-    "03_facade": {
-      "file": "hf_20261012_013915_68a49bed-0659-4700-b507-4bd14743a5cc.mp4",
-      "track": {}
-    },
-    "04_table": {
-      "file": "hf_20261012_013900_14427db8-5af0-4985-97f7-61ab4e09765c.mp4",
-      "track": {}
-    },
-    "07_docs": {
-      "file": "hf_20261012_013915_8da00e14-343c-4335-9b69-31ecac48250f.mp4",
-      "track": {
-        "regions": {
-          "paper": [
-            0.4,
-            0.35,
-            0.9,
-            0.85
-          ]
-        }
-      }
-    },
-    "08_navycards": {
-      "file": "hf_20261012_013915_b5b0c292-bec2-4139-825c-30ae28aa50e7.mp4"
-    },
-    "09_handraise": {
-      "file": "hf_20261012_013915_31ae921e-58ad-412c-ad38-2a5e3cdef8b1.mp4",
-      "pre": 0.0,
-      "track": {
-        "hand": true
-      },
-      "speed": 1.35
-    },
-    "10_datacenter": {
-      "file": "hf_20261012_013859_bbdb2d85-788a-4725-93a3-56743c171660.mp4"
-    },
-    "12_handwritten": {
-      "file": "hf_20261012_013900_d48ac24e-6899-469e-b518-11e5a757f7ab.mp4",
-      "track": {
-        "regions": {
-          "paper": [
-            0.1,
-            0.2,
-            0.75,
-            0.75
-          ]
-        }
-      }
-    },
-    "13_navystage": {
-      "file": "hf_20261012_013859_e85b19f0-3832-428e-b6e4-2fcb9ca0fb2f.mp4",
-      "pre": 0.0
-    },
-    "14_monitors": {
-      "file": "hf_20261012_013900_14de046e-a753-4bcb-af6f-b390aa16fb13.mp4"
-    },
-    "16_retail": {
-      "file": "hf_20261012_014007_1318380f-0b70-492e-a5ff-2ecf1481f259.mp4"
-    },
-    "24_personal": {
-      "file": "hf_20261012_014008_80236417-19cc-4274-8e76-7ddabdfe524b.mp4",
-      "pre": 0.0,
-      "track": {
-        "hand": true,
-        "regions": {
-          "laptop": [
-            0.22,
-            0.52,
-            0.4,
-            0.8
-          ]
-        }
-      }
-    },
-    "23_typing": {
-      "file": "hf_20261012_014007_ed664f93-9f0d-4337-a25f-4cef74966a91.mp4",
-      "pre": 0.0,
-      "speed": 0.6
-    },
-    "06_line": {
-      "file": "hf_20261012_014007_2d7d532b-81c4-47ac-aa16-18c18ceb8326.mp4",
-      "track": {}
-    },
-    "17_robot": {
-      "file": "hf_20261012_014008_b039bab3-1451-4c39-84f8-3bacfb1de6d1.mp4",
-      "track": {
-        "points": {
-          "grip": [
-            0.61,
-            0.52
-          ]
-        }
-      }
-    },
-    "18_factory": {
-      "file": "hf_20261012_014007_a80d9ee8-8429-4a87-8a14-9db29ce03d0b.mp4",
-      "track": {}
-    },
-    "19_aerial": {
-      "file": "hf_20261012_014007_afc129fd-046f-4939-8606-f3f19ff296be.mp4",
-      "track": {}
-    },
-    "21_tablet_hold": {
-      "file": "hf_20261012_014007_9939f03e-7e36-4385-9b01-2afe7fdf8f3e.mp4"
-    },
-    "05_warehouse": {
-      "file": "hf_20261012_014008_d2f519ac-e135-4645-806f-8b0bcb22ba4f.mp4"
-    },
-    "20_team": {
-      "file": "hf_20261012_014007_9e9fae57-9187-40d0-ad68-0ad1ab597c2c.mp4"
+ "_note": "Kling 3.0 Pro image-to-video clips; each starts from the Nano Banana Pro plate of the same name. Prompts: PLAN.md",
+ "base": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/",
+ "clips": {
+  "22_city": {
+   "file": "hf_20261012_013900_90abc482-5ba7-4bc0-b72b-43f7616cf180.mp4",
+   "pre": 0.2
+  },
+  "02_tower": {
+   "file": "hf_20261012_013859_70e08c50-659f-4969-9f67-ec812380434a.mp4",
+   "track": {
+    "regions": {
+     "tower": [
+      0.15,
+      0.15,
+      0.85,
+      1.0
+     ]
     }
+   }
+  },
+  "03_facade": {
+   "file": "hf_20261012_013915_68a49bed-0659-4700-b507-4bd14743a5cc.mp4",
+   "track": {},
+   "speed": 0.8,
+   "pre": 0.3
+  },
+  "04_table": {
+   "file": "hf_20261012_013900_14427db8-5af0-4985-97f7-61ab4e09765c.mp4",
+   "track": {},
+   "speed": 0.88
+  },
+  "07_docs": {
+   "file": "hf_20261012_013915_8da00e14-343c-4335-9b69-31ecac48250f.mp4",
+   "track": {
+    "regions": {
+     "paper": [
+      0.4,
+      0.35,
+      0.9,
+      0.85
+     ]
+    }
+   },
+   "loop": "pingpong"
+  },
+  "08_navycards": {
+   "file": "hf_20261012_013915_b5b0c292-bec2-4139-825c-30ae28aa50e7.mp4"
+  },
+  "09_handraise": {
+   "file": "hf_20261012_013915_31ae921e-58ad-412c-ad38-2a5e3cdef8b1.mp4",
+   "pre": 0.0,
+   "track": {
+    "hand": true
+   },
+   "speed": 1.35
+  },
+  "10_datacenter": {
+   "file": "hf_20261012_013859_bbdb2d85-788a-4725-93a3-56743c171660.mp4",
+   "speed": 0.9
+  },
+  "12_handwritten": {
+   "file": "hf_20261012_013900_d48ac24e-6899-469e-b518-11e5a757f7ab.mp4",
+   "track": {
+    "regions": {
+     "paper": [
+      0.1,
+      0.2,
+      0.75,
+      0.75
+     ]
+    }
+   }
+  },
+  "13_navystage": {
+   "file": "hf_20261012_013859_e85b19f0-3832-428e-b6e4-2fcb9ca0fb2f.mp4",
+   "pre": 0.0
+  },
+  "14_monitors": {
+   "file": "hf_20261012_013900_14de046e-a753-4bcb-af6f-b390aa16fb13.mp4",
+   "speed": 0.82
+  },
+  "16_retail": {
+   "file": "hf_20261012_014007_1318380f-0b70-492e-a5ff-2ecf1481f259.mp4",
+   "speed": 0.9
+  },
+  "24_personal": {
+   "file": "hf_20261012_014008_80236417-19cc-4274-8e76-7ddabdfe524b.mp4",
+   "pre": 0.0,
+   "track": {
+    "hand": true,
+    "regions": {
+     "laptop": [
+      0.22,
+      0.52,
+      0.4,
+      0.8
+     ]
+    }
+   }
+  },
+  "23_typing": {
+   "file": "hf_20261012_014007_ed664f93-9f0d-4337-a25f-4cef74966a91.mp4",
+   "pre": 0.0,
+   "speed": 0.5
+  },
+  "06_line": {
+   "file": "hf_20261012_014007_2d7d532b-81c4-47ac-aa16-18c18ceb8326.mp4",
+   "track": {}
+  },
+  "17_robot": {
+   "file": "hf_20261012_014008_b039bab3-1451-4c39-84f8-3bacfb1de6d1.mp4",
+   "track": {
+    "points": {
+     "grip": [
+      0.61,
+      0.52
+     ]
+    }
+   },
+   "pre": 0.4
+  },
+  "18_factory": {
+   "file": "hf_20261012_014007_a80d9ee8-8429-4a87-8a14-9db29ce03d0b.mp4",
+   "track": {}
+  },
+  "19_aerial": {
+   "file": "hf_20261012_014007_afc129fd-046f-4939-8606-f3f19ff296be.mp4",
+   "track": {},
+   "speed": 0.85
+  },
+  "21_tablet_hold": {
+   "file": "hf_20261012_014007_9939f03e-7e36-4385-9b01-2afe7fdf8f3e.mp4",
+   "loop": "pingpong",
+   "track": {
+    "screens": {
+     "screen": [
+      0.2,
+      0.3,
+      0.8,
+      0.92
+     ]
+    }
+   }
+  },
+  "05_warehouse": {
+   "file": "hf_20261012_014008_d2f519ac-e135-4645-806f-8b0bcb22ba4f.mp4",
+   "loop": "pingpong"
+  },
+  "20_team": {
+   "file": "hf_20261012_014007_9e9fae57-9187-40d0-ad68-0ad1ab597c2c.mp4",
+   "loop": "pingpong"
+  },
+  "25_city8": {
+   "file": "hf_20261012_061556_f39e0e43-8fad-43f1-a32d-7a9296e2b290.mp4",
+   "pre": 0.0,
+   "track": {
+    "regions": {
+     "tower": [
+      0.64,
+      0.04,
+      0.8,
+      0.86
+     ]
+    }
+   }
+  },
+  "30_tab_personal": {
+   "file": "hf_20261012_062236_19373e88-2847-4a06-b6d0-43589f036e45.mp4",
+   "pre": 0.0,
+   "track": {
+    "hand": true,
+    "hand_near": [
+     0.62,
+     0.6
+    ]
+   }
+  },
+  "31_tab_ent": {
+   "file": "hf_20261012_062236_5b3ed50b-60be-42eb-a941-8aea56bf9aa6.mp4",
+   "pre": 0.0,
+   "track": {
+    "hand": true,
+    "hand_near": [
+     0.52,
+     0.62
+    ]
+   }
+  },
+  "33_ocr": {
+   "file": "hf_20261012_063004_809e065b-eb10-4387-8a52-f13fa99f20af.mp4",
+   "pre": 0.0,
+   "speed": 0.93,
+   "track": {
+    "regions": {
+     "paper": [
+      0.3,
+      0.15,
+      0.72,
+      0.7
+     ]
+    }
+   }
   }
+ }
 }

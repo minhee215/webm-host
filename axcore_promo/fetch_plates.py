@@ -22,7 +22,8 @@ def fetch(item):
     dst = os.path.join(OUT, name + ".jpg")
     if os.path.exists(dst):
         return name, "cached"
-    with urllib.request.urlopen(MANIFEST["base"] + fname, timeout=120) as r:
+    url = fname if fname.startswith("http") else MANIFEST["base"] + fname
+    with urllib.request.urlopen(url, timeout=120) as r:
         im = Image.open(BytesIO(r.read())).convert("RGB")
     im.resize(PLATE_SIZE, Image.LANCZOS).save(dst, quality=95)
     return name, "ok"

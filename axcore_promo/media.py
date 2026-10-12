@@ -55,7 +55,11 @@ def clip_time(name, t):
     incoming transition; 'speed' retimes the take; the last frame holds at the end."""
     info = clip_info(name)
     ct = (t + info.get("pre", 0.5)) * info.get("speed", 1.0)
-    return min(max(ct, 0.0), info["dur"] - 1.0 / FPS)
+    end = info["dur"] - 1.0 / FPS
+    if info.get("loop") == "pingpong" and ct > end:  # play back and forth instead of freezing
+        k = (ct / end) % 2.0
+        ct = end * (k if k <= 1 else 2 - k)
+    return min(max(ct, 0.0), end)
 
 
 def clip_index(name, t):
@@ -169,6 +173,13 @@ class Track:
         if not pts:
             return None
         return tuple(pts[self._i(fi)])
+
+    def screen(self, name, fi):
+        """Four tracked corners (TL, TR, BR, BL; frame uv) of a bright device screen, or None."""
+        q = self.d.get("screens", {}).get(name)
+        if not q:
+            return None
+        return q[self._i(fi)]
 
     def hand(self, fi, lm=8):
         """Landmark lm (8 = index tip, 4 = thumb tip, 9 = middle MCP) and pinch strength 0..1."""

@@ -103,7 +103,7 @@ def track_point(grays, uv):
     return a.tolist()
 
 
-def track_hand(frames):
+def track_hand(frames, near=None):
     import mediapipe as mp
     from mediapipe.tasks import python as mpt
     from mediapipe.tasks.python import vision
@@ -111,7 +111,7 @@ def track_hand(frames):
     if not os.path.exists(model):
         urllib.request.urlretrieve(HAND_MODEL, model)
     opts = vision.HandLandmarkerOptions(base_options=mpt.BaseOptions(model_asset_path=model),
-                                        running_mode=vision.RunningMode.VIDEO, num_hands=1,
+                                        running_mode=vision.RunningMode.VIDEO, num_hands=2 if near else 1,
                                         min_hand_detection_confidence=0.3, min_hand_presence_confidence=0.3,
                                         min_tracking_confidence=0.3)
     det = vision.HandLandmarker.create_from_options(opts)
@@ -120,7 +120,11 @@ def track_hand(frames):
         rgb = cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
         res = det.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(i * 1000 / 24))
         if res.hand_landmarks:
-            raw.append(np.array([[p.x, p.y] for p in res.hand_landmarks[0]]))
+            hands = [np.array([[p.x, p.y] for p in h]) for h in res.hand_landmarks]
+            if near is not None:  # several hands: keep the one whose index fingertip is nearest the hint
+                prev = raw[-1][8] if raw and raw[-1] is not None else np.array(near)
+                hands.sort(key=lambda h: np.linalg.norm(h[8] - prev))
+            raw.append(hands[0])
         else:
             raw.append(None)
     det.close()
@@ -155,6 +159,48 @@ def track_hand(frames):
     return out
 
 
+def track_screen(frames, box):
+    """Corners (TL, TR, BR, BL; normalized) of the bright blank device screen inside box, per frame.
+    Thresholds the bright low-saturation blob, takes its convex hull (fingers over the edge are
+    bridged) and reduces it to a quadrilateral; smoothed over time."""
+    u0, v0, u1, v1 = box
+    out, last = [], None
+    for f in frames:
+        h, w = f.shape[:2]
+        x0, y0, x1, y1 = int(u0 * w), int(v0 * h), int(u1 * w), int(v1 * h)
+        hsv = cv2.cvtColor(f[y0:y1, x0:x1], cv2.COLOR_BGR2HSV)
+        m = ((hsv[..., 2] > 185) & (hsv[..., 1] < 90)).astype(np.uint8) * 255
+        m = cv2.morphologyEx(m, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+        cs, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        quad = None
+        if cs:
+            cnt = max(cs, key=cv2.contourArea)
+            hull = cv2.convexHull(cnt)
+            peri = cv2.arcLength(hull, True)
+            for eps in np.linspace(0.01, 0.12, 23):
+                ap = cv2.approxPolyDP(hull, eps * peri, True)
+                if len(ap) == 4:
+                    quad = ap.reshape(4, 2).astype(float)
+                    break
+        if quad is None:
+            out.append(last)
+            continue
+        quad[:, 0] = (quad[:, 0] + x0) / w
+        quad[:, 1] = (quad[:, 1] + y0) / h
+        sm, df = quad.sum(1), quad[:, 0] - quad[:, 1]
+        tl, br = quad[np.argmin(sm)], quad[np.argmax(sm)]
+        tr, bl = quad[np.argmax(df)], quad[np.argmin(df)]
+        last = np.array([tl, tr, br, bl])
+        out.append(last)
+    first = next((q for q in out if q is not None), None)
+    if first is None:
+        return None
+    arr = np.array([q if q is not None else first for q in out])
+    for _ in range(3):
+        arr[1:-1] = (arr[:-2] + 2 * arr[1:-1] + arr[2:]) / 4
+    return arr.tolist()
+
+
 def main():
     manifest = json.load(open(os.path.join(HERE, "assets", "clips.json")))
     for name, info in manifest["clips"].items():
@@ -172,7 +218,9 @@ def main():
         for pname, uv in cfg.get("points", {}).items():
             data["points"][pname] = track_point(grays, uv)
         if cfg.get("hand"):
-            data["hand"] = track_hand(frames)
+            data["hand"] = track_hand(frames, cfg.get("hand_near"))
+        if cfg.get("screens"):
+            data["screens"] = {k: track_screen(frames, b) for k, b in cfg["screens"].items()}
         json.dump(data, open(os.path.join(CLIP_DIR, name + "_track.json"), "w"))
         hs = data["H"]["global"][-1]
         print(name, len(frames), "frames; global H end", [round(v, 3) for v in hs[:6]],

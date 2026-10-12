@@ -646,8 +646,9 @@ def ent_slot(i):
 
 
 def ent_column(c, r, name, subs, a, T, t0, sel=0.0):
-    glass(c, r, 12, a, tint=WHITE, tint_a=0.72, blur=12, border=0.9, shadow=0.12, highlight=0.12,
+    glass(c, r, 12, a, tint=WHITE, tint_a=0.9, blur=12, border=0.95, shadow=0.14, highlight=0.12,
           glow=sel, glow_col=BLUE)
+    rrect_stroke(c, r, 12, "#C9D6EE", a, 1.2)
     text(c, name, r.centerX(), r.top() + 32, 16, "SemiBold", INK, a, "center")
     c.drawLine(r.left() + 12, r.top() + 48, r.right() - 12, r.top() + 48, paint_stroke("#DCE3EE", a, 1))
     for j, s in enumerate(subs):
@@ -679,7 +680,7 @@ def sc09(c, T, t, d):
     c.translate(-P.centerX(), -P.centerY())
     a = clamp(pk * 1.4)
     solid = e_io_cubic(prog(T, ENT_DONE, 0.8))
-    glass(c, P, 24, a, tint=WHITE, tint_a=lerp(0.30, 0.55, solid), blur=30, border=0.9, shadow=0.18, highlight=0.18)
+    glass(c, P, 24, a, tint=WHITE, tint_a=lerp(0.55, 0.72, solid), blur=30, border=0.95, shadow=0.24, highlight=0.18)
     text(c, "M-AI-Works", P.left() + 32, P.top() + 46, 26, "Bold", INK, a)
     dk = e_out_expo(prog(T, ENT_DONE, 0.6))
     text(c, "우리 회사 맞춤 워크스페이스", P.right() - 32, P.top() + 44, 18, "SemiBold", BLUE, a * dk, "right")
@@ -851,8 +852,8 @@ def sc10(c, T, t, d):
 # Front close-up of a hand on a tablet; each tap lifts an app (real Gmail / Slack / Notion icons)
 # out of the screen, it hovers, then docks into the personal glass workspace; custom AI functions
 # combine with the connected apps.
-SC12_APPS = [("Gmail", "gmail", "GMAIL", (870, 250)), ("Slack", "slack", "SLACK", (1030, 180)),
-             ("Notion", "notion", "NOTION", (1150, 300))]
+SC12_APPS = [("Gmail", "gmail", "GMAIL", (1080, 170)), ("Slack", "slack", "SLACK", (950, 290)),
+             ("Notion", "notion", "NOTION", (1110, 400))]
 SC12_FUNCS = [("메일 요약", "mail"), ("회의록 AI", "chat"), ("일정 정리", "calendar")]
 SC12_WP = R(1252, 64, 610, 436)
 SC12_TIP = (0.62, 0.62)
@@ -977,7 +978,7 @@ def sc13(c, T, t, d):
                 rrect(c, R(tb.left() + 28 + cc * 104, y + 13, w, 12), 6, BLUE if (rr_ == 0) else STEEL_200, ra)
     # OCR: each recognised row is underlined on the paper (tracked), then becomes a data chip
     hk = vis(T, CUE["OCR"] + 0.2, 0.5)
-    hx, hy0 = 1420, 300
+    hx, hy0 = 1560, 300
     if hk > 0:
         rrect(c, R(hx, hy0 - 44, 136, 34), 17, NAVY, hk * 0.92)
         icon(c, "scan", hx + 24, hy0 - 27, 16, CYAN_SOFT, hk)
@@ -1113,7 +1114,7 @@ def onto_cam(T):
     b = e_io_cubic(prog(T, CUE["L18"] - 0.3, 2.2))
     yaw = math.radians(lerp(-16, -6, a) + 4 * b)
     pitch = math.radians(lerp(30, 33, a) + 4 * b)
-    dist = lerp(19.0, 17.6, a) + 2.6 * b
+    dist = lerp(19.0, 17.6, a) + 1.4 * b
     return Proj(yaw, pitch, dist, (0.0, 0.4, 0.4), 1500, W / 2, H / 2 + 70 + 70 * b)
 
 
@@ -1454,7 +1455,7 @@ def sc17(c, T, t, d):
         return
     a = clamp(k)
     r = R(100, 110 + 16 * (1 - a), 640, 360)
-    glass(c, r, 20, a, tint=WHITE, tint_a=0.6, blur=26, border=0.85, shadow=0.25)
+    glass(c, r, 20, a, tint=WHITE, tint_a=0.86, blur=26, border=0.9, shadow=0.28)
     text(c, "수요 예측", r.left() + 32, r.top() + 50, 24, "SemiBold", INK, a)
     text(c, "향후 4주", r.left() + 34, r.top() + 76, 15, "Medium", STEEL, a)
     ch = R(r.right() - 140, r.top() + 30, 110, 40)
@@ -1674,7 +1675,7 @@ def sc21(c, T, t, d):
                 c.drawCircle(x, y, 20 + 90 * q, paint_stroke(CYAN, (1 - q) * 0.7, 1.6))
         else:
             square(c, x, y, 7, WHITE, 0.9)
-    flows(c, cam, SC21_FLOWS, T, "s21", None, SC21_TOWER, width=1.6)
+    flows(c, cam, SC21_FLOWS, T, "s21", None, SC21_TOWER, width=2.4, n=18)
 
 
 # ============================================================ FIN: lines become video, video becomes AX, AX becomes AXCORE

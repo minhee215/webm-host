@@ -1,273 +1,390 @@
-"""AXCORE promo film - soundtrack.
+"""AXCORE promo film - soundtrack (v4).
 
-Synthesizes a restrained, quietly optimistic music bed (pad, plucked arpeggio,
-sub, soft shaker), transition whooshes and a logo impact, then mixes them under
-the narration (delayed by the film pre-roll) with sidechain ducking.
+Narration: the supplied read, with silence spliced in at scenes.PAUSES (each split falls inside a
+pause of the original read), so the film breathes before the emphasised lines.
+
+Score: a synthesized cinematic cue in D minor (Dm - Bb - F - C, 90 BPM) that resolves to D major on the
+logo - string ensemble, low brass swells, a driving cello ostinato, taiko drums, bell motif - shaped to
+the story (intro, build, ontology breakdown, second build, finale), with a room reverb and sidechain
+ducking under the voice so the narration always sits on top. No transition sound effects.
 """
 import os
 import subprocess
+import wave
 
 import numpy as np
+from scipy.signal import butter, fftconvolve, lfilter, sosfilt
 
 import scenes as S
 
 SR = 48000
 HERE = os.path.dirname(os.path.abspath(__file__))
 NARRATION = os.path.join(HERE, "assets", "narration.mp3")
-BPM = 92.0
-BAR = 4 * 60.0 / BPM
+BPM = 90.0
+BEAT = 60.0 / BPM
+BAR = 4 * BEAT
 
-# D major: Dmaj9 - Bm11 - Gmaj7(#11) - Asus4 -> A (two bars each)
-PROG = [
-    [50, 57, 61, 64, 66],   # D A C# E F#
-    [47, 54, 57, 61, 64],   # B F# A C# E
-    [43, 50, 54, 57, 61],   # G D F# A C#
-    [45, 52, 57, 59, 64],   # A E A B E
-]
+#            voicing (MIDI)                 bass
+CHORDS = {"Dm": ([50, 57, 62, 65, 69], 38), "Bb": ([46, 53, 58, 62, 65], 34), "F": ([53, 60, 65, 69, 72], 41),
+          "C": ([48, 55, 60, 64, 67], 36), "D": ([50, 57, 62, 66, 69, 74], 38)}
+SEQ = ["Dm", "Bb", "F", "C"]
+
+
+def C(name):
+    return CHORDS[name]
 
 
 def mtof(m):
     return 440.0 * 2 ** ((m - 69) / 12)
 
 
-def env_adsr(n, a, r, sr=SR):
-    e = np.ones(n, np.float32)
-    na, nr = min(int(a * sr), n // 2), min(int(r * sr), n // 2)
+def sec(t):
+    return int(round(t * SR))
+
+
+# ---------------------------------------------------------------- timeline of the score (film time)
+def T(key):
+    return S.CUEN[key]
+
+
+LOGO = T("L32") - 0.05            # final hit
+FIN_LINES = [T("L28"), T("L29"), T("L30")]  # 더 빠른 판단 / 효율적인 실행 / 생산성
+
+
+def chord_at(t):
+    if t >= LOGO - 0.15:
+        return "D"
+    return SEQ[int(t / BAR) % 4]
+
+
+def intensity(t):
+    """0..1.3 arrangement curve: intro, build, ontology breakdown, second build, finale."""
+    pts = [(0, 0.25), (6, 0.42), (14.1, 0.55), (28, 0.65), (37, 0.72), (57.8, 0.78), (63.3, 0.5), (69.5, 0.62),
+           (71.2, 0.95), (74.3, 0.72), (86.5, 0.85), (99.9, 1.0), (107.0, 1.12), (112.2, 1.2), (113.2, 0.55),
+           (LOGO, 0.6), (LOGO + 0.05, 1.3), (118.0, 0.8), (120.0, 0.0)]
+    xs, ys = zip(*pts)
+    return np.interp(t, xs, ys)
+
+
+# ---------------------------------------------------------------- instruments
+def saw(freq, n, phase=0.0):
+    ph = (phase + np.cumsum(np.broadcast_to(freq, (n,)) / SR)) % 1.0
+    return (2 * ph - 1).astype(np.float32)
+
+
+def lp(x, fc, order=2):
+    sos = butter(order, min(fc, SR * 0.45), "low", fs=SR, output="sos")
+    return sosfilt(sos, x).astype(np.float32)
+
+
+def hp(x, fc, order=2):
+    sos = butter(order, fc, "high", fs=SR, output="sos")
+    return sosfilt(sos, x).astype(np.float32)
+
+
+def env(n, a, r, sustain=1.0):
+    e = np.full(n, sustain, np.float32)
+    na, nr = min(int(a * SR), n // 2), min(int(r * SR), n // 2)
     if na:
-        e[:na] = np.linspace(0, 1, na) ** 2
+        e[:na] = np.linspace(0, sustain, na) ** 1.6
     if nr:
-        e[-nr:] *= np.linspace(1, 0, nr) ** 1.5
+        e[-nr:] *= np.linspace(1, 0, nr) ** 1.4
     return e
 
 
-def onepole_lp(x, fc):
-    a = np.exp(-2 * np.pi * fc / SR)
-    from scipy.signal import lfilter
-    return lfilter([1 - a], [1, -a], x).astype(np.float32)
-
-
-def pad(total):
+def strings(total, rng):
+    """String ensemble: per bar, every chord tone as 5 detuned saws with slow vibrato, warm low-pass."""
     out = np.zeros((total, 2), np.float32)
-    seg = 2 * BAR
-    n_seg = int(np.ceil(total / SR / seg)) + 1
-    rng = np.random.default_rng(7)
-    for k in range(n_seg):
-        t0 = k * seg - 0.6
-        dur = seg + 1.2
-        i0 = int(max(0, t0) * SR)
-        n = int(dur * SR)
-        if i0 >= total:
-            break
-        n = min(n, total - i0)
-        t = np.arange(n) / SR
-        chord = PROG[k % 4]
-        sig = np.zeros((n, 2), np.float32)
-        for note in chord:
-            for v, det in enumerate((-5, 0, 6)):
-                f = mtof(note) * 2 ** (det / 1200)
-                ph = rng.uniform(0, 2 * np.pi)
-                w = np.zeros(n, np.float32)
-                for h in range(1, 7):
-                    w += (np.sin(2 * np.pi * f * h * t + ph * h) / h * np.exp(-0.35 * h)).astype(np.float32)
-                pan = (v - 1) * 0.45
-                sig[:, 0] += w * (1 - pan) * 0.5
-                sig[:, 1] += w * (1 + pan) * 0.5
-        e = env_adsr(n, 0.9, 1.1)
-        sig *= e[:, None] / (len(chord) * 3)
-        out[i0:i0 + n] += sig
-    for ch in range(2):
-        out[:, ch] = onepole_lp(out[:, ch], 1800)
-    lfo = 1 + 0.08 * np.sin(2 * np.pi * 0.11 * np.arange(total) / SR)
-    return out * lfo[:, None].astype(np.float32)
-
-
-def pluck_arp(total, t_on, t_off_list):
-    out = np.zeros((total, 2), np.float32)
-    step = 60.0 / BPM / 2
-    pattern = [0, 2, 4, 3, 1, 4, 2, 3]
-    nsteps = int(total / SR / step)
-    dl = int(step * 1.5 * SR)
-    for s in range(nsteps):
-        t = s * step
-        if t < t_on or any(a <= t < b for a, b in t_off_list):
+    nbar = int(np.ceil(total / SR / BAR))
+    for b in range(nbar):
+        t0 = b * BAR
+        name = chord_at(t0 + 0.01)
+        if t0 < LOGO - 0.15 < t0 + BAR:   # split the bar at the logo: minor -> major
+            spans = [(t0, LOGO - 0.15, chord_at(t0)), (LOGO - 0.15, total / SR, "D")]
+        elif t0 >= LOGO - 0.15:
             continue
-        chord = PROG[int(t / (2 * BAR)) % 4]
-        note = chord[pattern[s % 8]] + 12
-        f = mtof(note)
-        n = int(0.9 * SR)
-        i0 = int(t * SR)
+        else:
+            spans = [(t0, t0 + BAR, name)]
+        for (a, z, nm) in spans:
+            i0 = sec(max(0.0, a - 0.35))
+            n = min(sec(z - a + 0.9), total - i0)
+            if n <= 0:
+                continue
+            notes, _ = C(nm)
+            sig = np.zeros((n, 2), np.float32)
+            tt = np.arange(n) / SR
+            for j, m in enumerate(notes):
+                for v, det in enumerate((-9, -4, 0, 5, 10)):
+                    f = mtof(m) * 2 ** (det / 1200) * (1 + 0.0016 * np.sin(2 * np.pi * (4.6 + v * 0.3) * tt + v))
+                    w = saw(f, n, rng.uniform())
+                    pan = ((v - 2) / 2) * 0.55 + (j - 2) * 0.06
+                    sig[:, 0] += w * (1 - pan) * 0.5
+                    sig[:, 1] += w * (1 + pan) * 0.5
+            sig *= (env(n, 0.55, 0.9) / (len(notes) * 5))[:, None]
+            fc = 900 + 2600 * float(intensity(a + 0.5))
+            for ch in range(2):
+                sig[:, ch] = lp(sig[:, ch], fc, 2)
+            out[i0:i0 + n] += sig
+    return out
+
+
+def high_strings(total, rng, t_on, t_off):
+    """Octave-up violins doubling the top voices in the big sections."""
+    out = np.zeros((total, 2), np.float32)
+    for b in range(int(total / SR / BAR) + 1):
+        t0 = b * BAR
+        if not (t_on <= t0 < t_off) or t0 >= LOGO - 0.2:
+            continue
+        notes, _ = C(chord_at(t0 + 0.01))
+        i0 = sec(t0 - 0.3)
+        n = min(sec(BAR + 0.8), total - i0)
+        tt = np.arange(n) / SR
+        sig = np.zeros((n, 2), np.float32)
+        for m in notes[-2:]:
+            for v, det in enumerate((-7, 0, 7)):
+                f = mtof(m + 12) * 2 ** (det / 1200) * (1 + 0.0025 * np.sin(2 * np.pi * 5.2 * tt + v))
+                w = saw(f, n, rng.uniform())
+                sig[:, 0] += w * (0.7 - 0.2 * v)
+                sig[:, 1] += w * (0.3 + 0.2 * v)
+        sig *= (env(n, 0.7, 0.9) / 6)[:, None]
+        for ch in range(2):
+            sig[:, ch] = lp(hp(sig[:, ch], 500), 5200)
+        out[i0:i0 + n] += sig
+    return out
+
+
+def ostinato(total, spans):
+    """Driving cello/bass 8th notes on the chord root (octave/fifth figure)."""
+    out = np.zeros(total, np.float32)
+    fig = [0, 0, 12, 0, 0, 7, 0, 12]
+    step = BEAT / 2
+    for s in range(int(total / SR / step)):
+        t = s * step
+        if not any(a <= t < b for a, b in spans) or t >= LOGO - 0.2:
+            continue
+        _, root = C(chord_at(t))
+        m = root + 12 + fig[s % 8]
+        n = sec(0.34)
+        i0 = sec(t)
         if i0 + n > total:
             break
         tt = np.arange(n) / SR
-        w = (np.sin(2 * np.pi * f * tt) + 0.25 * np.sin(4 * np.pi * f * tt)) * np.exp(-tt * 6.5)
-        w *= 0.9 + 0.1 * (s % 2)
-        pan = 0.3 * np.sin(s * 0.7)
-        out[i0:i0 + n, 0] += w * (1 - pan) * 0.5
-        out[i0:i0 + n, 1] += w * (1 + pan) * 0.5
-    # ping-pong delay
-    d = np.zeros_like(out)
-    d[dl:, 0] += out[:-dl, 1] * 0.35
-    d[2 * dl:, 1] += out[:-2 * dl, 0] * 0.25
-    out += d
-    for ch in range(2):
-        out[:, ch] = onepole_lp(out[:, ch], 4200)
-    return out
+        w = saw(mtof(m), n) * 0.6 + saw(mtof(m) * 1.003, n) * 0.4
+        e = (1 - np.exp(-tt * 300)) * np.exp(-tt * 9.0)
+        acc = 1.0 if s % 4 == 0 else 0.72
+        out[i0:i0 + n] += w * e * acc
+    out = lp(out, 950, 2)
+    return np.stack([out * 0.9, out], 1)
 
 
-def sub(total, t_on, t_off_list):
+def sub_bass(total):
     out = np.zeros(total, np.float32)
-    seg = 2 * BAR
-    for k in range(int(total / SR / seg) + 1):
-        t0 = k * seg
-        if t0 < t_on or any(a <= t0 < b for a, b in t_off_list):
+    for b in range(int(total / SR / BAR) + 1):
+        t0 = b * BAR
+        if t0 < 14.0 or (63.3 <= t0 < 69.5) or t0 >= LOGO - 0.2:
             continue
-        f = mtof(PROG[k % 4][0] - 12)
-        n = min(int(seg * SR), total - int(t0 * SR))
+        _, root = C(chord_at(t0 + 0.01))
+        i0, n = sec(t0), min(sec(BAR), total - sec(t0))
         if n <= 0:
             break
         tt = np.arange(n) / SR
-        out[int(t0 * SR):int(t0 * SR) + n] += (np.sin(2 * np.pi * f * tt) * env_adsr(n, 0.25, 0.6)).astype(np.float32)
+        out[i0:i0 + n] += np.sin(2 * np.pi * mtof(root) * tt) * env(n, 0.08, 0.5)
     return np.stack([out, out], 1)
 
 
-def shaker(total, t_on, t_off):
+def brass(total, swells):
+    """Low horns/trombones: root-fifth-octave saws with a filter swell (crescendo into the downbeat)."""
     out = np.zeros((total, 2), np.float32)
-    rng = np.random.default_rng(11)
-    step = 60.0 / BPM / 4
-    for s in range(int(total / SR / step)):
-        t = s * step
-        if not (t_on <= t < t_off):
+    for (t0, dur, nm, gain) in swells:
+        notes, root = C(nm)
+        i0 = sec(t0)
+        n = min(sec(dur), total - i0)
+        if n <= 0:
             continue
-        n = int(0.07 * SR)
-        i0 = int(t * SR)
-        nz = rng.standard_normal(n).astype(np.float32)
-        nz = np.diff(np.concatenate([[0], nz]))  # crude high-pass
-        acc = 1.0 if s % 4 == 2 else 0.45
-        e = np.exp(-np.arange(n) / SR * 60)
-        pan = 0.25 if s % 2 else -0.25
-        out[i0:i0 + n, 0] += nz * e * acc * (1 - pan)
-        out[i0:i0 + n, 1] += nz * e * acc * (1 + pan)
+        tt = np.arange(n) / SR
+        sig = np.zeros(n, np.float32)
+        for m in (root + 12, root + 19, root + 24, notes[2]):
+            for det in (-6, 0, 6):
+                sig += saw(mtof(m) * 2 ** (det / 1200), n)
+        sig /= 12
+        sw = np.clip(tt / (dur * 0.55), 0, 1) ** 1.5
+        # block-wise filter sweep
+        y = np.zeros(n, np.float32)
+        blocks = 32
+        for k in range(blocks):
+            a, z = k * n // blocks, (k + 1) * n // blocks
+            fc = 260 + 2100 * sw[min(a, n - 1)]
+            bb, aa = butter(2, fc, "low", fs=SR)
+            y[a:z] = lfilter(bb, aa, sig[a:z])
+        e = env(n, dur * 0.45, dur * 0.4) * (0.35 + 0.65 * sw)
+        y *= e * gain
+        out[i0:i0 + n, 0] += y
+        out[i0:i0 + n, 1] += y * 0.92
     return out
 
 
-def whoosh(total, t_center, dur=0.9, gain=1.0, rng=None):
+def taiko(total, hits, rng):
     out = np.zeros((total, 2), np.float32)
-    n = int(dur * SR)
-    i0 = int((t_center - dur * 0.6) * SR)
+    for (t, g, pan) in hits:
+        i0 = sec(t)
+        n = min(sec(1.6), total - i0)
+        if n <= 0 or i0 < 0:
+            continue
+        tt = np.arange(n) / SR
+        f = 48 + 75 * np.exp(-tt * 28)
+        body = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-tt * 5.5)
+        skin = lp(rng.standard_normal(n).astype(np.float32), 1400) * np.exp(-tt * 40) * 0.8
+        w = (body + skin) * g
+        out[i0:i0 + n, 0] += w * (1 - pan)
+        out[i0:i0 + n, 1] += w * (1 + pan)
+    return out
+
+
+def bells(total, notes_at):
+    out = np.zeros((total, 2), np.float32)
+    for (t, m, g) in notes_at:
+        i0 = sec(t)
+        n = min(sec(2.4), total - i0)
+        if n <= 0:
+            continue
+        tt = np.arange(n) / SR
+        f = mtof(m)
+        w = (np.sin(2 * np.pi * f * tt) + 0.35 * np.sin(2 * np.pi * f * 2.76 * tt) * np.exp(-tt * 3) +
+             0.18 * np.sin(2 * np.pi * f * 5.4 * tt) * np.exp(-tt * 6)) * np.exp(-tt * 1.6) * g
+        pan = ((m % 7) / 6 - 0.5) * 0.8
+        out[i0:i0 + n, 0] += w * (1 - pan)
+        out[i0:i0 + n, 1] += w * (1 + pan)
+    return out
+
+
+def swell_noise(total, t_end, dur, rng, gain=1.0):
+    """Reverse-cymbal style swell that lands on a downbeat (musical, not a transition effect)."""
+    out = np.zeros((total, 2), np.float32)
+    i0 = sec(t_end - dur)
+    n = sec(dur)
     if i0 < 0 or i0 + n > total:
         return out
-    nz = rng.standard_normal(n).astype(np.float32)
-    tt = np.linspace(0, 1, n)
-    e = (np.sin(np.pi * tt ** 0.8) ** 2).astype(np.float32)
-    # sweeping band: filter cutoff rises then falls
-    from scipy.signal import lfilter
-    y = np.zeros(n, np.float32)
-    blocks = 24
-    for b in range(blocks):
-        a0, a1 = b * n // blocks, (b + 1) * n // blocks
-        fc = 400 + 5200 * np.sin(np.pi * (b + 0.5) / blocks)
-        a = np.exp(-2 * np.pi * fc / SR)
-        y[a0:a1] = lfilter([1 - a], [1, -a], nz[a0:a1])
-    y = y - onepole_lp(y, 180)
-    pan = np.linspace(-0.6, 0.6, n)
-    out[i0:i0 + n, 0] = y * e * (1 - pan) * gain
-    out[i0:i0 + n, 1] = y * e * (1 + pan) * gain
+    nz = hp(rng.standard_normal(n).astype(np.float32), 3500)
+    e = (np.linspace(0, 1, n) ** 3.2).astype(np.float32)
+    out[i0:i0 + n, 0] = nz * e * gain
+    out[i0:i0 + n, 1] = hp(rng.standard_normal(n).astype(np.float32), 3500) * e * gain
     return out
 
 
-def impact(total, t):
-    out = np.zeros((total, 2), np.float32)
-    n = int(4.0 * SR)
-    i0 = int(t * SR)
-    n = min(n, total - i0)
+def reverb(x, seconds=2.2, mix=0.28, rng=None):
+    n = sec(seconds)
     tt = np.arange(n) / SR
-    f = 55 * np.exp(-tt * 1.4) + 38
-    boom = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-tt * 1.6)
-    shim = np.zeros(n)
-    for m in (86, 90, 93, 97):
-        shim += np.sin(2 * np.pi * mtof(m) * tt) * np.exp(-tt * 1.2) * 0.18
-    out[i0:i0 + n, 0] = boom * 0.9 + shim * 0.8
-    out[i0:i0 + n, 1] = boom * 0.9 + shim * 1.0
-    return out
+    out = np.zeros_like(x)
+    for ch in range(x.shape[1]):
+        ir = rng.standard_normal(n).astype(np.float32) * np.exp(-tt * 3.1).astype(np.float32)
+        ir = lp(ir, 5200)
+        ir[:sec(0.012)] = 0
+        ir /= np.sqrt((ir ** 2).sum())
+        out[:, ch] = fftconvolve(x[:, ch], ir)[:len(x)].astype(np.float32)
+    return x * (1 - mix) + out * mix * 1.6
 
 
-def tick(total, t, gain=0.5):
-    out = np.zeros((total, 2), np.float32)
-    n = int(0.05 * SR)
-    i0 = int(t * SR)
-    if i0 + n > total:
-        return out
-    tt = np.arange(n) / SR
-    w = np.sin(2 * np.pi * 2400 * tt) * np.exp(-tt * 120) * gain
-    out[i0:i0 + n] += w[:, None]
-    return out
-
-
+# ---------------------------------------------------------------- narration with pauses
 def load_narration(total):
     raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", NARRATION, "-f", "f32le", "-ac", "1", "-ar", str(SR), "-"],
                          check=True, capture_output=True).stdout
     x = np.frombuffer(raw, np.float32)
     out = np.zeros(total, np.float32)
-    i0 = int(S.AUDIO_OFFSET * SR)
-    n = min(len(x), total - i0)
-    out[i0:i0 + n] = x[:n]
+    cuts = [sec(p - S.AUDIO_OFFSET) for p, _ in S.PAUSES]
+    bounds = [0] + cuts + [len(x)]
+    dst = sec(S.AUDIO_OFFSET)
+    for j in range(len(bounds) - 1):
+        a, z = bounds[j], bounds[j + 1]
+        seg = x[a:z]
+        n = min(len(seg), total - dst)
+        if n > 0:
+            out[dst:dst + n] = seg[:n]
+        dst += len(seg) + (sec(S.PAUSES[j][1]) if j < len(S.PAUSES) else 0)
     return out
 
 
-def rms_env(x, win=0.08):
-    n = int(win * SR)
-    k = np.ones(n) / n
-    e = np.sqrt(np.convolve(x ** 2, k, mode="same"))
-    # smooth release
-    from scipy.signal import lfilter
-    a = np.exp(-1 / (0.35 * SR))
-    return lfilter([1 - a], [1, -a], e).astype(np.float32)
+def rms_env(x, win=0.06):
+    n = sec(win)
+    e = np.sqrt(np.convolve(x ** 2, np.ones(n) / n, mode="same"))
+    att = np.exp(-1 / (0.02 * SR))
+    rel = np.exp(-1 / (0.45 * SR))
+    # peak-hold style follower: fast attack, slow release (so the bed does not pump between words)
+    from scipy.signal import lfilter as lf
+    fast = lf([1 - att], [1, -att], e)
+    slow = lf([1 - rel], [1, -rel], e)
+    return np.maximum(fast, slow).astype(np.float32)
 
 
 def db(x):
     return 10 ** (x / 20)
 
 
+def score(total):
+    rng = np.random.default_rng(5)
+    tl = np.arange(total) / SR
+    m = strings(total, rng) * db(-4)
+    m += high_strings(total, rng, 99.9, 113.0) * db(-11)
+    m += high_strings(total, rng, 69.5, 74.3) * db(-14)
+    m += ostinato(total, [(14.1, 63.3), (69.6, 113.0)]) * db(-12)
+    m += sub_bass(total) * db(-13)
+    # brass swells into the structural downbeats
+    swells = [(10.5, 3.6, "Dm", 0.55), (24.5, 3.5, "F", 0.5), (34.0, 3.0, "Dm", 0.5), (54.0, 3.8, "Bb", 0.6),
+              (68.6, 2.7, "Dm", 0.7), (83.0, 3.5, "Bb", 0.65), (96.5, 3.4, "F", 0.75), (104.0, 3.0, "C", 0.85)]
+    for i, t in enumerate(FIN_LINES):
+        swells.append((t - 0.9, 1.6, ["Dm", "Bb", "F"][i], 0.9))
+    swells.append((LOGO - 0.02, 4.6, "D", 1.15))
+    m += brass(total, swells) * db(-7)
+    # taiko: groove in the build sections, accents on the finale lines and the logo
+    hits = []
+    for b in range(int(total / SR / BAR) + 1):
+        t0 = b * BAR
+        sect = (18.2 <= t0 < 63.3) or (78.8 <= t0 < 112.5)
+        if not sect:
+            continue
+        big = t0 >= 99.9
+        for (bt, g, pan) in ((0, 1.0, 0.0), (1.5, 0.45, -0.3), (2, 0.75, 0.2), (3.5, 0.4, 0.3)):
+            hits.append((t0 + bt * BEAT, g * (1.15 if big else 0.85), pan))
+        if (b % 4) == 3:
+            for k in range(4):
+                hits.append((t0 + (3 + k * 0.25) * BEAT, 0.35 + 0.12 * k, (k - 1.5) * 0.25))
+    for t in FIN_LINES:
+        hits.append((t - 0.04, 1.5, 0.0))
+    hits += [(71.2, 1.3, 0.0), (107.0, 1.4, 0.0), (LOGO, 2.2, 0.0), (LOGO + 0.33, 0.9, -0.2)]
+    m += taiko(total, hits, rng) * db(-9)
+    # bell motif: intro and ontology (sparkle), last echo after the logo
+    motif = [62, 65, 69, 72, 69, 65]
+    notes = []
+    for k in range(int(13.6 / (BEAT * 1.5))):
+        notes.append((0.6 + k * BEAT * 1.5, motif[k % 6] + 12, 0.5 if k % 6 == 0 else 0.32))
+    for k in range(int(6.0 / (BEAT * 0.75))):
+        notes.append((63.4 + k * BEAT * 0.75, motif[k % 6] + 12, 0.3))
+    for k, mm in enumerate((74, 78, 81, 86)):
+        notes.append((LOGO + 0.6 + k * 0.28, mm, 0.35))
+    m += bells(total, notes) * db(-17)
+    m += swell_noise(total, 71.2, 2.4, rng, 0.6) * db(-24)
+    m += swell_noise(total, 107.0, 2.2, rng, 0.7) * db(-24)
+    m += swell_noise(total, LOGO, 2.6, rng, 1.0) * db(-21)
+    m = reverb(m, 2.4, 0.3, rng)
+    m *= intensity(tl)[:, None].astype(np.float32)
+    # gentle bus glue (soft clip)
+    m = np.tanh(m * 1.4) / 1.4
+    return m
+
+
 def build_mix(path):
     total = int(S.DURATION * SR)
-    rng = np.random.default_rng(3)
     narr = load_narration(total)
-    narr *= db(-3) / (np.abs(narr).max() + 1e-9)
-
-    tl = np.arange(total) / SR
-    music = pad(total) * db(-5)
-    arp_off = [(58.0, 62.6), (102.4, 120)]
-    music += pluck_arp(total, 13.1, arp_off) * db(-12)
-    music += sub(total, 17.2, [(102.4, 120)]) * db(-11)
-    music += shaker(total, 40.6, 97.4) * db(-30)
-    music += shaker(total, 97.4, 102.4) * db(-25)
-    # arrangement dynamics
-    dyn = np.interp(tl, [0, 3, 13, 17, 40, 58, 62.6, 68, 91, 97.4, 102.4, 104.6, 107.6, 109.5],
-                    [0.0, 0.7, 0.8, 0.9, 1.0, 0.9, 1.1, 1.0, 1.05, 1.15, 0.75, 1.3, 1.1, 0.0])
-    music *= dyn[:, None].astype(np.float32)
-
-    sfx = np.zeros((total, 2), np.float32)
-    for name, t0, t1, fn in S.SCENES[1:]:
-        typ = S.TRANS.get(name, ("cut",))[0]
-        g = {"streak": 0.9, "zoom": 0.7, "whip": 1.0, "blocks": 0.6, "expand": 0.6, "shrink": 0.6}.get(typ, 0.35)
-        sfx += whoosh(total, t0, 0.7 if typ == "whip" else 1.0, g, rng)
-    for cue in ("ERP", "MES", "CRM", "GMAIL", "SLACK", "NOTION", "EQUIP", "MATER", "PROC", "PROD", "PEOPLE", "TASK",
-                "L21", "CAUSE", "CTX"):
-        sfx += tick(total, S.CUE[cue], 0.35)
-    sfx += impact(total, S.CUE["L32"] - 0.12)
-    sfx *= db(-17)
-
-    # sidechain duck music + sfx under the voice
-    env = rms_env(narr)
-    env /= env.max() + 1e-9
-    duck = (1 - 0.5 * np.clip(env * 3, 0, 1))[:, None]
-    bed = (music + sfx * 0.8) * duck
-
-    mix = bed + narr[:, None] * np.array([1.0, 1.0], np.float32)
-    peak = np.abs(mix).max()
-    mix *= db(-1.0) / peak
+    narr *= db(-2.5) / (np.abs(narr).max() + 1e-9)
+    music = score(total)
+    music *= db(-3.0) / (np.abs(music).max() + 1e-9)
+    # sidechain: the bed dips ~9 dB under the voice (voice stays ~12 dB above the music) and recovers between sentences
+    e = rms_env(narr)
+    e /= e.max() + 1e-9
+    duck = (1 - 0.66 * np.clip(e * 3.2, 0, 1))[:, None]
+    bed = music * duck * db(-7.0)
+    mix = bed + narr[:, None]
+    mix *= db(-1.0) / np.abs(mix).max()
     pcm = (np.clip(mix, -1, 1) * 32767).astype(np.int16)
-    import wave
     with wave.open(path, "wb") as w:
         w.setnchannels(2)
         w.setsampwidth(2)

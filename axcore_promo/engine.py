@@ -1232,9 +1232,8 @@ def tr_lines(c, A, B, p, angle=-14.0, color=CYAN, key="tl", bend=0.10, bundles=5
     c.restore()
     a = math.sin(math.pi * clamp(p))
     # light band at the cut line
-    band = skia.GradientShader.MakeLinear([skia.Point(fx - dx * 260, fy - dy * 260), skia.Point(fx, fy),
-                                           skia.Point(fx + dx * 120, fy + dy * 120)],
-                                          [colint(color, 0), colint(color, 0.22 * a), colint(color, 0)])
+    band = skia.GradientShader.MakeLinear([skia.Point(fx - dx * 260, fy - dy * 260), skia.Point(fx + dx * 120, fy + dy * 120)],
+                                          [colint(color, 0), colint(color, 0.22 * a), colint(color, 0)], [0.0, 0.68, 1.0])
     c.drawPaint(skia.Paint(Shader=band, BlendMode=skia.BlendMode.kScreen if not light else skia.BlendMode.kSrcOver))
     r = rng(key)
     L = span * 0.95
@@ -1248,8 +1247,8 @@ def tr_lines(c, A, B, p, angle=-14.0, color=CYAN, key="tl", bend=0.10, bundles=5
             w = o + amp * math.sin(math.pi * u + phs)
             pts.append((W / 2 + dx * u * L + nx * w, H / 2 + dy * u * L + ny * w))
         hd = (front + L) / (2 * L) + r.uniform(-0.03, 0.02)
-        line_flow(c, pts, hd, 0.42, n=11, spread=r.uniform(16, 46), twist=1.2, width=1.5, color=color,
-                  alpha=0.95, key="%s%d" % (key, b), glow=0.9, sparks=14, tsec=p * 3,
+        line_flow(c, pts, hd, 0.42, n=12, spread=r.uniform(16, 46), twist=1.2, width=1.9, color=color,
+                  alpha=1.0, key="%s%d" % (key, b), glow=0.9, sparks=14, tsec=p * 3,
                   blend="normal" if light else "screen", core=WHITE if not light else color)
 
 

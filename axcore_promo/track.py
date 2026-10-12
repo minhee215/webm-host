@@ -123,6 +123,7 @@ def track_hand(frames):
             raw.append(np.array([[p.x, p.y] for p in res.hand_landmarks[0]]))
         else:
             raw.append(None)
+    det.close()
     # fill gaps by linear interpolation, then smooth
     idx = [i for i, r in enumerate(raw) if r is not None]
     if not idx:

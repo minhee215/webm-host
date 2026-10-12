@@ -427,44 +427,53 @@ def sc08(c, T, t, d):
 
 
 # ============================================================ SC09 M-AI Works modules (enterprise)
+# The live-action hand (Kling clip, MediaPipe-tracked) pinches a module on the right, drags it
+# into the workspace, then pinches another and flicks it away. Graphics follow the fingertips.
 MODULES = [("Doc Search", "search"), ("OCR Capture", "scan"), ("Forecast", "chart"), ("Quality AI", "alert"),
            ("Workflow", "flow"), ("Reports", "report"), ("Chat Q&A", "chat"), ("Robot Link", "robot")]
-SC09_PANEL = R(250, 175, 860, 620)
+SC09_T0 = 33.85
+SC09_SPEED = 1.35
+# clip-time events measured from the hand track
+SC09_GRAB, SC09_DROP, SC09_GRAB2, SC09_FLICK = 1.0, 5.45, 7.0, 7.95
+SC09_PANEL = R(150, 190, 900, 600)
 SC09_SLOTS = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]
-# (module index, slot, time in, time out)
-SC09_ADD = [(0, 0, 35.20), (2, 1, 35.55), (3, 2, 35.90), (7, 3, 36.25), (4, 4, 36.60)]
-SC09_REMOVE = (7, 37.05)
-SC09_ADD2 = (6, 3, 37.35)
+SC09_HAND_MOD = 0        # dragged by hand into slot 0
+SC09_AUTO = [(2, 1, 0.25), (3, 2, 0.5), (4, 3, 0.75), (7, 5, 1.0)]  # (module, slot, delay after drop)
+SC09_REMOVED = 7         # pinched out of slot 5 and flicked away
+SC09_ADD2 = (6, 5, 0.35)  # replaces it (delay after flick)
 
 
-def sc09_slot_rect(i, solid):
+def sc09_ct(T):
+    return (T - SC09_T0) * SC09_SPEED
+
+
+def sc09_slot_rect(i):
     col_, row = SC09_SLOTS[i]
-    x0, y0 = SC09_PANEL.left() + 40, SC09_PANEL.top() + 120
-    w, h = 248, 200
+    x0, y0 = SC09_PANEL.left() + 36, SC09_PANEL.top() + 124
+    w, h = 264, 210
     return R(x0 + col_ * (w + 18), y0 + row * (h + 18), w, h)
 
 
-def sc09_ring_pos(i, T):
-    a0 = -2.35 + i * 0.6 + jit("r9%d" % i, 1, 0.08)
-    cx, cy = 1330, 470
-    rx, ry = 330, 330
-    wob = math.sin(T * 0.9 + i) * 6
-    return cx + math.cos(a0) * rx + wob, cy + math.sin(a0) * ry * 0.95 + wob * 0.6
+def sc09_dock(i, T):
+    # 8-module library floating in a column right of the hand
+    x = 1560 + (i % 2) * 190 + math.sin(T * 0.8 + i) * 5
+    y = 150 + i * 102 + math.cos(T * 0.9 + i) * 4
+    return x, y
 
 
 def module_card(c, rect, name, ic, alpha, selected=0.0, solid=0.0, mini=0.0, idx=0, T=0.0):
-    glass(c, rect, 14, alpha, tint=WHITE, tint_a=0.42, blur=18, border=0.8, shadow=0.16, glow=selected,
+    glass(c, rect, 14, alpha, tint=WHITE, tint_a=0.5, blur=18, border=0.85, shadow=0.18, glow=selected,
           glow_col=BLUE, solid=solid, solid_col=WHITE, highlight=0.15)
     if rect.height() <= 90:  # chip form
         icon(c, ic, rect.left() + 26, rect.centerY(), 20, BLUE, alpha)
-        text(c, name, rect.left() + 48, rect.centerY() + 6, 16, "SemiBold", INK, alpha)
+        text(c, name, rect.left() + 48, rect.centerY() + 6, 17, "SemiBold", INK, alpha)
         return
-    icon(c, ic, rect.left() + 34, rect.top() + 36, 24, BLUE, alpha)
-    text(c, name, rect.left() + 60, rect.top() + 43, 18, "SemiBold", INK, alpha)
+    icon(c, ic, rect.left() + 34, rect.top() + 38, 24, BLUE, alpha)
+    text(c, name, rect.left() + 60, rect.top() + 45, 19, "SemiBold", INK, alpha)
     if mini > 0:
         a = alpha * mini
         r = rng("mini%d" % idx)
-        bx, by, bw, bh = rect.left() + 26, rect.top() + 74, rect.width() - 52, rect.height() - 100
+        bx, by, bw, bh = rect.left() + 26, rect.top() + 76, rect.width() - 52, rect.height() - 102
         kind = idx % 4
         if kind == 0:
             for j in range(4):
@@ -476,81 +485,139 @@ def module_card(c, rect, name, ic, alpha, selected=0.0, solid=0.0, mini=0.0, idx
         elif kind == 2:
             for j in range(7):
                 hh = bh * (0.25 + r.uniform(0, 0.7)) * mini
-                c.drawRect(R(bx + j * bw / 7 + 4, by + bh - hh, bw / 7 - 10, hh), paint_fill(INDIGO if j == 5 else STEEL_200, a))
+                c.drawRect(R(bx + j * bw / 7 + 4, by + bh - hh, bw / 7 - 10, hh),
+                           paint_fill(INDIGO if j == 5 else STEEL_200, a))
         else:
-            c.drawArc(R(bx + bw / 2 - 52, by + 4, 104, 104), 140, 260, False, paint_stroke(STEEL_200, a, 10))
-            c.drawArc(R(bx + bw / 2 - 52, by + 4, 104, 104), 140, 260 * 0.72 * mini, False, paint_stroke(BLUE, a, 10))
+            c.drawArc(R(bx + bw / 2 - 52, by + 2, 104, 104), 140, 260, False, paint_stroke(STEEL_200, a, 10))
+            c.drawArc(R(bx + bw / 2 - 52, by + 2, 104, 104), 140, 260 * 0.72 * mini, False, paint_stroke(BLUE, a, 10))
+
+
+def _badge(c, rect, kind, a):
+    bx, by = rect.right() - 10, rect.top() + 10
+    c.drawCircle(bx, by, 15, paint_fill(BLUE if kind == "plus" else STEEL, a))
+    icon(c, kind, bx, by, 16, WHITE, a)
 
 
 def sc09(c, T, t, d):
-    draw_plate(c, "09_handraise", t, d, s=(1.04, 1.1), x=(0, -20), grade=GRADE_DAY,
-                     beats=[(CUE["L12"] - 33.85, 0.03)])
-    solid = e_io_cubic(prog(T, CUE["L12"] + 0.1, 1.2))
-    par = lerp(14, -14, drift(t, d))
+    cam = draw_plate(c, "09_handraise", t, d, s=(1.0, 1.035), grade=GRADE_DAY)
+    ct = sc09_ct(T)
+    solid = e_io_cubic(prog(T, 39.6, 0.9))
     pk = enter(T, 34.0, 0.7)
-    if pk > 0:
-        a = clamp(pk)
-        panel = SC09_PANEL.makeOffset(par, 20 * (1 - a))
-        glass(c, panel, 22, a, tint=WHITE, tint_a=0.32, blur=30, border=0.85, shadow=0.25, solid=solid * 0.94,
-              solid_col=PAPER, highlight=0.2)
-        # header
-        text(c, "M-AI Works", panel.left() + 40, panel.top() + 62, 30, "SemiBold", INK, a)
-        sub = "Select modules for your company" if solid < 0.5 else "My Workspace"
-        text(c, sub, panel.left() + 42, panel.top() + 90, 16, "Medium", STEEL, a)
-        for j in range(3):
-            c.drawCircle(panel.right() - 40 - j * 20, panel.top() + 50, 5, paint_fill(STEEL_200, a))
-        c.drawLine(panel.left(), panel.top() + 108, panel.right(), panel.top() + 108, paint_stroke(STEEL_200, a * 0.7, 1))
-        # empty slots
-        for i in range(6):
-            r = sc09_slot_rect(i, solid).makeOffset(par, 20 * (1 - a))
-            dash = paint_stroke(STEEL_400, a * 0.5 * (1 - solid), 1.4)
-            dash.setPathEffect(skia.DashPathEffect.Make([6, 6], 0))
-            c.drawRRect(skia.RRect.MakeRectXY(r, 14, 14), dash)
-            icon(c, "plus", r.centerX(), r.centerY(), 22, STEEL_400, a * 0.6 * (1 - solid))
-    # module library floating around the hand
-    in_slot = {}
-    for mi, slot, ta in SC09_ADD:
-        in_slot[mi] = (slot, ta, SC09_REMOVE[1] if mi == SC09_REMOVE[0] else 1e9)
-    in_slot[SC09_ADD2[0]] = (SC09_ADD2[1], SC09_ADD2[2], 1e9)
+    if pk <= 0:
+        return
+    a = clamp(pk)
+    panel = SC09_PANEL.makeOffset(0, 20 * (1 - a))
+    glass(c, panel, 22, a, tint=WHITE, tint_a=0.34, blur=30, border=0.85, shadow=0.25, solid=solid * 0.94,
+          solid_col=PAPER, highlight=0.2)
+    text(c, "M-AI Works", panel.left() + 36, panel.top() + 60, 32, "Bold", INK, a)
+    text(c, "필요한 기능을 직접 골라 담으세요" if solid < 0.5 else "우리 회사 워크스페이스", panel.left() + 38,
+         panel.top() + 92, 17, "Medium", STEEL, a)
+    for j in range(3):
+        c.drawCircle(panel.right() - 40 - j * 20, panel.top() + 50, 5, paint_fill(STEEL_200, a))
+    c.drawLine(panel.left(), panel.top() + 110, panel.right(), panel.top() + 110, paint_stroke(STEEL_200, a * 0.7, 1))
+    for i in range(6):
+        r = sc09_slot_rect(i).makeOffset(0, 20 * (1 - a))
+        dash = paint_stroke(STEEL_400, a * 0.55 * (1 - solid), 1.4)
+        dash.setPathEffect(skia.DashPathEffect.Make([6, 6], 0))
+        c.drawRRect(skia.RRect.MakeRectXY(r, 14, 14), dash)
+        icon(c, "plus", r.centerX(), r.centerY(), 22, STEEL_400, a * 0.6 * (1 - solid))
+
+    hp = cam.hand(4)
+    hi = cam.hand(8)
+    pinch_pt = None
+    if hp and hi:
+        pinch_pt = ((hp[0] + hi[0]) / 2, (hp[1] + hi[1]) / 2)
+    t_drop = SC09_T0 + SC09_DROP / SC09_SPEED
+    t_grab2 = SC09_T0 + SC09_GRAB2 / SC09_SPEED
+    t_flick = SC09_T0 + SC09_FLICK / SC09_SPEED
+    mini_on = e_out_expo(prog(T, 39.7, 0.9))
+    placed = {}
+    # library chips (those not yet placed)
     for i, (name, ic) in enumerate(MODULES):
-        k = enter(T, 34.15 + i * 0.09, 0.55)
+        k = enter(T, 34.15 + i * 0.08, 0.5)
         if k <= 0:
             continue
-        rx, ry = sc09_ring_pos(i, T)
-        chip = R(rx - 95, ry - 30, 190, 60)
-        a = clamp(k)
-        if i in in_slot:
-            slot, ta, tr = in_slot[i]
-            f = e_io_cubic(prog(T, ta, 0.55))
-            back = e_io_cubic(prog(T, tr, 0.5))
-            sr = sc09_slot_rect(slot, solid).makeOffset(par, 0)
-            if f > 0:
-                pth = arc_path((rx, ry), (sr.centerX(), sr.centerY()), 0.18)
-                px, py, _ = path_at(pth, f if back <= 0 else 1 - back)
-                q = f if back <= 0 else 1 - back
-                w_ = lerp(190, sr.width(), q)
-                h_ = lerp(60, sr.height(), q)
-                rect = R(px - w_ / 2, py - h_ / 2, w_, h_)
-                # motion trail (velocity only)
-                if 0.05 < q < 0.95:
-                    line(c, pth, BLUE, 0.35 * math.sin(math.pi * q), 2.0, (max(0, q - 0.25), q), glow=0.5)
-                sel = math.sin(math.pi * clamp((T - ta - 0.45) / 0.5)) if back <= 0 else 0
-                mini = e_out_expo(prog(T, CUE["L12"] + 0.4 + slot * 0.12, 1.0))
-                module_card(c, rect, name, ic, a * (1 - 0.6 * back), sel, solid if q > 0.98 else 0.0,
-                            mini if q > 0.98 else 0, slot, T)
-                if back > 0 and back < 1:  # removed: minus badge
-                    bx, by = rect.right() - 10, rect.top() + 10
-                    c.drawCircle(bx, by, 14, paint_fill(STEEL, a))
-                    icon(c, "minus", bx, by, 16, WHITE, a)
-                elif 0 < (T - ta - 0.5) < 0.6 and back <= 0:
-                    bx, by = rect.right() - 10, rect.top() + 10
-                    ba = math.sin(math.pi * clamp((T - ta - 0.5) / 0.6))
-                    c.drawCircle(bx, by, 14, paint_fill(BLUE, ba))
-                    icon(c, "plus", bx, by, 16, WHITE, ba)
+        dx, dy = sc09_dock(i, T)
+        chip = R(dx - 90, dy - 30, 180, 60)
+        ka = clamp(k)
+        if i == SC09_HAND_MOD:
+            # grabbed by the pinch, dragged, dropped into slot 0
+            sr = sc09_slot_rect(0)
+            if ct < SC09_GRAB or pinch_pt is None:
+                gx, gy = (pinch_pt if pinch_pt else (dx, dy))
+                ga = e_io_cubic(prog(T, 34.3, 0.35))
+                x = lerp(dx, gx + 70, ga)
+                y = lerp(dy, gy - 10, ga)
+                module_card(c, R(x - 90, y - 30, 180, 60), name, ic, ka, 0.5 * ga)
+            elif T < t_drop:
+                x, y = pinch_pt[0] + 60, pinch_pt[1] - 10
+                module_card(c, R(x - 90, y - 30, 180, 60), name, ic, ka, 1.0)
+                glow_dot(c, pinch_pt[0], pinch_pt[1], 34, CYAN, 0.55)
+            else:
+                q = e_io_cubic(prog(T, t_drop, 0.4))
+                cx, cy = lerp(sr.centerX() + 40, sr.centerX(), q), lerp(sr.centerY() - 70, sr.centerY(), q)
+                w_, h_ = lerp(180, sr.width(), q), lerp(60, sr.height(), q)
+                rect = R(cx - w_ / 2, cy - h_ / 2, w_, h_)
+                module_card(c, rect, name, ic, ka, math.sin(math.pi * q), solid if q >= 1 else 0, mini_on, 0, T)
+                if 0 < T - t_drop < 0.8:
+                    _badge(c, rect, "plus", math.sin(math.pi * clamp((T - t_drop) / 0.8)))
+            continue
+        auto = [x_ for x_ in SC09_AUTO if x_[0] == i]
+        add2 = SC09_ADD2 if SC09_ADD2[0] == i else None
+        if auto or add2:
+            if auto:
+                _, slot, delay = auto[0]
+                ta = t_drop + delay
+            else:
+                _, slot, delay = add2
+                ta = t_flick + delay
+            f = e_io_cubic(prog(T, ta, 0.5))
+            sr = sc09_slot_rect(slot)
+            if f <= 0:
+                module_card(c, chip, name, ic, ka, 0)
                 continue
-        dimmed = e_io_sine(prog(T, 37.5, 0.8)) * 0.65
-        fade = 1 - e_io_cubic(prog(T, 38.6, 0.8))
-        module_card(c, chip, name, ic, a * (1 - dimmed) * fade, 0, 0, 0, i, T)
+            removed = i == SC09_REMOVED and T >= t_grab2
+            if removed:
+                # pinched out of its slot, follows the hand, flicked away to the right
+                if T < t_flick and pinch_pt:
+                    q = e_io_cubic(prog(T, t_grab2, 0.25))
+                    x = lerp(sr.centerX(), pinch_pt[0] + 40, q)
+                    y = lerp(sr.centerY(), pinch_pt[1], q)
+                    w_, h_ = lerp(sr.width(), 180, q), lerp(sr.height(), 60, q)
+                    rect = R(x - w_ / 2, y - h_ / 2, w_, h_)
+                    module_card(c, rect, name, ic, ka, 0.6)
+                    _badge(c, rect, "minus", q)
+                else:
+                    q = e_out_cubic(prog(T, t_flick, 0.6))
+                    sx, sy = (pinch_pt[0] + 40, pinch_pt[1]) if pinch_pt else (sr.centerX(), sr.centerY())
+                    x, y = lerp(sx, W + 200, q), lerp(sy, sy - 120, q)
+                    rect = R(x - 90, y - 30, 180, 60)
+                    if q < 1:
+                        line(c, poly([(sx, sy), (x, y)]), STEEL_400, 0.5 * (1 - q), 2.0)
+                        module_card(c, rect, name, ic, ka * (1 - q * 0.8), 0)
+                        _badge(c, rect, "minus", 1 - q)
+                continue
+            px, py = lerp(chip.centerX(), sr.centerX(), f), lerp(chip.centerY(), sr.centerY(), f)
+            pth = arc_path((chip.centerX(), chip.centerY()), (sr.centerX(), sr.centerY()), 0.16)
+            if 0.05 < f < 0.95:
+                line(c, pth, BLUE, 0.4 * math.sin(math.pi * f), 2.0, (max(0, f - 0.3), f), glow=0.5)
+                px, py, _ = path_at(pth, f)
+            w_, h_ = lerp(180, sr.width(), f), lerp(60, sr.height(), f)
+            rect = R(px - w_ / 2, py - h_ / 2, w_, h_)
+            module_card(c, rect, name, ic, ka, math.sin(math.pi * f), solid if f >= 1 else 0,
+                        mini_on if f >= 1 else 0, slot, T)
+            if 0.5 < f and T - ta < 1.0:
+                _badge(c, rect, "plus", math.sin(math.pi * clamp((T - ta) / 1.0)))
+            placed[slot] = True
+            continue
+        dim = e_io_sine(prog(T, 38.4, 0.8)) * 0.6
+        module_card(c, chip, name, ic, ka * (1 - dim), 0)
+    # headline (storyboard): the workspace that understands the company
+    hk = enter(T, 38.6, 0.7)
+    if hk > 0:
+        ha = clamp(hk)
+        text(c, "우리 회사를 이해하는", 1120, 860 + 12 * (1 - ha), 46, "Bold", INK, ha)
+        text(c, "AI WORKSPACE", 1120, 916 + 12 * (1 - ha), 46, "Bold", BLUE, ha)
 
 
 # ============================================================ SC10 AXCORE connects everything (white)

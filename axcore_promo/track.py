@@ -159,7 +159,7 @@ def main():
     manifest = json.load(open(os.path.join(HERE, "assets", "clips.json")))
     for name, info in manifest["clips"].items():
         cfg = info.get("track")
-        if not cfg or (ONLY and name not in ONLY):
+        if cfg is None or (ONLY and name not in ONLY):
             continue
         path = os.path.join(CLIP_DIR, name + ".mp4")
         frames = read_frames(path)

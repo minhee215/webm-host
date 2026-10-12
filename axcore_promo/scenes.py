@@ -7,10 +7,11 @@ transitions so camera drift never stops. Cue times are the narration timings
 """
 import math
 
+import numpy as np
 import skia
 
 from engine import (W, H, BLUE, CYAN, CYAN_SOFT, INDIGO, INK, NAVY, NAVY_700, NAVY_800, NAVY_900,
-                    NAVY_950, PAPER, STEEL, STEEL_200, STEEL_400, WARM_W, WHITE, R, arc_path, clamp,
+                    NAVY_950, PAPER, STEEL, STEEL_200, STEEL_400, WARM_W, WHITE, R, arc_path, clamp, colint,
                     col, corner_brackets, curve, dot_grid, draw_image_cover, draw_plate, drift,
                     e_io_cubic, e_io_expo, e_io_sine, e_out_cubic, e_out_expo, enter, glass, glow_dot, grade_filter,
                     icon, jit, lerp, line, logo, paint_fill, paint_stroke, path_at, poly,
@@ -63,11 +64,11 @@ def label_chip(c, x, y, s, alpha=1.0, dark=True, size=15, icon_kind=None, accent
 
 
 def photo_tile(c, name, rect, alpha=1.0, label=None, focus=(0.5, 0.5), zoom=1.0, dim=0.0, frame=None,
-               frame_a=0.0, label_side="below"):
+               frame_a=0.0, label_side="below", t=None):
     if alpha <= 0.003:
         return
     c.drawRect(rect.makeOffset(0, 10), paint_fill(NAVY_950, 0.18 * alpha, blur=18))
-    draw_image_cover(c, name, rect, alpha, zoom, focus, 0, GRADE_TILE)
+    draw_image_cover(c, name, rect, alpha, zoom, focus, 0, GRADE_TILE, t=t)
     if dim > 0:
         c.drawRect(rect, paint_fill(WARM_W, dim * alpha * 0.7))
     if frame and frame_a > 0:
@@ -81,18 +82,11 @@ def photo_tile(c, name, rect, alpha=1.0, label=None, focus=(0.5, 0.5), zoom=1.0,
 
 # ============================================================ SC01 skyline
 def sc01(c, T, t, d):
-    cam = draw_plate(c, "01_skyline", t, d, s=(1.05, 1.15), x=(20, -30), y=(10, -6), grade=GRADE_COOL)
-    # haze / depth: navy falloff at the top
-    vgrad(c, R(0, 0, W, H * 0.45), NAVY_900, NAVY_900, 0.35, 0.0)
-    # light streak sweeping through the district (tracked to plate)
-    p0 = cam.map(-0.05, 0.86)
-    p1 = cam.map(1.05, 0.62)
-    head = e_io_cubic(prog(T, 1.1, 3.0)) * 1.4
-    streak(c, p0, p1, head, 0.45, 2.6, CYAN, 0.95)
-    p0b = cam.map(0.15, 1.02)
-    p1b = cam.map(0.95, 0.72)
-    streak(c, p0b, p1b, e_io_cubic(prog(T, 2.4, 2.4)) * 1.4, 0.4, 1.6, CYAN_SOFT, 0.6)
-    # opening fade from black
+    cam = draw_plate(c, "22_city", t, d, s=(1.0, 1.05), x=(10, -16), grade=GRADE_COOL)
+    vgrad(c, R(0, 0, W, H * 0.4), NAVY_900, NAVY_900, 0.25, 0.0)
+    p0 = cam.map(-0.05, 0.92)
+    p1 = cam.map(1.05, 0.70)
+    streak(c, p0, p1, e_io_cubic(prog(T, 1.4, 2.8)) * 1.4, 0.4, 2.0, CYAN, 0.7)
     a = 1 - e_out_cubic(prog(T, 0.0, 1.0))
     if a > 0:
         c.drawRect(R(0, 0, W, H), paint_fill(NAVY_950, a))
@@ -260,7 +254,7 @@ def sc05(c, T, t, d):
         sel = (ax_on if is_ax else dx_on if tag == "DX" else 0.0)
         dim = find * (0 if tag else 0.75)
         frame = BLUE if is_ax else NAVY
-        photo_tile(c, name, rect, a, lab, focus, 1.0, dim, frame if tag else None, sel * find)
+        photo_tile(c, name, rect, a, lab, focus, 1.0, dim, frame if tag else None, sel * find, t=T + i * 0.7)
         # data scan: thin line passes the tiles
         scan_x = lerp(-100, W + 100, e_io_sine(prog(T, 18.2, 1.5)))
         if rect.left() - 20 < scan_x < rect.right() + 20:
@@ -309,7 +303,7 @@ def sc05(c, T, t, d):
             c.drawRect(r.makeOffset(0, 14), paint_fill(NAVY_950, 0.18 * a, blur=22))
             c.drawRect(r, paint_fill(WHITE, a))
             th = r.height() * 0.62
-            draw_image_cover(c, name, R(r.left(), r.top(), r.width(), th), a, 1.0, foc, 0, GRADE_TILE)
+            draw_image_cover(c, name, R(r.left(), r.top(), r.width(), th), a, 1.0, foc, 0, GRADE_TILE, t=T)
             hero = i == 0
             square(c, r.left() + 18, r.top() + th + 26, 10, BLUE if hero else NAVY, a)
             ss = r.width() / 300
@@ -336,7 +330,7 @@ def sc07(c, T, t, d):
         if g <= 0:
             continue
         u0, v = 0.505 + i * 0.005, 0.517 + i * 0.022
-        p0, p1 = cam.map(u0, v), cam.map(u0 + 0.12 * g, v - 0.041 * g)
+        p0, p1 = cam.map(u0, v, "paper"), cam.map(u0 + 0.12 * g, v - 0.041 * g, "paper")
         c.drawLine(p0[0], p0[1], p1[0], p1[1], paint_stroke(CYAN, 0.3, 11, blend=skia.BlendMode.kScreen))
         c.drawLine(p0[0], p0[1], p1[0], p1[1], paint_stroke(CYAN, 0.9, 1.4))
     # diagonal scan across the documents
@@ -663,7 +657,7 @@ def sc10(c, T, t, d):
         square(c, tx, ty, 9, NAVY, a)
         square(c, mid[0], mid[1], 9, NAVY, g)
         pulse(c, pth, prog(T, t0 + 1.0 + i * 0.05, 1.1), BLUE, 0.85, 12, 0.18)
-        photo_tile(c, name, rect, a, lab, (0.5, 0.5), 1.0, 0, None, 0)
+        photo_tile(c, name, rect, a, lab, (0.5, 0.5), 1.0, 0, None, 0, t=T + i * 0.5)
     L.draw(c, lx, ly, lw, rev, dk, bars, False, 1.0, glint=prog(T, 42.6, 1.2))
 
 
@@ -725,13 +719,16 @@ def sc11(c, T, t, d):
         label_chip(c, x + par * 1.6, y, lab, a, True, 15)
 
 
-# ============================================================ SC12 personal: drag external platforms
-SC12_SCREEN = [(0.292, 0.347), (0.52, 0.18), (0.69, 0.66), (0.469, 0.835)]  # TL TR BR BL (plate uv)
-SC12_FINGER = (0.461, 0.436)
-SC12_CHIPS = [("Gmail", "mail", "GMAIL", (150, 230)), ("Slack", "hash", "SLACK", (110, 420)),
-              ("Notion", "note", "NOTION", (190, 610))]
-SC12_EXTRA = [("Drive", "drive", (1480, 120)), ("Calendar", "calendar", (1620, 300)), ("Jira", "flow", (1560, 900)),
-              ("Teams", "chat", (300, 880))]
+# ============================================================ SC12 personal: pull external platforms by hand
+# Live-action hand (tracked): reaches up, pinches the Gmail chip, pulls it down into the laptop
+# where it docks into the connector list; Slack and Notion follow along the same path.
+SC12_T0 = 48.75
+SC12_GRAB, SC12_DOCK = 1.45, 3.15          # clip-time events from the hand track
+SC12_SCREEN = [(0.492, 0.455), (0.770, 0.485), (0.752, 0.845), (0.471, 0.796)]  # TL TR BR BL (frame uv)
+SC12_CHIPS = [("Gmail", "mail", "GMAIL", (900, 70)), ("Slack", "hash", "SLACK", (1180, 120)),
+              ("Notion", "note", "NOTION", (1420, 210))]
+SC12_EXTRA = [("Drive", "drive", (1560, 70)), ("Calendar", "calendar", (1700, 330)), ("Jira", "flow", (1650, 520)),
+              ("Teams", "chat", (300, 160))]
 
 
 def screen_matrix(cam, vw=1000, vh=700):
@@ -742,67 +739,79 @@ def screen_matrix(cam, vw=1000, vh=700):
     return m
 
 
+def ext_chip(c, x, y, name, ic, a, glow=0.0, scale=1.0):
+    w, h = 200 * scale, 64 * scale
+    chip = R(x - w / 2, y - h / 2, w, h)
+    glass(c, chip, h / 2, a, tint=WHITE, tint_a=0.72, blur=16, border=0.9, shadow=0.22, glow=glow, glow_col=BLUE)
+    icon(c, ic, chip.left() + 34 * scale, chip.centerY(), 24 * scale, BLUE, a)
+    text(c, name, chip.left() + 62 * scale, chip.centerY() + 7 * scale, 21 * scale, "SemiBold", INK, a)
+
+
 def sc12(c, T, t, d):
-    cam = draw_plate(c, "11_tablet", t, d, s=(1.05, 1.11), r=(0.6, -1.2), grade=GRADE_DAY)
-    fx, fy = cam.map(*SC12_FINGER)
+    cam = draw_plate(c, "24_personal", t, d, s=(1.0, 1.03), grade=GRADE_DAY)
+    ct = T - SC12_T0
     m = screen_matrix(cam)
-    # on-screen connector UI (left column; the hand covers the lower right)
-    ui = e_out_expo(prog(T, 48.9, 0.6))
+    hp, hi = cam.hand(4), cam.hand(8)
+    pinch = ((hp[0] + hi[0]) / 2, (hp[1] + hi[1]) / 2) if (hp and hi) else None
+    t_grab, t_dock = SC12_T0 + SC12_GRAB, SC12_T0 + SC12_DOCK
+    # connector list on the laptop screen (right part; the arm passes on the left)
+    ui = e_out_expo(prog(T, 49.0, 0.6))
     if ui > 0:
         c.save()
         c.concat(m)
-        c.drawRect(R(0, 0, 1000, 700), paint_fill(WHITE, 0.55 * ui))
-        text(c, "Connectors", 40, 80, 46, "SemiBold", INK, ui)
-        text(c, "Pull in the tools you use", 42, 128, 26, "Medium", STEEL, ui)
+        c.drawRect(R(0, 0, 1000, 700), paint_fill(WHITE, 0.45 * ui))
+        text(c, "커넥터", 560, 92, 50, "Bold", INK, ui)
+        text(c, "쓰는 도구를 끌어와 연결하세요", 562, 140, 28, "Medium", STEEL, ui)
         for j in range(3):
-            y = 190 + j * 150
-            rrect_stroke(c, R(36, y, 400, 120), 18, STEEL_200, ui * 0.9, 2)
+            rrect_stroke(c, R(540, 190 + j * 150, 420, 122), 20, STEEL_200, ui * 0.9, 2.5)
         c.restore()
+    dock_pt = cam.map(0.68, 0.64)
     for i, (name, ic, cue, (sx, sy)) in enumerate(SC12_CHIPS):
-        t0 = CUE[cue] - 0.1
-        k = enter(T, t0, 0.5)
+        k = enter(T, CUE[cue] - 0.1, 0.5)
         if k <= 0:
             continue
         a = clamp(k)
-        drag = e_io_cubic(prog(T, t0 + 0.55, 0.85))
-        dock = e_io_cubic(prog(T, t0 + 1.4, 0.5))
-        bob = math.sin(T * 1.7 + i) * 5
-        pth = arc_path((sx + 95, sy + bob), (fx - 30, fy - 10), -0.22)
-        px, py, _ = path_at(pth, drag)
-        if drag > 0.02 and dock <= 0:
-            line(c, pth, BLUE, 0.6, 1.6, (0, drag), glow=0.5, dash=[8, 8])
-        if dock <= 0:
-            chip = R(px - 95, py - 32, 190, 64)
-            glass(c, chip, 32, a, tint=WHITE, tint_a=0.7, blur=16, border=0.9, shadow=0.22,
-                  glow=0.8 * math.sin(math.pi * drag), glow_col=BLUE)
-            icon(c, ic, chip.left() + 34, chip.centerY(), 24, BLUE, a)
-            text(c, name, chip.left() + 62, chip.centerY() + 7, 20, "SemiBold", INK, a)
-        else:
-            # docked inside the tablet screen (perspective-mapped)
+        bob = math.sin(T * 1.6 + i) * 5
+        t_go = t_grab if i == 0 else t_dock + 0.05 + (i - 1) * 0.3
+        t_in = t_dock if i == 0 else t_go + 0.55
+        dock = e_io_cubic(prog(T, t_in, 0.45))
+        if dock > 0:
             c.save()
             c.concat(m)
             y = 190 + i * 150
-            q = dock
-            rect = R(36, y, 400, 120)
-            rrect(c, rect, 18, WHITE, q)
-            rrect_stroke(c, rect, 18, BLUE, q * 0.9, 2.5)
-            icon(c, ic, 100, y + 60, 46, BLUE, q)
-            text(c, name, 150, y + 74, 38, "SemiBold", INK, q)
-            ck = e_out_expo(prog(T, t0 + 1.8, 0.4))
-            c.drawCircle(386, y + 60, 22, paint_fill(BLUE, ck))
-            icon(c, "check", 386, y + 60, 26, WHITE, ck, 3.2)
+            rect = R(540, y, 420, 122)
+            rrect(c, rect, 20, WHITE, dock)
+            rrect_stroke(c, rect, 20, BLUE, dock * 0.9, 3)
+            icon(c, ic, 604, y + 61, 48, BLUE, dock)
+            text(c, name, 656, y + 76, 40, "SemiBold", INK, dock)
+            ck = e_out_expo(prog(T, t_in + 0.35, 0.4))
+            c.drawCircle(908, y + 61, 24, paint_fill(BLUE, ck))
+            icon(c, "check", 908, y + 61, 28, WHITE, ck, 3.4)
             c.restore()
-    # finger contact glow while dragging
-    dg = max(math.sin(math.pi * clamp((T - CUE[k_] - 0.45) / 1.2)) for k_ in ("GMAIL", "SLACK", "NOTION"))
-    if dg > 0:
-        radial(c, fx, fy, 90, CYAN, 0.35 * dg)
+            if dock >= 1:
+                continue
+        if i == 0 and pinch is not None and t_grab <= T < t_dock:
+            # held by the pinch: the chip rides on the fingertips
+            ext_chip(c, pinch[0] + 70, pinch[1] - 6, name, ic, a, 1.0, lerp(1.0, 0.8, prog(T, t_grab, 1.6)))
+            glow_dot(c, pinch[0], pinch[1], 36, CYAN, 0.6)
+        elif i == 0 and pinch is not None and T < t_grab:
+            # magnetized toward the reaching hand
+            g = e_io_cubic(prog(T, t_grab - 0.6, 0.6))
+            ext_chip(c, lerp(sx, pinch[0] + 70, g), lerp(sy + bob, pinch[1] - 6, g), name, ic, a, 0.5 * g)
+        elif T >= t_go:
+            f = e_io_cubic(prog(T, t_go, 0.55))
+            pth = arc_path((sx, sy + bob), dock_pt, 0.2)
+            px, py, _ = path_at(pth, f)
+            line(c, pth, BLUE, 0.6 * (1 - dock), 1.8, (0, f), glow=0.5, dash=[8, 8])
+            ext_chip(c, px, py, name, ic, a * (1 - dock), 0.8, lerp(1.0, 0.7, f))
+        else:
+            ext_chip(c, sx, sy + bob, name, ic, a, 0.0)
+    # more tools to choose from (personalised)
     for i, (name, ic, (x, y)) in enumerate(SC12_EXTRA):
-        t0 = 50.9 + i * 0.18
-        k = enter(T, t0, 0.5)
-        if k <= 0:
-            continue
-        bob = math.sin(T * 1.3 + i * 2) * 6
-        label_chip(c, x, y + bob, name, clamp(k) * 0.9, False, 17, ic)
+        k = enter(T, 52.2 + i * 0.15, 0.5)
+        if k > 0:
+            label_chip(c, x, y + math.sin(T * 1.3 + i * 2) * 6, name, clamp(k) * 0.9, False, 18, ic)
+    del ct
 
 
 # ============================================================ SC13 files -> data, handwriting -> OCR
@@ -848,8 +857,8 @@ def sc13(c, T, t, d):
     sp = prog(T, CUE["OCR"] + 0.05, 1.3)
     if 0 < sp < 1:
         vv = lerp(0.24, 0.6, e_io_sine(sp))
-        a0 = cam.map(0.28, vv)
-        a1 = cam.map(0.62, vv + 0.34 * SC13_SLOPE)
+        a0 = cam.map(0.28, vv, "paper")
+        a1 = cam.map(0.62, vv + 0.34 * SC13_SLOPE, "paper")
         c.drawLine(a0[0], a0[1], a1[0], a1[1], paint_stroke(CYAN, 0.6, 12, blur=10, blend=skia.BlendMode.kScreen))
         c.drawLine(a0[0], a0[1], a1[0], a1[1], paint_stroke(WHITE, 0.9, 1.4))
     for i, ((u0, v0, du, hh), txt) in enumerate(SC13_OCR):
@@ -859,7 +868,8 @@ def sc13(c, T, t, d):
             continue
         a = clamp(k)
         dv = du * SC13_SLOPE
-        pts = [cam.map(u0, v0), cam.map(u0 + du, v0 + dv), cam.map(u0 + du, v0 + dv + hh), cam.map(u0, v0 + hh)]
+        pts = [cam.map(u0, v0, "paper"), cam.map(u0 + du, v0 + dv, "paper"), cam.map(u0 + du, v0 + dv + hh, "paper"),
+               cam.map(u0, v0 + hh, "paper")]
         c.drawPath(poly(pts, True), paint_fill(CYAN, 0.12 * a, blend=skia.BlendMode.kScreen))
         c.drawPath(poly(pts, True), paint_stroke(CYAN, a, 1.8))
         ex = (pts[1][0] + 8, (pts[1][1] + pts[2][1]) / 2)
@@ -872,23 +882,29 @@ def sc13(c, T, t, d):
     text(c, "OCR", 1272, 272, 14, "SemiBold", CYAN_SOFT, hk)
 
 
-# ============================================================ SC14 AXCORE Ontology (2.5D graph)
-ON_STAGES = [("Order", -6.0), ("Plan", -3.6), ("Procure", -1.2), ("Produce", 1.2), ("Inspect", 3.6), ("Deliver", 6.0)]
-ON_ENT = [("Equipment", "gear", (-4.4, 2.5, -1.6), "EQUIP"), ("Material", "box", (-1.9, 3.3, -2.6), "MATER"),
-          ("Process", "flow", (0.4, 2.3, -0.9), "PROC"), ("Product", "cube", (2.6, 3.2, -2.4), "PROD"),
-          ("People", "user", (4.7, 2.5, -1.3), "PEOPLE"), ("Task", "doc", (-0.3, 4.3, -3.4), "TASK")]
-ON_EDGES_ES = [("Task", "Order"), ("People", "Plan"), ("Material", "Procure"), ("Equipment", "Produce"),
-               ("Process", "Produce"), ("Process", "Inspect"), ("Product", "Inspect"), ("Product", "Deliver")]
-ON_EDGES_EE = [("Equipment", "Process"), ("Material", "Product"), ("Process", "Product"), ("People", "Task"),
-               ("People", "Equipment")]
+# ============================================================ SC14 AXCORE Ontology (storyboard: wireframe factory)
+# A glowing wireframe of the plant; inside it the ontology entities appear on their narration
+# cues and connect with labelled relations. Along the front floor runs the business flow from
+# START to END; a pulse travels it and lights the entities each step depends on (context).
+ON_BAYS = [-6.5, -3.25, 0.0, 3.25, 6.5]
+ON_WALL_H, ON_PEAK_H, ON_Z = 2.0, 3.3, 3.0
+ON_ENT = {
+    "EQUIPMENT": ((-3.9, 0.7, 1.7), "EQUIP", "gear"), "MATERIAL": ((-3.2, 1.7, -1.2), "MATER", "box"),
+    "PROCESS": ((0.0, 1.05, 0.2), "PROC", "flow"), "PRODUCT": ((2.8, 1.5, -1.0), "PROD", "cube"),
+    "PEOPLE": ((2.9, 0.45, 2.0), "PEOPLE", "user"), "TRANSACTION": ((5.3, 1.15, 0.2), "TASK", "doc"),
+}
+ON_REL = [("MATERIAL", "PROCESS", "Input"), ("EQUIPMENT", "PROCESS", "Runs"), ("PROCESS", "PRODUCT", "Produces"),
+          ("PRODUCT", "TRANSACTION", "Ships"), ("PEOPLE", "PROCESS", "Operates"), ("PEOPLE", "TRANSACTION", "Manages")]
+ON_FLOW = [("Order", "TRANSACTION"), ("Plan", "PEOPLE"), ("Procure", "MATERIAL"), ("Produce", "PROCESS"),
+           ("Inspect", "PRODUCT"), ("Deliver", "TRANSACTION")]
+ON_FLOW_Z = 4.4
+ON_LINE = "#3F7DFF"
 
 
 class Proj:
-    def __init__(self, yaw, pitch, dist, target=(0.0, 1.7, 0.0), f=1150, cx=W / 2, cy=H / 2 + 40):
-        self.yaw, self.pitch, self.dist, self.t, self.f, self.cx, self.cy = yaw, pitch, dist, target, f, cx, cy
-        cy_, sy_ = math.cos(yaw), math.sin(yaw)
-        cp, sp = math.cos(pitch), math.sin(pitch)
-        self.r = (cy_, sy_, cp, sp)
+    def __init__(self, yaw, pitch, dist, target=(0.0, 1.2, 0.8), f=1250, cx=W / 2, cy=H / 2 + 30):
+        self.dist, self.t, self.f, self.cx, self.cy = dist, target, f, cx, cy
+        self.r = (math.cos(yaw), math.sin(yaw), math.cos(pitch), math.sin(pitch))
 
     def __call__(self, x, y, z):
         cy_, sy_, cp, sp = self.r
@@ -897,108 +913,169 @@ class Proj:
         z1 = -sy_ * x + cy_ * z
         y2 = cp * y - sp * z1
         z2 = sp * y + cp * z1
-        depth = self.dist - z2
-        k = self.f / depth
+        k = self.f / (self.dist - z2)
         return self.cx + x1 * k, self.cy - y2 * k, k
 
 
 def onto_cam(T):
-    a = e_io_sine(prog(T, 58.0, 7.2))
-    b = e_io_cubic(prog(T, CUE["L18"] - 0.1, 2.4))
-    yaw = math.radians(lerp(-20, -8, a) + 14 * b)
-    pitch = math.radians(lerp(9, 13, a) + 9 * b)
-    dist = lerp(13.5, 12.4, a) + 4.2 * b
-    cy = H / 2 + 60 + 40 * b
-    return Proj(yaw, pitch, dist, (0.0, 1.7, 0.0), 1150, W / 2, cy)
+    a = e_io_sine(prog(T, 58.0, 7.3))
+    b = e_io_cubic(prog(T, CUE["L18"] - 0.2, 2.4))
+    yaw = math.radians(lerp(-24, -14, a) + 10 * b)
+    pitch = math.radians(lerp(20, 24, a) + 6 * b)
+    dist = lerp(15.0, 13.6, a) + 3.4 * b
+    return Proj(yaw, pitch, dist, (0.0, 1.3, 1.2), 1450, W / 2, H / 2 + 50 + 40 * b)
+
+
+def onto_edges():
+    """Wireframe segments of the plant: floor, walls, posts, sawtooth roof."""
+    segs = []
+    x0, x1 = ON_BAYS[0], ON_BAYS[-1]
+    for z in (-ON_Z, ON_Z):
+        segs.append(((x0, 0, z), (x1, 0, z)))
+        segs.append(((x0, ON_WALL_H, z), (x1, ON_WALL_H, z)))
+        for i in range(len(ON_BAYS) - 1):
+            xa, xb = ON_BAYS[i], ON_BAYS[i + 1]
+            pk = (xa + (xb - xa) * 0.3, ON_PEAK_H, z)
+            segs.append(((xa, ON_WALL_H, z), pk))
+            segs.append((pk, (xb, ON_WALL_H, z)))
+    for x in ON_BAYS:
+        segs.append(((x, 0, -ON_Z), (x, ON_WALL_H, -ON_Z)))
+    for x in (x0, x1):
+        segs.append(((x, 0, ON_Z), (x, ON_WALL_H, ON_Z)))
+        segs.append(((x, 0, -ON_Z), (x, 0, ON_Z)))
+        segs.append(((x, ON_WALL_H, -ON_Z), (x, ON_WALL_H, ON_Z)))
+    for i in range(len(ON_BAYS) - 1):
+        xa, xb = ON_BAYS[i], ON_BAYS[i + 1]
+        px = xa + (xb - xa) * 0.3
+        segs.append(((px, ON_PEAK_H, -ON_Z), (px, ON_PEAK_H, ON_Z)))
+    return segs
+
+
+def onto_node(c, P, name, xyz, ic, a, hl, hero=False, scale_k=1.0):
+    x, y, k = P(*xyz)
+    fx, fy, _ = P(xyz[0], 0, xyz[2])
+    sc = k / 72 * scale_k
+    col_ = CYAN if hero else "#8FB4FF"
+    # light stem down to the floor + floor reflection
+    sh = skia.GradientShader.MakeLinear([skia.Point(x, y), skia.Point(fx, fy)], [colint(col_, 0.55 * a), colint(col_, 0)])
+    c.drawLine(x, y, fx, fy, skia.Paint(AntiAlias=True, Shader=sh, Style=skia.Paint.kStroke_Style, StrokeWidth=2 * sc))
+    radial(c, fx, fy, 50 * sc, col_, 0.25 * a)
+    r = 20 * sc
+    radial(c, x, y, r * 3.2, col_, (0.35 + 0.5 * hl) * a)
+    c.drawCircle(x, y, r, paint_fill(NAVY_900, 0.85 * a))
+    c.drawCircle(x, y, r, paint_stroke(col_, a, 2.2 * sc))
+    c.drawCircle(x, y, r * 0.48, paint_fill(CYAN_SOFT if hero else "#DCE8FF", a))
+    if hl > 0:
+        c.drawCircle(x, y, r * (1.25 + 0.6 * hl), paint_stroke(CYAN, a * hl * 0.8, 1.6))
+    tw = text_w(name, 19 * sc, "SemiBold")
+    pill = R(x - tw / 2 - 18 * sc, y - r - 52 * sc, tw + 36 * sc, 38 * sc)
+    glass(c, pill, 19 * sc, a, tint=NAVY_900, tint_a=0.75, blur=8, border=0.0, shadow=0.0, highlight=0.0)
+    rrect_stroke(c, pill, 19 * sc, "#6F9BFF", a * 0.9, 1.4)
+    text(c, name, x, pill.top() + 26 * sc, 19 * sc, "SemiBold", WHITE, a, "center")
+    return x, y, sc
 
 
 def sc14(c, T, t, d):
-    draw_plate(c, "13_navystage", t, d, s=(1.06, 1.14), x=(30, -30), grade=GRADE_DARK)
+    draw_plate(c, "13_navystage", t, d, s=(1.0, 1.04), grade=GRADE_DARK)
+    c.drawRect(R(0, 0, W, H), paint_fill(NAVY_950, 0.35))
     P = onto_cam(T)
-    stage_xyz = {n: (x, 0.0, 1.6) for n, x in ON_STAGES}
-    ent_xyz = {n: p for (n, _, p, _) in ON_ENT}
-    ent_t = {n: CUE[k] for (n, _, _, k) in ON_ENT}
-    # floor flow line: start -> end of the business
-    fl_g = e_out_expo(prog(T, 58.25, 1.3))
-    pts = [P(*stage_xyz[n])[:2] for n, _ in ON_STAGES]
-    start = P(-7.6, 0.0, 1.6)[:2]
-    end = P(7.6, 0.0, 1.6)[:2]
-    flow = poly([start] + pts + [end])
-    line(c, flow, WHITE, 0.55, 2.0, (0, fl_g))
-    # traveling context pulse start -> end
+    # floor grid
+    gk = e_out_expo(prog(T, 58.2, 1.2))
+    for i in range(-10, 11):
+        for (p0, p1) in (((i, 0, -7), (i, 0, 8)), ((-11, 0, i * 0.75), (11, 0, i * 0.75))):
+            a_, b_ = P(*p0), P(*p1)
+            c.drawLine(a_[0], a_[1], b_[0], b_[1], paint_stroke(ON_LINE, 0.10 * gk, 1.0))
+    # plant wireframe draws in
+    segs = onto_edges()
+    for i, (p0, p1) in enumerate(segs):
+        g = e_out_expo(prog(T, 58.3 + (i % 17) * 0.05, 0.9))
+        if g <= 0:
+            continue
+        a_, b_ = P(*p0), P(*p1)
+        line(c, poly([a_[:2], b_[:2]]), ON_LINE, 0.75, 1.6, (0, g), glow=0.55, glow_w=6)
+        if g > 0.95:
+            for q in (a_, b_):
+                c.drawCircle(q[0], q[1], 2.6, paint_fill("#CFE0FF", 0.9))
+    # business flow along the front floor: START -> END
+    fz = ON_FLOW_Z
+    xs = [lerp(-5.8, 5.8, i / (len(ON_FLOW) - 1)) for i in range(len(ON_FLOW))]
+    start, end = P(-7.2, 0, fz), P(7.2, 0, fz)
+    stops = [P(x, 0, fz) for x in xs]
+    flow = poly([start[:2]] + [p[:2] for p in stops] + [end[:2]])
+    fg = e_out_expo(prog(T, 58.6, 1.4))
+    line(c, flow, WHITE, 0.5, 1.8, (0, fg))
     pp = prog(T, 62.75, 2.1)
     line(c, flow, CYAN, 0.95, 2.6, (0, pp), glow=1.0, glow_w=9)
     if 0 < pp < 1:
         pulse(c, flow, pp, CYAN, 1.0, 22, 0.08, 2.6)
     for lab, p in (("START", start), ("END", end)):
-        k = clamp(enter(T, 58.3 if lab == "START" else 59.3, 0.5))
-        square(c, p[0], p[1], 14, CYAN if lab == "END" and pp >= 1 else WHITE, k)
-        text(c, lab, p[0], p[1] + 34, 13, "SemiBold", CYAN_SOFT, k, "center")
-    # edges (entity -> stage, entity -> entity)
-    lit = {}
-    for i, (n, x) in enumerate(ON_STAGES):
-        f = (i + 1) / (len(ON_STAGES) + 1)
-        lit[n] = clamp((pp - f) * 6 + 0.0) if pp > 0 else 0.0
-    for (e, s_) in ON_EDGES_ES:
-        te = ent_t[e]
-        g = e_out_expo(prog(T, te + 0.25, 0.7))
+        k = clamp(enter(T, 58.7 if lab == "START" else 59.5, 0.5))
+        square(c, p[0], p[1], 14, CYAN if (lab == "END" and pp >= 1) else WHITE, k)
+        text(c, lab, p[0], p[1] + 34, 15, "SemiBold", CYAN_SOFT, k, "center")
+    lit = {n: 0.0 for n in ON_ENT}
+    for i, (lab, ent) in enumerate(ON_FLOW):
+        f = (i + 1) / (len(ON_FLOW) + 1)
+        h = clamp((pp - f) * 7) * (1 - clamp((pp - f - 0.25) * 4)) if pp > 0 else 0.0
+        lit[ent] = max(lit[ent], h)
+        k = clamp(enter(T, 58.8 + i * 0.12, 0.5))
+        sx, sy, sk = stops[i]
+        square(c, sx, sy, 9, CYAN if h > 0.3 else WHITE, k)
+        text(c, lab, sx, sy + 30, 16, "Medium", WHITE, k * 0.9, "center")
+        if h > 0.02:  # context beam from the step to the entity it depends on
+            ex, ey, _ = P(*ON_ENT[ent][0])
+            line(c, poly([(sx, sy), (ex, ey)]), CYAN, 0.8 * h, 1.6, glow=0.8 * h)
+    # relations (arrows + labels)
+    pos = {}
+    for n, (xyz, key, ic) in ON_ENT.items():
+        pos[n] = P(*xyz)
+    for (s_, d_, lab) in ON_REL:
+        t0 = max(CUE[ON_ENT[s_][1]], CUE[ON_ENT[d_][1]]) + 0.2
+        g = e_out_expo(prog(T, t0, 0.7))
         if g <= 0:
             continue
-        a = P(*ent_xyz[e])
-        b = P(*stage_xyz[s_])
-        hl = lit[s_]
-        pth = poly([(a[0], a[1]), (b[0], b[1])])
-        line(c, pth, CYAN if hl > 0 else CYAN_SOFT, 0.35 + 0.55 * hl, 1.2 + 0.8 * hl, (0, g), glow=0.9 * hl)
-    for (e1, e2) in ON_EDGES_EE:
-        te = max(ent_t[e1], ent_t[e2])
-        g = e_out_expo(prog(T, te + 0.3, 0.8))
-        a = P(*ent_xyz[e1])
-        b = P(*ent_xyz[e2])
-        line(c, poly([(a[0], a[1]), (b[0], b[1])]), INDIGO, 0.7, 1.3, (0, g), dash=[5, 6])
-    # stage chips on the floor
-    for i, (n, x) in enumerate(ON_STAGES):
-        k = enter(T, 58.35 + i * 0.12, 0.5)
-        if k <= 0:
-            continue
-        sx, sy, sk = P(*stage_xyz[n])
-        sc = sk / 95
-        a = clamp(k)
-        hl = lit[n]
-        tw = text_w(n, 16 * sc, "SemiBold")
-        r = R(sx - tw / 2 - 16 * sc, sy - 46 * sc, tw + 32 * sc, 32 * sc)
-        glass(c, r, 16 * sc, a, tint=NAVY_800, tint_a=0.55, blur=10, border=0.5, shadow=0.0, highlight=0.05,
-              glow=hl * 0.9)
-        text(c, n, sx, r.top() + 21.5 * sc, 16 * sc, "SemiBold", WHITE, a, "center")
-        square(c, sx, sy, 8 * sc, CYAN if hl > 0.5 else WHITE, a)
-    # entities (sorted far -> near)
-    order = sorted(ON_ENT, key=lambda e: e[2][2])
-    for (n, ic, xyz, key) in order:
+        (x0, y0, k0), (x1, y1, k1) = pos[s_], pos[d_]
+        ang = math.atan2(y1 - y0, x1 - x0)
+        r0, r1 = 30 * k0 / 72, 34 * k1 / 72
+        a0 = (x0 + math.cos(ang) * r0, y0 + math.sin(ang) * r0)
+        a1 = (x1 - math.cos(ang) * r1, y1 - math.sin(ang) * r1)
+        hl = max(lit[s_], lit[d_])
+        line(c, poly([a0, a1]), WHITE if hl < 0.3 else CYAN, 0.85, 1.6 + hl, (0, g), glow=0.4 + hl * 0.6)
+        if g > 0.9:
+            hx, hy = a1
+            c.drawPath(poly([(hx, hy), (hx - 13 * math.cos(ang - 0.4), hy - 13 * math.sin(ang - 0.4)),
+                             (hx - 13 * math.cos(ang + 0.4), hy - 13 * math.sin(ang + 0.4))], True),
+                       paint_fill(WHITE if hl < 0.3 else CYAN, 0.95))
+            mx, my = (a0[0] + a1[0]) / 2, (a0[1] + a1[1]) / 2
+            text(c, lab, mx + 10, my - 12, 17, "Medium", "#9FC0FF", clamp((g - 0.9) * 10))
+    # ERP / MES feed the equipment
+    ek = enter(T, 62.9, 0.5)
+    if ek > 0:
+        ex, ey, _ = pos["EQUIPMENT"]
+        for i, lab in enumerate(("ERP", "MES")):
+            bx, by, bk = P(-6.2 - i * 0.2, 0, 3.4 + i * 1.3)
+            r = R(bx - 34, by - 20, 68, 40)
+            glass(c, r, 8, clamp(ek), tint=NAVY_700, tint_a=0.8, blur=8, border=0.5, shadow=0.0, highlight=0.0)
+            rrect_stroke(c, r, 8, "#6F9BFF", clamp(ek), 1.4)
+            text(c, lab, r.centerX(), r.top() + 27, 17, "SemiBold", WHITE, clamp(ek), "center")
+            line(c, poly([(r.right(), r.centerY()), (ex - 20, ey + 8)]), "#6F9BFF", 0.8 * clamp(ek), 1.3, dash=[5, 5])
+    # entities (far -> near) on their narration cues
+    for n in sorted(ON_ENT, key=lambda k_: ON_ENT[k_][0][2]):
+        xyz, key, ic = ON_ENT[n]
         k = enter(T, CUE[key] - 0.08, 0.55)
         if k <= 0:
             continue
-        ex, ey, ek = P(*xyz)
-        sc = ek / 95 * clamp(k, 0, 1.05)
-        a = clamp(k)
-        hl = max([lit[s_] for (e, s_) in ON_EDGES_ES if e == n] + [0])
-        hl *= 1 - e_io_sine(prog(T, 65.2, 0.6)) * 0.4
-        w_ = text_w(n, 20 * sc, "SemiBold") + 76 * sc
-        r = R(ex - w_ / 2, ey - 28 * sc, w_, 56 * sc)
-        glass(c, r, 14 * sc, a, tint=NAVY_700, tint_a=0.5, blur=16, border=0.55, shadow=0.25,
-              glow=0.35 + 0.65 * hl, glow_col=CYAN)
-        icon(c, ic, r.left() + 30 * sc, ey, 22 * sc, CYAN, a)
-        text(c, n, r.left() + 54 * sc, ey + 7 * sc, 20 * sc, "SemiBold", WHITE, a)
-    # title: AXCORE Ontology
+        onto_node(c, P, n, xyz, ic, clamp(k), lit[n], n == "PROCESS", clamp(k, 0, 1.05))
+    # title
     k = enter(T, CUE["ONTO"] - 0.1, 0.8)
     if k > 0:
         a = clamp(k)
         L = logo()
         lw = 300
-        tw = text_w("Ontology", 46, "Light")
-        total = lw + 26 + tw
-        x0 = W / 2 - total / 2
-        y0 = 150 + 14 * (1 - a)
-        L.draw(c, x0 + lw / 2, y0, lw, e_io_cubic(prog(T, CUE["ONTO"] - 0.1, 0.6)), clamp(k), (a, a, a), True, a)
-        text(c, "Ontology", x0 + lw + 26, y0 + 22, 46, "Light", WHITE, a)
+        tw = text_w("Ontology", 50, "Light")
+        x0 = W / 2 - (lw + 24 + tw) / 2
+        y0 = 120 + 14 * (1 - a)
+        L.draw(c, x0 + lw / 2, y0, lw, e_io_cubic(prog(T, CUE["ONTO"] - 0.1, 0.6)), a, (a, a, a), True, a)
+        text(c, "Ontology", x0 + lw + 24, y0 + 22, 50, "Light", WHITE, a)
 
 
 # ============================================================ SC15 too many systems -> one
@@ -1035,145 +1112,127 @@ def sc15(c, T, t, d):
         for j in range(4):
             rrect(c, R(-w / 2 + 20, -h / 2 + 54 + j * 28, (w - 40) * rr.uniform(0.4, 0.95), 11), 5, STEEL_200, a)
         c.restore()
-    # the single window that replaces them
+    # the single AXCORE window that replaces them (dark, leads into the Q&A)
     k = enter(T, 70.6, 0.6)
     if k > 0:
         a = clamp(k)
         r = SC15_ONE
-        glass(c, r, 22, a, tint=WHITE, tint_a=0.85, blur=30, border=0.9, shadow=0.3, solid=0.5, solid_col=PAPER,
-              glow=0.6, glow_col=BLUE)
-        L = logo()
-        L.draw(c, r.left() + 120, r.top() + 60, 150, 1.0, 1.0, (1, 1, 1), False, a)
-        bar = R(r.left() + 50, r.centerY() - 10, r.width() - 100, 76)
-        rrect(c, bar, 38, WHITE, a)
-        rrect_stroke(c, bar, 38, BLUE, a * 0.8, 2)
-        icon(c, "search", bar.left() + 44, bar.centerY(), 26, BLUE, a)
-        text(c, "Ask anything about your work", bar.left() + 84, bar.centerY() + 9, 24, "Medium", STEEL_400, a)
+        dark_card(c, r, a, 0.9)
+        icon(c, "spark", r.left() + 66, r.top() + 66, 30, "#3D8BFF", a)
+        text(c, "AXCORE AI", r.left() + 98, r.top() + 77, 26, "SemiBold", "#B9CCFF", a)
+        bar = R(r.left() + 50, r.centerY() - 6, r.width() - 100, 84)
+        rrect(c, bar, 42, NAVY_800, a)
+        rrect_stroke(c, bar, 42, "#3E6BFF", a, 2)
+        icon(c, "search", bar.left() + 46, bar.centerY(), 28, "#7FA6FF", a)
+        ph = "무엇이든 물어보세요"
+        text(c, ph, bar.left() + 88, bar.centerY() + 11, 30, "Medium", "#8EA6E6", a)
         if (T * 2) % 1 < 0.55:
-            c.drawLine(bar.left() + 84 + 352, bar.centerY() - 16, bar.left() + 84 + 352, bar.centerY() + 16,
-                       paint_stroke(BLUE, a, 2))
+            x_ = bar.left() + 92 + text_w(ph, 30, "Medium")
+            c.drawLine(x_, bar.centerY() - 18, x_, bar.centerY() + 18, paint_stroke(WHITE, a, 2))
 
 
 def sc15_rect(T):
     return SC15_ONE
 
 
-# ============================================================ SC16 AI Q&A traced through the ontology
-SC16_WIN = R(170, 110, 1580, 860)
-Q_TEXT = "Why did Line 3's defect rate rise this week?"
-SC16_NODES = {  # pane-relative positions (0..1)
-    "q": ("Line 3 defect rate", "alert", (0.50, 0.12)),
-    "prod": ("Product A-200", "cube", (0.22, 0.34)),
-    "proc": ("Welding process", "flow", (0.70, 0.36)),
-    "eq": ("Robot W-07", "robot", (0.78, 0.62)),
-    "mat": ("Material Lot A-2041", "box", (0.28, 0.62)),
-    "task": ("Maintenance task", "calendar", (0.52, 0.86)),
-}
-SC16_PATH = ["q", "prod", "proc", "eq", "mat", "task"]
-SC16_EDGES = [("q", "prod"), ("q", "proc"), ("prod", "proc"), ("proc", "eq"), ("prod", "mat"), ("eq", "mat"),
-              ("eq", "task"), ("mat", "task")]
-SC16_ANS = [("Current status", "Defect rate 2.8%  ·  +1.6%p vs. last week", "L21", ["q", "prod"]),
-            ("Root cause", "Torque drift on welding robot W-07 after Lot A-2041", "CAUSE", ["eq", "mat", "proc"]),
-            ("Context", "Maintenance postponed on 10/02  ·  same lot runs on Line 5", "CTX", ["task", "mat"])]
+# ============================================================ SC16 AI Q&A traced through the ontology (storyboard 3)
+SC16_Q = "지난달 3라인 불량이 왜 늘었지?"
+SC16_A = ["원자재 로트가 바뀐 뒤부터 늘었습니다.", "관련 작업일지 3건을 찾았어요."]
+SC16_TRACE = [("3라인 불량률", "alert"), ("공정 · 용접", "flow"), ("설비 · W-07", "robot"),
+              ("자재 · 로트 A-2041", "box"), ("작업일지", "doc")]
+SC16_TAGS = [("현재 상황", "L21"), ("원인", "CAUSE"), ("업무 맥락", "CTX")]
+SC16_PANEL_BORDER = "#3E6BFF"
+
+
+def dark_card(c, rect, a, glow=0.6):
+    glass(c, rect, 28, a, tint=NAVY_900, tint_a=0.72, blur=26, border=0.0, shadow=0.35, highlight=0.04)
+    c.drawRRect(skia.RRect.MakeRectXY(rect, 28, 28), paint_stroke(SC16_PANEL_BORDER, a * 0.5 * glow, 8, blur=12,
+                                                                blend=skia.BlendMode.kScreen))
+    rrect_stroke(c, rect, 28, SC16_PANEL_BORDER, a * 0.95, 2.0)
 
 
 def sc16(c, T, t, d):
-    draw_plate(c, "15_whitedesk", t, d, s=(1.04, 1.09), grade=GRADE_DAY)
-    s = lerp(1.0, 1.025, drift(t, d))
-    c.save()
-    c.translate(W / 2, H / 2)
-    c.scale(s, s)
-    c.translate(-W / 2, -H / 2)
-    win = SC16_WIN
-    glass(c, win, 26, 1.0, tint=WHITE, tint_a=0.88, blur=34, border=0.9, shadow=0.28, solid=0.6, solid_col=PAPER)
-    # header
-    L = logo()
-    L.draw(c, win.left() + 110, win.top() + 46, 140, 1.0, 1.0, (1, 1, 1), False, 1.0)
-    c.drawLine(win.left(), win.top() + 92, win.right(), win.top() + 92, paint_stroke(STEEL_200, 0.8, 1))
-    pane = R(win.left() + 870, win.top() + 120, 680, win.height() - 150)
-    rrect(c, pane, 18, "#F1F3F8", 1.0)
-    text(c, "Ontology trace", pane.left() + 28, pane.top() + 42, 18, "SemiBold", INK, 1.0)
-    # question typing
-    q_n = int(len(Q_TEXT) * clamp(prog(T, CUE["L20"] + 0.05, 1.05)))
-    sent = e_io_cubic(prog(T, 73.2, 0.45))
-    inp = R(win.left() + 40, win.bottom() - 110, 800, 72)
-    rrect(c, inp, 36, WHITE, 1.0)
-    rrect_stroke(c, inp, 36, BLUE if sent < 1 else STEEL_200, 0.9, 1.8)
-    icon(c, "chat", inp.left() + 40, inp.centerY(), 24, BLUE, 1.0)
-    if sent < 0.5:
-        text(c, Q_TEXT[:q_n], inp.left() + 78, inp.centerY() + 8, 22, "Medium", INK, 1 - sent * 2)
-    else:
-        text(c, "Ask a follow-up ...", inp.left() + 78, inp.centerY() + 8, 22, "Medium", STEEL_400, (sent - 0.5) * 2)
-    if sent > 0:
-        bw = text_w(Q_TEXT, 21, "Medium") + 56
-        by = lerp(inp.top(), win.top() + 130, sent)
-        b = R(win.left() + 830 - bw, by, bw, 60)
-        rrect(c, b, 30, BLUE, sent)
-        text(c, Q_TEXT, b.left() + 28, b.top() + 38, 21, "Medium", WHITE, sent)
-    # ontology trace in the pane
-    def npos(k):
-        _, _, (u, v) = SC16_NODES[k]
-        return pane.left() + 40 + u * (pane.width() - 80), pane.top() + 80 + v * (pane.height() - 120)
-    tr0 = CUE["L20b"]
-    step = {k: tr0 + i * 0.3 for i, k in enumerate(SC16_PATH)}
-    focus = set()
-    for (title, body, cue, nodes) in SC16_ANS:
-        if CUE[cue] < T < CUE[cue] + 1.6:
-            focus.update(nodes)
-    for (a_, b_) in SC16_EDGES:
-        pa, pb = npos(a_), npos(b_)
-        base = e_out_expo(prog(T, 72.2, 0.8))
-        line(c, poly([pa, pb]), STEEL_400, 0.45 * base, 1.3)
-        g = e_out_expo(prog(T, max(step[a_], step[b_]), 0.4))
-        line(c, poly([pa, pb]), BLUE, 0.95, 2.2, (0, g), glow=0.3)
-    for k in SC16_NODES:
-        lab, ic, _ = SC16_NODES[k]
-        x, y = npos(k)
-        on = e_out_expo(prog(T, step[k], 0.35))
-        base = e_out_expo(prog(T, 72.2, 0.8))
-        foc = 1.0 if k in focus else 0.0
-        tw = text_w(lab, 15, "SemiBold")
-        r = R(x - tw / 2 - 40, y - 22, tw + 64, 44)
-        rrect(c, r.makeOffset(0, 6), 22, NAVY_950, 0.1 * base, blur=10)
-        rrect(c, r, 22, BLUE if (on > 0.5 and k == "q") else WHITE, base)
-        rrect_stroke(c, r, 22, BLUE, base * (0.25 + 0.75 * on), 1.4 + 1.2 * foc)
-        if foc:
-            rrect_stroke(c, r.makeOutset(5, 5), 26, CYAN, 0.6 * math.sin(math.pi * ((T * 1.5) % 1)), 2, blur=3)
-        fg = WHITE if (on > 0.5 and k == "q") else INK
-        icon(c, ic, r.left() + 26, y, 18, WHITE if fg == WHITE else BLUE, base)
-        text(c, lab, r.left() + 46, y + 5.5, 15, "SemiBold", fg, base)
-    # data sources found
-    for i, src in enumerate(("MES", "QMS", "Maintenance log")):
-        t0 = tr0 + 0.6 + i * 0.3
-        k = enter(T, t0, 0.4)
-        x = pane.left() + 28 + sum(text_w(s_, 14, "SemiBold") + 50 for s_ in ("MES", "QMS", "Maintenance log")[:i])
-        if k > 0:
-            r = R(x, pane.bottom() - 52, text_w(src, 14, "SemiBold") + 40, 32)
-            rrect(c, r, 16, "#E3E8FF", clamp(k))
-            icon(c, "db", r.left() + 16, r.centerY(), 14, INDIGO, clamp(k))
-            text(c, src, r.left() + 30, r.centerY() + 5, 14, "SemiBold", INDIGO, clamp(k))
-    # answer cards
-    for i, (title, body, cue, nodes) in enumerate(SC16_ANS):
-        k = enter(T, CUE[cue] - 0.05, 0.55)
-        if k <= 0:
-            continue
-        a = clamp(k)
-        r = R(win.left() + 40, win.top() + 222 + i * 140 + 18 * (1 - a), 790, 120)
-        rrect(c, r.makeOffset(0, 8), 16, NAVY_950, 0.08 * a, blur=12)
-        rrect(c, r, 16, WHITE, a)
-        rrect_stroke(c, r, 16, STEEL_200, a, 1)
-        c.drawRect(R(r.left(), r.top() + 18, 4, r.height() - 36), paint_fill(BLUE if i == 1 else INDIGO, a))
-        text(c, title.upper(), r.left() + 30, r.top() + 42, 13, "SemiBold", BLUE if i == 1 else INDIGO, a)
-        n = int(len(body) * clamp(prog(T, CUE[cue] + 0.1, 0.7)))
-        text(c, body[:n], r.left() + 30, r.top() + 82, 23, "Medium", INK, a)
-        if i == 0:
-            pts = [(r.right() - 190 + j * 18, r.top() + 80 - (j * j * 0.35 + (j % 3) * 4)) for j in range(9)]
-            line(c, poly(pts), BLUE, a, 2.2, (0, e_out_expo(prog(T, CUE[cue] + 0.3, 0.8))))
-    c.restore()
-
-
-def sc16_rect(T):
-    return SC16_WIN
+    # live action: typing the question, then the shot falls back into a deep navy blur behind the UI
+    ui = e_io_cubic(prog(T, 72.9, 0.8))
+    draw_plate(c, "23_typing", t, d, s=(1.02, 1.08), grade=GRADE_DARK, defocus=ui)
+    c.drawRect(R(0, 0, W, H), paint_fill(NAVY_950, 0.15 + 0.55 * ui))
+    radial(c, W * 0.35, H * 0.55, 900, "#1B3A8F", 0.35 * ui)
+    # question bubble
+    qk = enter(T, 72.05, 0.6)
+    if qk > 0:
+        a = clamp(qk)
+        r = R(1010, 120 + 16 * (1 - a), 760, 150)
+        dark_card(c, r, a)
+        n = int(len(SC16_Q) * clamp(prog(T, 72.25, 0.8)))
+        text(c, SC16_Q[:n], r.left() + 56, r.centerY() + 14, 40, "Medium", WHITE, a)
+        if n < len(SC16_Q) and (T * 2) % 1 < 0.6:
+            cx_ = r.left() + 56 + text_w(SC16_Q[:n], 40, "Medium") + 4
+            c.drawLine(cx_, r.centerY() - 20, cx_, r.centerY() + 22, paint_stroke(WHITE, a, 2))
+    # AI answer card
+    ak = enter(T, CUE["L20b"] - 0.05, 0.6)
+    if ak > 0:
+        a = clamp(ak)
+        r = R(150, 360 + 18 * (1 - a), 1060, 470)
+        dark_card(c, r, a, 0.9)
+        icon(c, "spark", r.left() + 74, r.top() + 72, 36, "#3D8BFF", a)
+        text(c, "AXCORE AI", r.left() + 110, r.top() + 84, 30, "SemiBold", "#B9CCFF", a)
+        for j, ic in enumerate(("doc", "more")):
+            x_ = r.right() - 150 + j * 76
+            if ic == "doc":
+                rrect_stroke(c, R(x_ - 14, r.top() + 56, 26, 32), 4, "#B9CCFF", a, 2)
+                rrect_stroke(c, R(x_ - 6, r.top() + 50, 26, 32), 4, "#B9CCFF", a * 0.7, 2)
+            else:
+                for q in range(3):
+                    c.drawCircle(x_ - 14 + q * 14, r.top() + 72, 3.6, paint_fill("#B9CCFF", a))
+        # context tags light as the narration names them
+        tx = r.left() + 74
+        for lab, cue in SC16_TAGS:
+            on = e_out_expo(prog(T, CUE[cue] - 0.05, 0.4))
+            tw = text_w(lab, 19, "SemiBold")
+            tr = R(tx, r.top() + 116, tw + 34, 38)
+            rrect(c, tr, 19, "#2A55E8" if on > 0.5 else NAVY_700, a * (0.55 + 0.45 * on))
+            text(c, lab, tr.left() + 17, tr.top() + 26, 19, "SemiBold", WHITE, a * (0.5 + 0.5 * on))
+            tx += tr.width() + 12
+        # searching -> answer typing
+        if T < CUE["L21"]:
+            dots = int((T * 3) % 4)
+            text(c, "관련 데이터를 찾는 중" + "." * dots, r.left() + 74, r.top() + 230, 34, "Medium", "#8EA6E6", a)
+        else:
+            y = r.top() + 232
+            for j, ln in enumerate(SC16_A):
+                n = int(len(ln) * clamp(prog(T, CUE["L21"] + j * 0.75, 0.7)))
+                text(c, ln[:n], r.left() + 74, y + j * 62, 40, "Medium", WHITE, a)
+        c.drawLine(r.left() + 74, r.bottom() - 120, r.right() - 74, r.bottom() - 120, paint_stroke("#2B3F7A", a, 1.4))
+        for j in range(3):
+            ck = enter(T, CUE["CTX"] + j * 0.15, 0.45)
+            if ck <= 0:
+                continue
+            cr = R(r.left() + 74 + j * 250, r.bottom() - 92, 228, 64)
+            rrect(c, cr, 14, NAVY_800, a * clamp(ck))
+            rrect_stroke(c, cr, 14, "#33477F", a * clamp(ck), 1.4)
+            icon(c, "doc", cr.left() + 40, cr.centerY(), 30, "#5B8CFF", a * clamp(ck))
+            text(c, "Work Log 0%d" % (j + 1), cr.left() + 70, cr.centerY() + 8, 22, "Medium", WHITE, a * clamp(ck))
+    # ontology trace: how the answer was found
+    pk = enter(T, CUE["L20b"] + 0.15, 0.6)
+    if pk > 0:
+        a = clamp(pk)
+        r = R(1270, 360 + 18 * (1 - a), 500, 470)
+        dark_card(c, r, a, 0.5)
+        text(c, "온톨로지 탐색", r.left() + 40, r.top() + 62, 24, "SemiBold", "#B9CCFF", a)
+        n = len(SC16_TRACE)
+        pts = [(r.left() + 90 + (j % 2) * 210, r.top() + 120 + j * 66) for j in range(n)]
+        for j in range(n - 1):
+            g = e_out_expo(prog(T, CUE["L20b"] + 0.5 + j * 0.32, 0.35))
+            line(c, poly([pts[j], pts[j + 1]]), CYAN, 0.9, 2.0, (0, g), glow=0.6)
+        for j, (lab, ic) in enumerate(SC16_TRACE):
+            on = e_out_expo(prog(T, CUE["L20b"] + 0.4 + j * 0.32, 0.3))
+            x_, y_ = pts[j]
+            tw = text_w(lab, 18, "SemiBold")
+            nr = R(x_ - 26, y_ - 22, tw + 70, 44)
+            rrect(c, nr, 22, "#1E3F9E" if on > 0.5 else NAVY_800, a)
+            rrect_stroke(c, nr, 22, CYAN if on > 0.5 else "#33477F", a, 1.6)
+            icon(c, ic, nr.left() + 24, y_, 18, CYAN_SOFT, a)
+            text(c, lab, nr.left() + 46, y_ + 6.5, 18, "SemiBold", WHITE, a * (0.55 + 0.45 * on))
 
 
 # ============================================================ SC17 sales: demand forecast
@@ -1212,31 +1271,29 @@ def sc17(c, T, t, d):
 
 
 # ============================================================ SC18 production & quality: anomaly
-SC18_ITEMS = [(0.11, 0.69, 0.39, 0.83), (0.26, 0.64, 0.47, 0.76), (0.34, 0.60, 0.52, 0.71), (0.41, 0.58, 0.555, 0.68),
-              (0.47, 0.555, 0.58, 0.65)]
-SC18_BAD = 2
+SC18_GATE = (0.20, 0.50, 0.50, 0.86)   # inspection zone over the moving conveyor (frame uv)
 
 
 def sc18(c, T, t, d):
-    cam = draw_plate(c, "06_line", t, d, s=(1.06, 1.13), x=(40, -40), grade=GRADE_COOL)
-    for i, box in enumerate(SC18_ITEMS):
-        t0 = CUE["L23"] + 0.05 + i * 0.12
-        k = enter(T, t0, 0.4)
-        if k <= 0:
-            continue
+    cam = draw_plate(c, "06_line", t, d, s=(1.02, 1.08), x=(20, -20), grade=GRADE_COOL)
+    k = enter(T, CUE["L23"] + 0.05, 0.5)
+    if k > 0:
         a = clamp(k)
-        r = cam.rect(*box).makeInset(6, 4)
-        bad = i == SC18_BAD and T > 82.5
-        colr = CYAN if bad else WHITE
-        corner_brackets(c, r, 16, colr, a, 2.2 if bad else 1.6)
-        lab = "ANOMALY  0.91" if bad else "OK  0.9%d" % (7 - i % 3)
-        tw = text_w(lab, 12, "SemiBold") + 18
-        c.drawRect(R(r.left(), r.top() - 24, tw, 20), paint_fill(BLUE if bad else NAVY_900, a * 0.85))
-        text(c, lab, r.left() + 9, r.top() - 9.5, 12, "SemiBold", WHITE, a)
+        r = cam.rect(*SC18_GATE)
+        bad = T > 82.5
+        corner_brackets(c, r, 30, CYAN if bad else WHITE, a, 2.4)
+        sp = ((T - CUE["L23"]) * 0.9) % 1.0
+        y = lerp(r.top(), r.bottom(), e_io_sine(sp))
+        c.drawLine(r.left(), y, r.right(), y, paint_stroke(CYAN, 0.5 * a, 10, blur=10, blend=skia.BlendMode.kScreen))
+        c.drawLine(r.left(), y, r.right(), y, paint_stroke(WHITE, 0.9 * a, 1.4))
+        lab = "이상 징후 감지  0.91" if bad else "품질 검사 중  ·  정상 0.98"
+        tw = text_w(lab, 17, "SemiBold") + 28
+        rrect(c, R(r.left(), r.top() - 44, tw, 34), 6, BLUE if bad else NAVY_900, a * 0.9)
+        text(c, lab, r.left() + 14, r.top() - 21, 17, "SemiBold", WHITE, a)
         if bad:
             ph = (T - 82.5) % 1.1 / 1.1
-            c.drawRect(r.makeOutset(10 * ph, 10 * ph), paint_stroke(CYAN, (1 - ph) * 0.8, 2))
-            radial(c, r.centerX(), r.centerY(), r.width() * 0.8, CYAN, 0.18)
+            c.drawRect(r.makeOutset(14 * ph, 14 * ph), paint_stroke(CYAN, (1 - ph) * 0.8, 2))
+            radial(c, r.centerX(), r.centerY(), r.width() * 0.7, CYAN, 0.16)
     # signal card
     k = enter(T, 81.5, 0.6)
     if k > 0:
@@ -1275,7 +1332,8 @@ SC19_GRIP = (0.61, 0.52)
 
 def sc19(c, T, t, d):
     cam = draw_plate(c, "17_robot", t, d, s=(1.05, 1.13), x=(-20, 20), grade=GRADE_COOL)
-    gx, gy = cam.map(*SC19_GRIP)
+    gp = cam.point("grip")
+    gx, gy = gp if gp else cam.map(*SC19_GRIP)
     for i, (lab, ic) in enumerate(SC19_TASKS):
         t0 = CUE["L24"] + i * 0.25
         k = enter(T, t0, 0.5)
@@ -1418,43 +1476,177 @@ def sc22c(c, T, t, d):
     streak(c, (-80, H * 0.86), (W + 80, H * 0.74), prog(t, 0.0, 1.8) * 1.5, 0.4, 2.2, CYAN, 0.85)
 
 
-# ============================================================ SC23 finale: AXCORE
+# ============================================================ SC23 finale: AX filled with footage -> AXCORE (storyboard 5)
+SC23_CLIPS = ["18_factory", "17_robot", "05_warehouse", "10_datacenter", "06_line", "19_aerial", "16_retail",
+              "04_table", "14_monitors", "20_team", "08_navycards", "12_handwritten"]
+SC23_CARDS = [("ERP", "db", 250, 250), ("CRM", "user", 210, 520), ("Slack", "hash", 250, 800),
+              ("Gmail", "mail", 1670, 230), ("Notion", "note", 1720, 460), ("MES", "factory", 1690, 690),
+              ("WMS", "box", 1640, 900), ("OCR", "scan", 960, 960)]
+SC23_SIZE = 560
+SC23_FILL0, SC23_FILL1 = 102.6, 104.5
+SC23_MORPH = 104.85
+SC23_LOGO_W = 760
+SC23_LOGO_AX = 292          # x (logo px) where the stylised "/X" ends and "CORE" begins
+SC23_LOGO_Y = (53, 185)     # glyph rows in the logo artwork
+
+
+def sc23_ax_rect():
+    from engine import font as _font
+    fnt = _font(SC23_SIZE, "ExtraBold")
+    w = fnt.measureText("AX")
+    cap = SC23_SIZE * 0.707
+    x0 = W / 2 - w / 2
+    base = H / 2 + cap / 2
+    return fnt, x0, base, R(x0, base - cap, w, cap)
+
+
+def sc23_ax_path(fnt, x0, base):
+    """Outline of the letters A and X (used as the clip for the footage mosaic)."""
+    path = skia.Path()
+    x = x0
+    gids = fnt.textToGlyphs("AX")
+    for gid, adv in zip(gids, fnt.getWidths(gids)):
+        gp = fnt.getPath(gid)
+        gp.offset(x, base)
+        path.addPath(gp)
+        x += adv
+    return path
+
+
+def sc23_cells():
+    """Seeded treemap mosaic inside the AX bounds (video tiles + solid brand tiles)."""
+    _, _, _, box = sc23_ax_rect()
+    r = rng("ax-mosaic")
+    cells = [(box.left(), box.top(), box.width(), box.height())]
+    while len(cells) < 34:
+        i = int(np.argmax([cw * ch for (_, _, cw, ch) in cells]))
+        x, y, cw, ch = cells.pop(i)
+        k = r.uniform(0.35, 0.65)
+        if cw > ch * 1.1:
+            cells += [(x, y, cw * k, ch), (x + cw * k, y, cw * (1 - k), ch)]
+        else:
+            cells += [(x, y, cw, ch * k), (x, y + ch * k, cw, ch * (1 - k))]
+    out = []
+    for j, (x, y, cw, ch) in enumerate(cells):
+        kind = r.choice(["clip"] * 6 + ["navy", "blue", "pale"])
+        out.append(dict(rect=(x, y, cw, ch), kind=kind, clip=SC23_CLIPS[j % len(SC23_CLIPS)],
+                        t0=r.uniform(0, 1), off=r.uniform(0, 3)))
+    return out
+
+
+_SC23_CELLS = None
+
+
 def sc23(c, T, t, d):
+    global _SC23_CELLS
+    if _SC23_CELLS is None:
+        _SC23_CELLS = sc23_cells()
     c.clear(col(WARM_W))
     p = drift(t, d)
-    s = lerp(1.0, 1.06, p)
+    s = lerp(1.0, 1.05, p)
     dot_grid(c, 44, STEEL_400, 0.36 * (1 - e_io_sine(prog(T, 107.6, 1.2)) * 0.5), 1.25, 0, 0, s)
-    cx, cy = W / 2, H / 2 - 10
-    # converging lines with square nodes (reference vocabulary)
-    rays = [(-1, -1), (1, -1), (-1, 1), (1, 1), (-1, 0), (1, 0)]
-    for i, (dx, dy) in enumerate(rays):
-        t0 = CUE["L31"] - 0.1 + i * 0.14
-        g = e_out_expo(prog(T, t0, 1.1))
-        fade = 1 - e_io_sine(prog(T, 105.0, 0.9))
-        far = (cx + dx * 1100, cy + dy * 640 + (60 if dy == 0 else 0) * dx)
-        nearp = (cx + dx * 450, cy + dy * 120)
-        elbow = (lerp(far[0], nearp[0], 0.45), nearp[1] if dy == 0 else lerp(far[1], nearp[1], 0.5))
-        pth = poly([far, elbow, nearp])
-        line(c, pth, NAVY, 0.7 * fade, 1.4, (0, g))
-        if g > 0:
-            square(c, elbow[0], elbow[1], 10, NAVY, fade * clamp(g * 2))
-            x, y, _ = path_at(pth, g)
-            square(c, x, y, 14, BLUE if i == 2 else NAVY, fade)
-    # frame that holds the mark
-    fk = e_out_expo(prog(T, 104.0, 0.8)) * (1 - e_io_sine(prog(T, 105.6, 0.8)))
-    if fk > 0:
-        fr = R(cx - 470, cy - 150, 940, 300)
-        corner_brackets(c, fr.makeOutset(40 * (1 - fk), 20 * (1 - fk)), 34, NAVY, fk, 2.2)
+    fnt, x0, base, box = sc23_ax_rect()
     L = logo()
-    lw = 760 * s
-    rev = e_io_cubic(prog(T, 104.55, 0.9))
-    dk = settle(prog(T, CUE["L32"] - 0.15, 0.55))
+    lw = SC23_LOGO_W * s
+    k = lw / L.w
+    lcx, lcy = W / 2, H / 2 - 10
+    lx0, ly0 = lcx - lw / 2, lcy - L.h * k / 2
+    target = R(lx0, ly0 + SC23_LOGO_Y[0] * k, SC23_LOGO_AX * k, (SC23_LOGO_Y[1] - SC23_LOGO_Y[0]) * k)
+    morph = e_io_expo(prog(T, SC23_MORPH, 0.75))
+    out_a = 1 - e_io_sine(prog(T, SC23_MORPH + 0.35, 0.4))
+    # connector cards (ERP, CRM, Slack, Gmail, Notion, MES, WMS, OCR) wired into the letters
+    cards_a = 1 - e_io_sine(prog(T, SC23_MORPH - 0.1, 0.4))
+    for i, (lab, ic, cx, cy) in enumerate(SC23_CARDS):
+        ck = enter(T, 102.75 + i * 0.12, 0.55)
+        if ck <= 0 or cards_a <= 0:
+            continue
+        a = clamp(ck) * cards_a
+        cr = R(cx - 78, cy - 58, 156, 116)
+        tx = box.left() + 20 if cx < W / 2 else box.right() - 20
+        if lab == "OCR":
+            tx, ty = box.centerX(), box.bottom() - 10
+            pth = poly([(cx, cr.top()), (cx, ty)])
+        else:
+            ty = cy * 0.5 + box.centerY() * 0.5
+            ex = cr.right() if cx < W / 2 else cr.left()
+            mid = lerp(ex, tx, 0.45)
+            pth = poly([(ex, cy), (mid, cy), (mid, ty), (tx, ty)])
+        g = e_out_expo(prog(T, 102.9 + i * 0.12, 0.8))
+        line(c, pth, BLUE, 0.7 * a, 1.6, (0, g))
+        square(c, pth_end(pth)[0], pth_end(pth)[1], 10, BLUE, a * clamp(g * 2 - 1))
+        pulse(c, pth, ((T - 103.4 - i * 0.1) * 0.9) % 1.0 if T > 103.4 else 0, BLUE, 0.8 * a, 12, 0.2)
+        c.drawRect(cr.makeOffset(0, 10), paint_fill(NAVY_950, 0.12 * a, blur=18))
+        c.drawRect(cr, paint_fill(WHITE, a))
+        c.drawRect(cr, paint_stroke(STEEL_200, a, 1.2, cap=skia.Paint.kSquare_Cap))
+        icon(c, ic, cr.centerX(), cr.top() + 44, 40, NAVY, a)
+        text(c, lab, cr.centerX(), cr.bottom() - 18, 21, "SemiBold", INK, a, "center")
+    # small navy squares floating around (reference vocabulary)
+    rr = rng("ax-sq")
+    for j in range(16):
+        qx, qy = rr.uniform(120, W - 120), rr.uniform(80, H - 80)
+        qs = rr.uniform(10, 34)
+        qa = clamp(enter(T, 102.7 + rr.uniform(0, 1.2), 0.5)) * cards_a * 0.8
+        square(c, qx + math.sin(T + j) * 6, qy, qs, BLUE if j % 4 == 0 else "#C9D6F5", qa)
+    # AX mosaic layer (masked by the letters), morphs into the logo's "/X"
+    if out_a > 0.003:
+        sx = lerp(1.0, target.width() / box.width(), morph)
+        sy = lerp(1.0, target.height() / box.height(), morph)
+        dx = lerp(0, target.left() - box.left() * sx, morph)
+        dy = lerp(0, target.top() - box.top() * sy, morph)
+        lp = skia.Paint()
+        lp.setAlphaf(clamp(out_a))
+        c.save()
+        c.translate(dx, dy)
+        c.scale(sx, sy)
+        c.saveLayer(box.makeOutset(40, 40), lp)
+        c.clipPath(sc23_ax_path(fnt, x0, base), skia.ClipOp.kIntersect, True)
+        c.drawRect(box.makeOutset(30, 30), paint_fill("#E8EDF7", 1.0))
+        for cell in _SC23_CELLS:
+            x, y, cw, ch = cell["rect"]
+            ce = enter(T, SC23_FILL0 + cell["t0"] * (SC23_FILL1 - SC23_FILL0 - 0.3), 0.5)
+            if ce <= 0:
+                continue
+            ca = clamp(ce)
+            rect = R(x + 2, y + 2, cw - 4, ch - 4)
+            sc_ = 0.82 + 0.18 * clamp(ce, 0, 1.05)
+            rect = R(rect.centerX() - rect.width() * sc_ / 2, rect.centerY() - rect.height() * sc_ / 2,
+                     rect.width() * sc_, rect.height() * sc_)
+            if cell["kind"] == "clip":
+                draw_image_cover(c, cell["clip"], rect, ca, 1.0, (0.5, 0.5), 0, GRADE_COOL, t=T + cell["off"])
+                c.drawRect(rect, paint_fill(NAVY, 0.18 * ca))
+            else:
+                colr = {"navy": NAVY, "blue": BLUE, "pale": "#B8C8EA"}[cell["kind"]]
+                c.drawRect(rect, paint_fill(colr, ca))
+        # converge to the logo grey as the letters become the mark
+        c.drawRect(box.makeOutset(30, 30), paint_fill(STEEL, morph * 0.85))
+        c.restore()
+        c.restore()
+    # AXCORE logo: "/X" takes over from the mosaic, "CORE" wipes in, the blue E and diamond land on the word
+    la = e_io_sine(prog(T, SC23_MORPH + 0.4, 0.45))
+    if la > 0:
+        c.save()
+        c.clipRect(skia.Rect.MakeLTRB(0, 0, lx0 + SC23_LOGO_AX * k, H))
+        L.draw(c, lcx, lcy, lw, 1.0, 0.0, (0, 0, 0), False, la)
+        c.restore()
+        wipe = e_io_cubic(prog(T, SC23_MORPH + 0.45, 0.4))
+        c.save()
+        c.clipRect(skia.Rect.MakeLTRB(lx0 + SC23_LOGO_AX * k, 0, lerp(lx0 + SC23_LOGO_AX * k, lx0 + lw, wipe), H))
+        L.draw(c, lcx, lcy, lw, 1.0, 0.0, (0, 0, 0), False, 1.0)
+        c.restore()
+    dk = settle(prog(T, CUE["L32"] - 0.2, 0.55))
     bars = [settle(prog(T, CUE["L32"] - 0.05 + i * 0.11, 0.6)) for i in range(3)]
-    L.draw(c, cx, cy, lw, rev, dk, bars, False, 1.0, glint=prog(T, 106.4, 1.3))
-    # fade to warm white at the very end
+    if dk > 0 or bars[0] > 0:
+        L.draw(c, lcx, lcy, lw, 0.0, dk, bars, False, 1.0)
+    if T > 106.3:
+        L.draw(c, lcx, lcy, lw, 0.0, 0.0, (0, 0, 0), False, 1.0, glint=prog(T, 106.4, 1.3))
     fo = e_io_sine(prog(T, 108.7, 0.8))
     if fo > 0:
         c.drawRect(R(0, 0, W, H), paint_fill(WARM_W, fo))
+
+
+def pth_end(pth):
+    x, y, _ = path_at(pth, 1.0)
+    return x, y
 
 
 # ============================================================ timeline

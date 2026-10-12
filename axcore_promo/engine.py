@@ -529,6 +529,8 @@ def draw_plate(c, name, t, dur, s=(1.0, 1.04), x=(0, 0), y=(0, 0), r=(0, 0), alp
     else:
         img = plate(name)
     p = drift(t, dur)
+    if media.clip_info(name):  # the footage moves on its own: keep the digital move gentle
+        s = (1 + (s[0] - 1) * 0.5, 1 + (s[1] - 1) * 0.5)
     sc = lerp(s[0], s[1], p)
     for bt, amt in beats:
         sc += amt * e_out_expo(prog(t, bt, 0.9))
@@ -729,6 +731,9 @@ def icon(c, kind, cx, cy, s=22, color=WHITE, alpha=1.0, width=None):
     elif kind == "link":
         c.drawRRect(skia.RRect.MakeRectXY(R(L, cy - s * .16, s * .55, s * .32), s * .16, s * .16), p)
         c.drawRRect(skia.RRect.MakeRectXY(R(Rr - s * .55, cy - s * .16, s * .55, s * .32), s * .16, s * .16), p)
+    elif kind == "more":
+        for k in (-0.3, 0, 0.3):
+            c.drawCircle(cx + s * k, cy, w * 0.9, pf)
     else:
         c.drawCircle(cx, cy, s * .35, p)
 

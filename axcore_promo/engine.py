@@ -596,7 +596,7 @@ def hand_mask(cam, forearm=1.0):
     mask = poly([P[i] for i in (0, 1, 5, 9, 13, 17)], True)
     for chain in HAND_CHAINS:
         src = poly([P[i] for i in chain])
-        sp = skia.Paint(Style=skia.Paint.kStroke_Style, StrokeWidth=palm * 0.36, StrokeCap=skia.Paint.kRound_Cap,
+        sp = skia.Paint(Style=skia.Paint.kStroke_Style, StrokeWidth=palm * 0.27, StrokeCap=skia.Paint.kRound_Cap,
                         StrokeJoin=skia.Paint.kRound_Join)
         fill = skia.Path()
         sp.getFillPath(src, fill)
@@ -606,10 +606,10 @@ def hand_mask(cam, forearm=1.0):
         n = math.hypot(dx, dy) + 1e-6
         dx, dy = dx / n, dy / n
         nx, ny = -dy, dx
-        hw = palm * 0.55
-        far = 2400 * forearm
-        arm = poly([(P[0][0] + nx * hw, P[0][1] + ny * hw), (P[0][0] + dx * far + nx * hw * 1.8, P[0][1] + dy * far + ny * hw * 1.8),
-                    (P[0][0] + dx * far - nx * hw * 1.8, P[0][1] + dy * far - ny * hw * 1.8),
+        hw = palm * 0.40
+        far = palm * 3.5 * forearm
+        arm = poly([(P[0][0] + nx * hw, P[0][1] + ny * hw), (P[0][0] + dx * far + nx * hw * 1.15, P[0][1] + dy * far + ny * hw * 1.15),
+                    (P[0][0] + dx * far - nx * hw * 1.15, P[0][1] + dy * far - ny * hw * 1.15),
                     (P[0][0] - nx * hw, P[0][1] - ny * hw)], True)
         mask = skia.Op(mask, arm, skia.PathOp.kUnion_PathOp) or mask
     return mask

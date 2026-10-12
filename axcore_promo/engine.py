@@ -477,11 +477,11 @@ def line_flow(c, pts, head, length=0.5, n=9, spread=14.0, twist=1.6, width=1.3, 
         u = np.clip((ss - (h - ln)) / ln, 0, 1)
         for k in range(segs):
             uk = (u[k] + u[k + 1]) / 2
-            a = alpha * ai * uk ** 1.7 * (0.62 + 0.38 * (depth[k] + 1) / 2)
+            a = alpha * ai * uk ** 1.25 * (0.62 + 0.38 * (depth[k] + 1) / 2)
             if a < 0.01:
                 continue
             w = wi * (0.7 + 0.35 * (depth[k] + 1) / 2) * (0.45 + 0.55 * uk)
-            seg = (px[k], py[k], px[k + 1], py[k + 1], a, w)
+            seg = (px[k], py[k], px[k + 1], py[k + 1], a, w, i % 3 == 0)
             sm = (ss[k] + ss[k + 1]) / 2
             (back if any(p0 <= sm <= p1 for p0, p1 in spans) else front).append(seg)
         if a1 >= h - 1e-6:
@@ -489,10 +489,13 @@ def line_flow(c, pts, head, length=0.5, n=9, spread=14.0, twist=1.6, width=1.3, 
             heads.append((px[-1], py[-1], wi, ai, hb))
     paint = skia.Paint(AntiAlias=True, Style=skia.Paint.kStroke_Style, StrokeCap=skia.Paint.kRound_Cap, BlendMode=bm)
     cc = col(color)
+    cw = col(core)
+    hi = (lerp(cc.fR, cw.fR, 0.6), lerp(cc.fG, cw.fG, 0.6), lerp(cc.fB, cw.fB, 0.6))   # bright core lines
 
     def draw(lst):
-        for (x0, y0, x1, y1, a, w) in lst:
-            paint.setColor4f(skia.Color4f(cc.fR, cc.fG, cc.fB, min(1.0, a)))
+        for (x0, y0, x1, y1, a, w, bright) in lst:
+            r_, g_, b_ = hi if bright else (cc.fR, cc.fG, cc.fB)
+            paint.setColor4f(skia.Color4f(r_, g_, b_, min(1.0, a)))
             paint.setStrokeWidth(w)
             c.drawLine(x0, y0, x1, y1, paint)
 
@@ -502,7 +505,7 @@ def line_flow(c, pts, head, length=0.5, n=9, spread=14.0, twist=1.6, width=1.3, 
         if g1 > g0:
             ss = np.linspace(g0, g1, 40)
             pth = poly(list(zip(np.interp(ss, s, Q[:, 0]), np.interp(ss, s, Q[:, 1]))))
-            gp = paint_stroke(color, alpha * glow * 0.16, spread * 1.6 + 6, blur=14, blend=skia.BlendMode.kScreen)
+            gp = paint_stroke(color, alpha * glow * 0.24, spread * 1.5 + 8, blur=16, blend=skia.BlendMode.kScreen)
             c.drawPath(pth, gp)
     draw(front)
     if back:

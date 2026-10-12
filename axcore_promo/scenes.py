@@ -14,7 +14,7 @@ from engine import (W, H, BLUE, CYAN, CYAN_SOFT, INDIGO, INK, NAVY, NAVY_700, NA
                     NAVY_950, PAPER, STEEL, STEEL_200, STEEL_400, WARM_W, WHITE, R, arc_path, clamp, colint,
                     col, corner_brackets, curve, dot_grid, draw_image_cover, draw_plate, drift,
                     e_io_cubic, e_io_expo, e_io_sine, e_out_cubic, e_out_expo, enter, glass, glow_dot, grade_filter,
-                    icon, jit, lerp, line, logo, paint_fill, paint_stroke, path_at, poly,
+                    hand_in_front, icon, jit, lerp, line, logo, paint_fill, paint_stroke, path_at, poly,
                     prog, pulse, radial, rng, rrect, rrect_stroke, settle, square, streak, text, text_w, vgrad,
                     vis)
 
@@ -504,8 +504,12 @@ def sc09(c, T, t, d):
     glass(c, panel, 22, a, tint=WHITE, tint_a=0.34, blur=30, border=0.85, shadow=0.25, solid=solid * 0.94,
           solid_col=PAPER, highlight=0.2)
     text(c, "M-AI Works", panel.left() + 36, panel.top() + 60, 32, "Bold", INK, a)
-    text(c, "필요한 기능을 직접 골라 담으세요" if solid < 0.5 else "우리 회사 워크스페이스", panel.left() + 38,
-         panel.top() + 92, 17, "Medium", STEEL, a)
+    if solid < 0.5:
+        text(c, "필요한 기능을 직접 골라 담으세요", panel.left() + 38, panel.top() + 92, 17, "Medium", STEEL, a)
+    else:
+        hx = panel.left() + 38
+        hx += text(c, "우리 회사를 이해하는 ", hx, panel.top() + 93, 20, "Bold", INK, a)
+        text(c, "AI WORKSPACE", hx, panel.top() + 93, 20, "Bold", BLUE, a)
     for j in range(3):
         c.drawCircle(panel.right() - 40 - j * 20, panel.top() + 50, 5, paint_fill(STEEL_200, a))
     c.drawLine(panel.left(), panel.top() + 110, panel.right(), panel.top() + 110, paint_stroke(STEEL_200, a * 0.7, 1))
@@ -526,6 +530,7 @@ def sc09(c, T, t, d):
     t_flick = SC09_T0 + SC09_FLICK / SC09_SPEED
     mini_on = e_out_expo(prog(T, 39.7, 0.9))
     placed = {}
+    front = []  # items held by the hand are drawn after the hand is re-composited on top
     # library chips (those not yet placed)
     for i, (name, ic) in enumerate(MODULES):
         k = enter(T, 34.15 + i * 0.08, 0.5)
@@ -542,11 +547,13 @@ def sc09(c, T, t, d):
                 ga = e_io_cubic(prog(T, 34.3, 0.35))
                 x = lerp(dx, gx + 70, ga)
                 y = lerp(dy, gy - 10, ga)
-                module_card(c, R(x - 90, y - 30, 180, 60), name, ic, ka, 0.5 * ga)
+                front.append(lambda x=x, y=y, ga=ga, name=name, ic=ic, ka=ka:
+                             module_card(c, R(x - 90, y - 30, 180, 60), name, ic, ka, 0.5 * ga))
             elif T < t_drop:
                 x, y = pinch_pt[0] + 60, pinch_pt[1] - 10
-                module_card(c, R(x - 90, y - 30, 180, 60), name, ic, ka, 1.0)
-                glow_dot(c, pinch_pt[0], pinch_pt[1], 34, CYAN, 0.55)
+                front.append(lambda x=x, y=y, name=name, ic=ic, ka=ka:
+                             module_card(c, R(x - 90, y - 30, 180, 60), name, ic, ka, 1.0))
+                front.append(lambda p=pinch_pt: glow_dot(c, p[0], p[1], 34, CYAN, 0.55))
             else:
                 q = e_io_cubic(prog(T, t_drop, 0.4))
                 cx, cy = lerp(sr.centerX() + 40, sr.centerX(), q), lerp(sr.centerY() - 70, sr.centerY(), q)
@@ -579,8 +586,8 @@ def sc09(c, T, t, d):
                     y = lerp(sr.centerY(), pinch_pt[1], q)
                     w_, h_ = lerp(sr.width(), 180, q), lerp(sr.height(), 60, q)
                     rect = R(x - w_ / 2, y - h_ / 2, w_, h_)
-                    module_card(c, rect, name, ic, ka, 0.6)
-                    _badge(c, rect, "minus", q)
+                    front.append(lambda rect=rect, name=name, ic=ic, ka=ka, q=q:
+                                 (module_card(c, rect, name, ic, ka, 0.6), _badge(c, rect, "minus", q)))
                 else:
                     q = e_out_cubic(prog(T, t_flick, 0.6))
                     sx, sy = (pinch_pt[0] + 40, pinch_pt[1]) if pinch_pt else (sr.centerX(), sr.centerY())
@@ -606,12 +613,9 @@ def sc09(c, T, t, d):
             continue
         dim = e_io_sine(prog(T, 38.4, 0.8)) * 0.6
         module_card(c, chip, name, ic, ka * (1 - dim), 0)
-    # headline (storyboard): the workspace that understands the company
-    hk = enter(T, 38.6, 0.7)
-    if hk > 0:
-        ha = clamp(hk)
-        text(c, "우리 회사를 이해하는", 1120, 860 + 12 * (1 - ha), 46, "Bold", INK, ha)
-        text(c, "AI WORKSPACE", 1120, 916 + 12 * (1 - ha), 46, "Bold", BLUE, ha)
+    hand_in_front(c, "09_handraise", t, cam, GRADE_DAY)
+    for f in front:
+        f()
 
 
 # ============================================================ SC10 AXCORE connects everything (white)
@@ -766,6 +770,7 @@ def sc12(c, T, t, d):
             rrect_stroke(c, R(540, 190 + j * 150, 420, 122), 20, STEEL_200, ui * 0.9, 2.5)
         c.restore()
     dock_pt = cam.map(0.68, 0.64)
+    held = []
     for i, (name, ic, cue, (sx, sy)) in enumerate(SC12_CHIPS):
         k = enter(T, CUE[cue] - 0.1, 0.5)
         if k <= 0:
@@ -791,9 +796,10 @@ def sc12(c, T, t, d):
             if dock >= 1:
                 continue
         if i == 0 and pinch is not None and t_grab <= T < t_dock:
-            # held by the pinch: the chip rides on the fingertips
-            ext_chip(c, pinch[0] + 70, pinch[1] - 6, name, ic, a, 1.0, lerp(1.0, 0.8, prog(T, t_grab, 1.6)))
-            glow_dot(c, pinch[0], pinch[1], 36, CYAN, 0.6)
+            # held by the pinch: the chip rides on the fingertips (in front of the hand)
+            held.append(lambda p=pinch, a=a, name=name, ic=ic: (
+                ext_chip(c, p[0] + 70, p[1] - 6, name, ic, a, 1.0, lerp(1.0, 0.8, prog(T, t_grab, 1.6))),
+                glow_dot(c, p[0], p[1], 36, CYAN, 0.6)))
         elif i == 0 and pinch is not None and T < t_grab:
             # magnetized toward the reaching hand
             g = e_io_cubic(prog(T, t_grab - 0.6, 0.6))
@@ -806,6 +812,9 @@ def sc12(c, T, t, d):
             ext_chip(c, px, py, name, ic, a * (1 - dock), 0.8, lerp(1.0, 0.7, f))
         else:
             ext_chip(c, sx, sy + bob, name, ic, a, 0.0)
+    hand_in_front(c, "24_personal", t, cam, GRADE_DAY)
+    for f in held:
+        f()
     # more tools to choose from (personalised)
     for i, (name, ic, (x, y)) in enumerate(SC12_EXTRA):
         k = enter(T, 52.2 + i * 0.15, 0.5)

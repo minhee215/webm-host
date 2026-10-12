@@ -583,6 +583,55 @@ def draw_image_cover(c, name, rect, alpha=1.0, zoom=1.0, focus=(0.5, 0.5), radiu
     c.restore()
 
 
+HAND_CHAINS = [(0, 1, 2, 3, 4), (0, 5, 6, 7, 8), (9, 10, 11, 12), (13, 14, 15, 16), (0, 17, 18, 19, 20), (5, 9, 13, 17)]
+
+
+def hand_mask(cam, forearm=1.0):
+    """Path covering the tracked hand (finger capsules + palm) and the forearm, in screen space."""
+    if cam.trk is None or cam.hand(0) is None:
+        return None
+    pts = [cam.hand(i) for i in range(21)]
+    P = [(p[0], p[1]) for p in pts]
+    palm = math.hypot(P[0][0] - P[9][0], P[0][1] - P[9][1])
+    mask = poly([P[i] for i in (0, 1, 5, 9, 13, 17)], True)
+    for chain in HAND_CHAINS:
+        src = poly([P[i] for i in chain])
+        sp = skia.Paint(Style=skia.Paint.kStroke_Style, StrokeWidth=palm * 0.36, StrokeCap=skia.Paint.kRound_Cap,
+                        StrokeJoin=skia.Paint.kRound_Join)
+        fill = skia.Path()
+        sp.getFillPath(src, fill)
+        mask = skia.Op(mask, fill, skia.PathOp.kUnion_PathOp) or mask
+    if forearm > 0:
+        dx, dy = P[0][0] - P[9][0], P[0][1] - P[9][1]
+        n = math.hypot(dx, dy) + 1e-6
+        dx, dy = dx / n, dy / n
+        nx, ny = -dy, dx
+        hw = palm * 0.55
+        far = 2400 * forearm
+        arm = poly([(P[0][0] + nx * hw, P[0][1] + ny * hw), (P[0][0] + dx * far + nx * hw * 1.8, P[0][1] + dy * far + ny * hw * 1.8),
+                    (P[0][0] + dx * far - nx * hw * 1.8, P[0][1] + dy * far - ny * hw * 1.8),
+                    (P[0][0] - nx * hw, P[0][1] - ny * hw)], True)
+        mask = skia.Op(mask, arm, skia.PathOp.kUnion_PathOp) or mask
+    return mask
+
+
+def hand_in_front(c, name, t, cam, grade=None, forearm=1.0):
+    """Re-draw the live-action hand and arm on top of the graphics so the person interacts in front."""
+    import media
+    m = hand_mask(cam, forearm)
+    if m is None or not media.clip_info(name):
+        return
+    img, _ = media.frame(name, t)
+    c.save()
+    c.clipPath(m, skia.ClipOp.kIntersect, True)
+    c.concat(cam.m)
+    p = skia.Paint(AntiAlias=True)
+    if grade is not None:
+        p.setColorFilter(grade)
+    c.drawImage(img, 0, 0, SAMP, p)
+    c.restore()
+
+
 # ------------------------------------------------------------- glass cards
 def glass(c, rect, radius=18, alpha=1.0, tint=WHITE, tint_a=0.14, blur=22, border=0.55,
           shadow=0.22, glow=0.0, glow_col=CYAN, solid=0.0, solid_col=None, highlight=0.18):

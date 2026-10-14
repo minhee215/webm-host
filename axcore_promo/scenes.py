@@ -19,6 +19,7 @@ from engine import (W, H, BLUE, CYAN, CYAN_SOFT, INDIGO, INK, NAVY, NAVY_700, NA
                     vis, line_flow, flow_pts, resample_poly, brand_icon, path_seg, plate, SAMP)
 
 AUDIO_OFFSET = 0.8
+SAFE_T, SAFE_B = 150, 930     # 21:9 letterbox picture is y 138..942; keep graphics inside this band
 
 # Narration cues (video time). Measured from silence analysis + syllable alignment.
 CUE = {
@@ -239,7 +240,7 @@ def sc04(c, T, t, d):
         a = clamp(enter(T, t0, 0.45))
         corner_brackets(c, r.makeOutset(8, 8), 16, WHITE, a * 0.95, 1.8)
         c.drawRect(r.makeOutset(8, 8), paint_stroke(WHITE, a * 0.25, 1.0))
-        label_chip(c, r.left() - 8, r.top() - 26, lab, a, dark=True, size=13)
+        label_chip(c, r.left() - 8, clamp(r.top() - 26, SAFE_T + 16, SAFE_B - 16), lab, a, dark=True, size=13)
     # understanding the work: connections between documents, navy square nodes
     order = [5, 0, 2, 3, 4, 1]
     for k in range(len(order) - 1):
@@ -335,7 +336,7 @@ def sc05(c, T, t, d):
         k = 1.0 if i == 0 else enter(T, t0, 0.6)  # tile 0 is where the previous shot landed
         if k <= 0:
             continue
-        cx, cy = x + w / 2 + jit("x5%d" % i, 1, 14), y + h / 2 + jit("y5%d" % i, 1, 10)
+        cx, cy = x + w / 2 + jit("x5%d" % i, 1, 14), 540 + (y + h / 2 - 540) * 0.85 + jit("y5%d" % i, 1, 10)
         # morph: tiles drift toward the flow line and fade
         tx, ty = FLOW_CARD_CENTER(i % 4)
         cx, cy = lerp(cx, tx, morph * 0.55), lerp(cy, ty, morph * 0.55)
@@ -661,7 +662,8 @@ def sc07(c, T, t, d):
     op = e_io_expo(prog(T, 25.80, 0.75))
     r0 = flow_card_rect(25.80 + 1.2, 0)   # where sc05 (its clock runs 1.2 s longer: pause) leaves the card
     s = lerp(1.0, 1.025, drift(t, d))
-    tgt = R(W / 2 - AP_WIN.width() * s / 2, H / 2 - AP_WIN.height() * s / 2 + 8, AP_WIN.width() * s, AP_WIN.height() * s)
+    s *= 0.915   # fits the 21:9 band
+    tgt = R(W / 2 - AP_WIN.width() * s / 2, H / 2 - AP_WIN.height() * s / 2, AP_WIN.width() * s, AP_WIN.height() * s)
     r = skia.Rect.MakeLTRB(lerp(r0.left(), tgt.left(), op), lerp(r0.top(), tgt.top(), op),
                            lerp(r0.right(), tgt.right(), op), lerp(r0.bottom(), tgt.bottom(), op))
     rad = lerp(0, 26, op)
@@ -727,6 +729,12 @@ ENT_COLS = [("경영관리", ["인사", "급여", "회계"]), ("제품설계", [
 ENT_AGENT = ["AI 대화", "OCR 문서 읽기", "자료 검색 AI", "실시간 현황", "기능 연결"]
 ENT_BI = ["데이터 시각화", "KPI 관리", "알림 기능", "AI 데이터 분석", "데이터 통합"]
 ENT_P = R(64, 52, 1130, 604)
+ENT_S, ENT_C = 0.86, (606, 408)    # final panel scale and centre (21:9 band, above the tablet)
+
+
+def ent_xy(x, y):
+    """Panel space -> screen once the panel has settled."""
+    return ENT_C[0] + (x - ENT_P.centerX()) * ENT_S, ENT_C[1] + (y - ENT_P.centerY()) * ENT_S
 ENT_SCREEN = ((0.36, 0.64), (0.645, 0.64))
 ENT_TIP = (0.52, 0.66)
 ENT_ADD0, ENT_ADDS = 34.75, 0.22
@@ -765,9 +773,9 @@ def sc09(c, T, t, d):
     tip = fingertip(cam, ENT_TIP)
     # panel rises from the tablet
     tx, ty = cam.map(0.5, 0.7)
-    sc = lerp(0.35, 1.0, pk)
+    sc = lerp(0.35, 1.0, pk) * ENT_S
     P = ENT_P
-    cx, cy = lerp(tx, P.centerX(), pk), lerp(ty, P.centerY(), pk)
+    cx, cy = lerp(tx, ENT_C[0], pk), lerp(ty, ENT_C[1], pk)
     projection(c, cam, ENT_SCREEN, R(cx - P.width() * sc / 2, cy - P.height() * sc / 2, P.width() * sc, P.height() * sc),
                lerp(1.0, 0.45, e_io_sine(prog(T, 34.6, 1.2))))
     c.save()
@@ -870,7 +878,7 @@ def sc09(c, T, t, d):
     for (i, f, sr, out) in in_flight:
         name = ENT_COLS[i][0]
         # slot rect is in panel space (identity once the panel has settled)
-        dst = (sr.centerX(), sr.top() + 22)
+        dst = ent_xy(sr.centerX(), sr.top() + 22)
         src = (tip[0], tip[1] - 30)
         p0, p1 = (dst, src) if out else (src, dst)
         pth = arc_path(p0, p1, -0.18)
@@ -905,13 +913,14 @@ def sc10(c, T, t, d):
 
     hx, hy = xf(960, 540, 0.6)
     hk = enter(T, 40.75, 0.7)
-    rad = 150 * s
+    rad = 138 * s
     for i, (name, (x, y, w, h), lab, z) in enumerate(SC10_TILES):
         t0 = CUE["L13b"] - 0.4 + i * 0.12
         k = enter(T, t0, 0.6)
         if k <= 0:
             continue
-        X, Y = xf(x + w / 2, y + h / 2, z)
+        X, Y = xf(x + w / 2, 540 + (y + h / 2 - 540) * 0.7, z)
+        w, h = w * 0.86, h * 0.86
         sw, sh = w * s * (0.88 + 0.12 * clamp(k)), h * s * (0.88 + 0.12 * clamp(k))
         rect = R(X - sw / 2, Y - sh / 2, sw, sh)
         a = clamp(k)
@@ -957,10 +966,10 @@ def sc10(c, T, t, d):
 # Front close-up of a hand on a tablet; each tap lifts an app (real Gmail / Slack / Notion icons)
 # out of the screen, it hovers, then docks into the personal glass workspace; custom AI functions
 # combine with the connected apps.
-SC12_APPS = [("Gmail", "gmail", "GMAIL", (1080, 170)), ("Slack", "slack", "SLACK", (950, 290)),
-             ("Notion", "notion", "NOTION", (1110, 400))]
+SC12_APPS = [("Gmail", "gmail", "GMAIL", (1080, 250)), ("Slack", "slack", "SLACK", (950, 360)),
+             ("Notion", "notion", "NOTION", (1110, 460))]
 SC12_FUNCS = [("메일 요약", "mail"), ("회의록 AI", "chat"), ("일정 정리", "calendar")]
-SC12_WP = R(1252, 64, 610, 436)
+SC12_WP = R(1262, 166, 600, 430)
 SC12_TIP = (0.62, 0.62)
 SC12_SCREEN = ((0.32, 0.66), (0.78, 0.60))
 
@@ -1055,7 +1064,7 @@ SC13_PAPER = [(-0.02, 0.70), (0.70, 0.66), (0.72, 0.86), (-0.02, 0.92)]
 
 def sc13(c, T, t, d):
     cam = draw_plate(c, "34_ocr_lab", t, d, s=(1.02, 1.07), x=(10, -14), grade=GRADE_DAY)
-    tb = R(70, 96, 470, 300)
+    tb = R(70, 176, 470, 300)
     for i, (ext, ic) in enumerate(SC13_FILES):
         t0 = CUE["FILES"] + i * 0.18
         k = enter(T, t0, 0.5)
@@ -1064,7 +1073,7 @@ def sc13(c, T, t, d):
             continue
         a = clamp(k) * (1 - conv)
         x = lerp(90 + i * 112, tb.left() + 30 + i * 110, conv)
-        y = lerp(470, tb.top() + 80, conv)
+        y = lerp(560, tb.top() + 80, conv)
         r = R(x, y, 92, 116)
         glass(c, r, 10, a, tint=WHITE, tint_a=0.85, blur=12, border=0.9, shadow=0.2)
         icon(c, ic, r.centerX(), r.top() + 48, 32, BLUE, a)
@@ -1097,7 +1106,7 @@ def sc13(c, T, t, d):
         c.drawPath(poly([cam.map(u_, v_, "paper") for u_, v_ in SC13_PAPER], True),
                    paint_fill(CYAN, 0.07 * pk, blend=skia.BlendMode.kScreen))
     hk = vis(T, oc + 0.2, 0.5)
-    hx, hy0 = 1380, 170
+    hx, hy0 = 1380, 240
     if hk > 0:
         rrect(c, R(hx, hy0 - 44, 136, 34), 17, NAVY, hk * 0.92)
         icon(c, "scan", hx + 24, hy0 - 27, 16, CYAN_SOFT, hk)
@@ -1236,7 +1245,7 @@ def onto_cam(T):
     yaw = math.radians(lerp(-16, -6, a) + 4 * b)
     pitch = math.radians(lerp(30, 33, a) + 4 * b)
     dist = lerp(19.0, 17.6, a) + 1.4 * b
-    return Proj(yaw, pitch, dist, (0.0, 0.4, 0.4), 1500, W / 2, H / 2 + 70 + 70 * b)
+    return Proj(yaw, pitch, dist, (0.0, 0.4, 0.4), 1200, W / 2, H / 2 - 40 + 30 * b)
 
 
 def onto_disc(P, x, z, r, n=40, y=0.0):
@@ -1284,16 +1293,16 @@ def sc14(c, T, t, d):
         tx_, ty_, _ = P(x, 0, -hd + 0.4)
         sx = tx_ + (i - 2) * 30
         pth = skia.Path()
-        pth.moveTo(sx, 96)
-        pth.cubicTo(sx + 60, 96 + (ty_ - 96) * 0.35, tx_ - 60, 96 + (ty_ - 96) * 0.65, tx_, ty_)
+        pth.moveTo(sx, 206)
+        pth.cubicTo(sx + 60, 206 + (ty_ - 206) * 0.35, tx_ - 60, 206 + (ty_ - 206) * 0.65, tx_, ty_)
         dash = paint_stroke("#CFE0FF", 0.55, 1.4)
         dash.setPathEffect(skia.DashPathEffect.Make([3, 7], -T * 40))
         c.drawPath(path_seg(pth, 0, g), dash)
         tw = text_w(lab, 14, "SemiBold") + 26
-        rr = R(sx - tw / 2, 62, tw, 30)
+        rr = R(sx - tw / 2, 172, tw, 30)
         rrect(c, rr, 15, NAVY_800, 0.85 * g)
         rrect_stroke(c, rr, 15, CYAN_SOFT, 0.8 * g, 1.2)
-        text(c, lab, sx, 82, 14, "SemiBold", WHITE, g, "center")
+        text(c, lab, sx, 192, 14, "SemiBold", WHITE, g, "center")
     lit = {n: 0.0 for n in ON_ENT}
     pp = prog(T, ON_PULSE0, ON_PULSE1)
     # business flow along the front edge: 시작 -> 끝
@@ -1418,7 +1427,7 @@ def sc14(c, T, t, d):
         lw = 330
         tw = text_w("Ontology", 52, "Light")
         x0 = W / 2 - (lw + 28 + tw) / 2
-        y0 = 122 + 14 * (1 - a)
+        y0 = 205 + 14 * (1 - a)
         L.draw(c, x0 + lw / 2, y0, lw, e_io_cubic(prog(T, CUE["ONTO"] - 0.1, 0.6)), a, (a, a, a), True, a)
         text(c, "Ontology", x0 + lw + 28, y0 + 22, 52, "Light", WHITE, a)
 
@@ -1440,7 +1449,7 @@ def sc15(c, T, t, d):
             continue
         a = clamp(k) * (1 - clamp((merge - 0.7) / 0.3))
         w, h = 300, 190
-        cx, cy = x + w / 2 + jit("w15x%d" % i, 1, 24), y + h / 2 + jit("w15y%d" % i, 1, 18)
+        cx, cy = x + w / 2 + jit("w15x%d" % i, 1, 24), 540 + (y + h / 2 - 540) * 0.72 + jit("w15y%d" % i, 1, 18)
         cx, cy = lerp(cx, SC15_ONE.centerX(), merge), lerp(cy, SC15_ONE.centerY(), merge)
         s = lerp(1.0, 0.6, merge) * (0.9 + 0.1 * clamp(k))
         c.save()
@@ -1506,7 +1515,7 @@ def sc16(c, T, t, d):
     qk = enter(T, 72.05, 0.6)
     if qk > 0:
         a = clamp(qk)
-        r = R(1010, 120 + 16 * (1 - a), 760, 150)
+        r = R(1010, 172 + 16 * (1 - a), 760, 150)
         dark_card(c, r, a)
         n = int(len(SC16_Q) * clamp(prog(T, 72.25, 0.8)))
         text(c, SC16_Q[:n], r.left() + 56, r.centerY() + 14, 40, "Medium", WHITE, a)
@@ -1587,7 +1596,7 @@ def sc17(c, T, t, d):
     if k <= 0:
         return
     a = clamp(k)
-    r = R(100, 110 + 16 * (1 - a), 640, 360)
+    r = R(100, 172 + 16 * (1 - a), 640, 360)
     glass(c, r, 20, a, tint=WHITE, tint_a=0.86, blur=26, border=0.9, shadow=0.28)
     text(c, "수요 예측", r.left() + 32, r.top() + 50, 24, "SemiBold", INK, a)
     text(c, "향후 4주", r.left() + 34, r.top() + 76, 15, "Medium", STEEL, a)
@@ -1753,7 +1762,7 @@ def sc20(c, T, t, d):
     k = enter(T, CUE["L25b"] - 0.1, 0.6)
     if k > 0:
         a = clamp(k)
-        r = R(110, 120, 470, 100)
+        r = R(110, 176, 470, 100)
         glass(c, r, 50, a, tint=NAVY_800, tint_a=0.45, blur=20, border=0.5, shadow=0.25)
         sw = e_io_cubic(prog(T, 89.9, 0.6))
         knob = R(r.left() + 10 + sw * 225, r.top() + 10, 225, 80)

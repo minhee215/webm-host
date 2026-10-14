@@ -25,8 +25,13 @@ import scenes as S
 OUT = os.path.join(E.HERE, "out")
 
 
+SCALE = 1           # supersampling of the 1920x1080 composition (2 -> native 3840x2160)
+LETTERBOX = 0       # black bar height (output px) top and bottom, e.g. 276 at 4K for 21:9 (3840x1608 picture)
+
+
 def make_surface():
-    info = skia.ImageInfo.Make(E.W, E.H, skia.ColorType.kRGBA_8888_ColorType, skia.AlphaType.kPremul_AlphaType)
+    info = skia.ImageInfo.Make(E.W * SCALE, E.H * SCALE, skia.ColorType.kRGBA_8888_ColorType,
+                               skia.AlphaType.kPremul_AlphaType)
     return skia.Surface.MakeRaster(info)
 
 
@@ -35,13 +40,14 @@ class Renderer:
         self.main = make_surface()
         self.sa = make_surface()
         self.sb = make_surface()
-        self.finish = E.Finish()
+        self.finish = E.Finish(size=(E.W * SCALE, E.H * SCALE))
 
     def _draw(self, i, T, surf):
         name, t0, t1, fn = S.SCENES[i]
         c = surf.getCanvas()
         c.save()
         c.clear(skia.Color4f(0, 0, 0, 1))
+        c.scale(SCALE, SCALE)
         fn(c, T, T - t0, t1 - t0)
         c.restore()
 
@@ -77,16 +83,22 @@ class Renderer:
                 kw = kw(T)
             c.save()
             c.clear(skia.Color4f(0, 0, 0, 1))
+            c.scale(SCALE, SCALE)
             E.TRANSITIONS[typ](c, A, B, p, **kw)
             c.restore()
-        return self.finish.apply(self.main, f)
+        out = self.finish.apply(self.main, f)
+        if LETTERBOX:
+            out[:LETTERBOX] = 0
+            out[-LETTERBOX:] = 0
+        return out
 
 
 _R = None
 
 
-def _init(seed, chaos, plates):
-    global _R
+def _init(seed, chaos, plates, scale=1, letterbox=0):
+    global _R, SCALE, LETTERBOX
+    SCALE, LETTERBOX = scale, letterbox
     if plates:
         E.PLATE_DIR = plates
     E.configure(seed, chaos)
@@ -98,8 +110,9 @@ def _render_chunk(job):
     if os.path.exists(path):  # finished in an earlier run (chunks are written to .part, then renamed)
         return k, 0, 0.0
     final, path = path, path + ".part.mp4"
-    cmd = ["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (E.W, E.H),
-           "-r", str(E.FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "17", "-pix_fmt", "yuv420p",
+    cmd = ["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (E.W * SCALE, E.H * SCALE),
+           "-r", str(E.FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "17" if SCALE == 1 else "16",
+           "-pix_fmt", "yuv420p",
            "-g", "48", "-bf", "2", "-movflags", "+faststart", path]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
     t = time.time()
@@ -131,13 +144,15 @@ def main():
     ap.add_argument("--out", default=os.path.join(OUT, "axcore_promo.mp4"))
     ap.add_argument("--no-audio", action="store_true")
     ap.add_argument("--webm", action="store_true", help="also export a VP9 webm")
+    ap.add_argument("--scale", type=int, default=1, help="2 renders natively at 3840x2160")
+    ap.add_argument("--letterbox", type=int, default=0, help="black bars (output px) top and bottom, e.g. 276 for 21:9 at 4K")
     ap.add_argument("--audio", default=None, help="use this finished soundtrack (e.g. axcore_audio_v6.mp3) instead of the built-in mix")
     args = ap.parse_args()
 
     seed = int(np.random.SeedSequence().entropy % 2 ** 31) if args.seed == "new" else int(args.seed)
     print("seed=%d chaos=%.2f" % (seed, args.chaos), flush=True)
     os.makedirs(os.path.join(OUT, "stills"), exist_ok=True)
-    initargs = (seed, args.chaos, args.plates)
+    initargs = (seed, args.chaos, args.plates, args.scale, args.letterbox)
 
     if args.stills:
         times = [float(x) for x in args.stills.split(",")]
@@ -187,8 +202,9 @@ def main():
         # delivery copy: bitrate-capped H.264 for web players / uploads
         web = args.out.replace(".mp4", "_web.mp4")
         subprocess.check_call(["ffmpeg", "-loglevel", "error", "-y", "-i", args.out, "-c:v", "libx264", "-preset", "slow",
-                               "-b:v", "6500k", "-maxrate", "9000k", "-bufsize", "13000k", "-pix_fmt", "yuv420p",
-                               "-profile:v", "high", "-level", "4.1", "-g", "48", "-c:a", "copy",
+                               "-b:v", "6500k" if args.scale == 1 else "14000k", "-maxrate", "9000k" if args.scale == 1 else "20000k",
+                               "-bufsize", "13000k" if args.scale == 1 else "30000k", "-pix_fmt", "yuv420p",
+                               "-profile:v", "high", "-level", "4.1" if args.scale == 1 else "5.1", "-g", "48", "-c:a", "copy",
                                "-movflags", "+faststart", web])
         if args.webm:
             webm = args.out.replace(".mp4", ".webm")

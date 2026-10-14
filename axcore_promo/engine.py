@@ -1077,12 +1077,17 @@ def _img_paint(alpha=1.0):
     return p
 
 
+def blit(c, img, paint=None):
+    """Draw a full-frame snapshot in frame coordinates (works for supersampled snapshots too)."""
+    c.drawImageRect(img, skia.Rect.MakeWH(W, H), SAMP, paint if paint is not None else skia.Paint(AntiAlias=True))
+
+
 def draw_scaled(c, img, scale, fx=W / 2, fy=H / 2, alpha=1.0, dx=0.0, dy=0.0):
     c.save()
     c.translate(fx + dx, fy + dy)
     c.scale(scale, scale)
     c.translate(-fx, -fy)
-    c.drawImage(img, 0, 0, SAMP, _img_paint(alpha))
+    blit(c, img, _img_paint(alpha))
     c.restore()
 
 
@@ -1094,8 +1099,8 @@ def light_leak(c, p, color="#FFC9A0", x=0.78, y=0.25, amount=0.32):
 
 
 def tr_dissolve(c, A, B, p, leak=False, **kw):
-    c.drawImage(A, 0, 0)
-    c.drawImage(B, 0, 0, SAMP, _img_paint(e_io_sine(p)))
+    blit(c, A)
+    blit(c, B, _img_paint(e_io_sine(p)))
     if leak:
         light_leak(c, p)
 
@@ -1131,7 +1136,7 @@ def tr_streak(c, A, B, p, angle=-28.0, color=CYAN, reverse=False, **kw):
     span = abs(px_) * W + abs(py_) * H
     d = lerp(-span / 2 - 120, span / 2 + 120, q)
     cx, cy = W / 2 + px_ * d, H / 2 + py_ * d
-    c.drawImage(A, 0, 0)
+    blit(c, A)
     big = 4000
     poly_pts = [(cx + nx * big, cy + ny * big), (cx - nx * big, cy - ny * big),
                 (cx - nx * big - px_ * big, cy - ny * big - py_ * big),
@@ -1158,10 +1163,10 @@ def tr_blocks(c, A, B, p, color=NAVY, cols=12, key="blocks", **kw):
     rank[order] = np.arange(len(order))
     n = len(order)
     if p < 0.5:
-        c.drawImage(A, 0, 0)
+        blit(c, A)
         q = p / 0.5
     else:
-        c.drawImage(B, 0, 0)
+        blit(c, B)
         q = (p - 0.5) / 0.5
     paint = paint_fill(color, 1.0)
     paint2 = paint_fill(BLUE, 1.0)
@@ -1190,7 +1195,8 @@ def _lerp_rect(r0, r1, q):
 def _draw_cover_in(c, img, rect, radius, alpha=1.0):
     k = max(rect.width() / W, rect.height() / H)
     sw, sh = rect.width() / k, rect.height() / k
-    src = skia.Rect.MakeXYWH((W - sw) / 2, (H - sh) / 2, sw, sh)
+    q = img.width() / W
+    src = skia.Rect.MakeXYWH((W - sw) / 2 * q, (H - sh) / 2 * q, sw * q, sh * q)
     c.save()
     c.clipRRect(skia.RRect.MakeRectXY(rect, radius, radius), skia.ClipOp.kIntersect, True)
     c.drawImageRect(img, src, rect, SAMP, _img_paint(alpha))
@@ -1209,7 +1215,7 @@ def tr_shrink(c, A, B, p, rect=None, radius=10, **kw):
 def tr_expand(c, A, B, p, rect=None, radius=12, **kw):
     """A card of the outgoing layout expands to become the next shot."""
     q = e_io_expo(p)
-    c.drawImage(A, 0, 0)
+    blit(c, A)
     r = _lerp_rect(rect, skia.Rect.MakeWH(W, H), q)
     c.drawRRect(skia.RRect.MakeRectXY(r.makeOffset(0, 18), radius, radius), paint_fill(NAVY_950, 0.3 * (1 - q), blur=30))
     _draw_cover_in(c, B, r, radius * (1 - q))
@@ -1225,7 +1231,7 @@ def tr_lines(c, A, B, p, angle=-14.0, color=CYAN, key="tl", bend=0.10, bundles=5
     span = abs(dx) * W + abs(dy) * H
     perp = abs(nx) * W + abs(ny) * H
     front = lerp(-span / 2 - 260, span / 2 + 260, q)
-    c.drawImage(A, 0, 0)
+    blit(c, A)
     fx, fy = W / 2 + dx * front, H / 2 + dy * front
     c.saveLayer(None, None)
     draw_scaled(c, B, lerp(1.05, 1.0, e_out_cubic(p)))
@@ -1278,15 +1284,16 @@ class Finish:
     - soft focusing vignette
     - fine grain gated to shadows/midtones so highlights and white UI stay clean."""
 
-    def __init__(self, grain=0.022, vignette=0.15, ca=1.0013, lift=0.93):
+    def __init__(self, grain=0.022, vignette=0.15, ca=1.0013, lift=0.93, size=(W, H)):
         self.grain_amt = grain
+        self.w, self.h = size
         # gentle overall lift (gamma < 1): opens shadows and midtones, whites stay put
         self.lut = (255.0 * (np.arange(256) / 255.0) ** lift).astype(np.float32)
         self.ca = ca
-        yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
-        r2 = ((xx - W / 2) / (W / 2)) ** 2 + ((yy - H / 2) / (H / 2)) ** 2
+        yy, xx = np.mgrid[0:self.h, 0:self.w].astype(np.float32)
+        r2 = ((xx - self.w / 2) / (self.w / 2)) ** 2 + ((yy - self.h / 2) / (self.h / 2)) ** 2
         self.vig = (1 - vignette * np.clip(r2 / 2, 0, 1) ** 1.35)[..., None].astype(np.float32)
-        g = rng("grain").standard_normal((4, H // 2, W // 2)).astype(np.float32)
+        g = rng("grain").standard_normal((4, self.h // 2, self.w // 2)).astype(np.float32)
         self.grain = [np.repeat(np.repeat(x, 2, 0), 2, 1)[..., None] for x in g]
         self.cf_gb = skia.ColorFilters.Matrix([0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0])
         self.cf_r = skia.ColorFilters.Matrix([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0])
@@ -1298,9 +1305,9 @@ class Finish:
             c.clear(skia.Color4f(0, 0, 0, 1))
             c.drawImage(img, 0, 0, SAMP, skia.Paint(ColorFilter=self.cf_gb))
             c.save()
-            c.translate(W / 2, H / 2)
+            c.translate(self.w / 2, self.h / 2)
             c.scale(self.ca, self.ca)
-            c.translate(-W / 2, -H / 2)
+            c.translate(-self.w / 2, -self.h / 2)
             c.drawImage(img, 0, 0, SAMP, skia.Paint(ColorFilter=self.cf_r, BlendMode=skia.BlendMode.kPlus))
             c.restore()
         a = self.lut[surface.makeImageSnapshot().toarray()[..., :3]]

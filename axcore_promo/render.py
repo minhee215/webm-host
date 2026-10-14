@@ -111,7 +111,7 @@ def _render_chunk(job):
         return k, 0, 0.0
     final, path = path, path + ".part.mp4"
     cmd = ["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", "%dx%d" % (E.W * SCALE, E.H * SCALE),
-           "-r", str(E.FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "17" if SCALE == 1 else "16",
+           "-r", str(E.FPS), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-threads", "2" if SCALE > 1 else "0", "-crf", "17" if SCALE == 1 else "16",
            "-pix_fmt", "yuv420p",
            "-g", "48", "-bf", "2", "-movflags", "+faststart", path]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)

@@ -1881,17 +1881,46 @@ SC20_NODES = [(0.47, 0.45), (0.33, 0.50), (0.60, 0.37), (0.20, 0.58), (0.73, 0.6
 SC20_EDGES = [(0, 1), (0, 2), (1, 3), (2, 5), (0, 6), (6, 4), (1, 9), (2, 8), (0, 7), (5, 4), (7, 9)]
 
 
-SC20_OUT = 89.6          # "...실행으로 확장됩니다": the shot opens up
+SC20_OUT = 89.0          # "실행으로…": the shot snaps open on the word "실행" (voice onset 89.05)
+SC20_DUR = 1.05
+
+
+def bezier_ease(x, x1, y1, x2, y2):
+    """CSS-style cubic-bezier(x1, y1, x2, y2) easing."""
+    x = clamp(x)
+    if x <= 0 or x >= 1:
+        return x
+    lo, hi = 0.0, 1.0
+    for _ in range(40):
+        u = (lo + hi) / 2
+        bx = 3 * (1 - u) ** 2 * u * x1 + 3 * (1 - u) * u * u * x2 + u ** 3
+        lo, hi = (u, hi) if bx < x else (lo, u)
+    u = (lo + hi) / 2
+    return 3 * (1 - u) ** 2 * u * y1 + 3 * (1 - u) * u * u * y2 + u ** 3
+
+
+def sc20_zoom(T):
+    """0 = punched in, 1 = open. A short wind-up, then a fast pull-out that glides to rest (no overshoot)."""
+    return bezier_ease(prog(T, SC20_OUT, SC20_DUR), 0.62, 0.0, 0.08, 1.0)
 
 
 def sc20(c, T, t, d):
-    zo = e_io_expo(prog(T, SC20_OUT, 1.35))
-    Z = lerp(1.45, 1.0, zo)
+    zo = sc20_zoom(T)
+    creep = e_io_sine(prog(T, CUE["L25"] - 0.4, SC20_OUT - CUE["L25"] + 0.4))   # slow push before the snap
+    Z = lerp(1.85 + 0.06 * creep, 1.0, zo)
     c.save()
-    c.translate(W / 2, H / 2 - 20 * (1 - zo))
+    c.translate(W / 2, H / 2 - 24 * (1 - zo))
     c.scale(Z, Z)
     c.translate(-W / 2, -H / 2)
+    bl = 11.0 * (1 - zo) ** 1.4          # background defocus, clears as the shot opens
+    if bl > 0.05:
+        lp_ = skia.Paint()
+        lp_.setImageFilter(skia.ImageFilters.Blur(bl, bl, skia.TileMode.kClamp))
+        c.saveLayer(None, lp_)
     cam = draw_plate(c, "18_factory", t, d, s=(1.05, 1.16), y=(20, -10), grade=GRADE_COOL)
+    if bl > 0.05:
+        c.drawRect(R(-W, -H, 3 * W, 3 * H), paint_fill(NAVY_950, 0.18 * (1 - zo)))
+        c.restore()
     pts = [cam.map(u, v) for (u, v) in SC20_NODES]
     # breadth-first growth from node 0
     dist = {0: 0}
@@ -1920,26 +1949,36 @@ def sc20(c, T, t, d):
         c.drawCircle(x, y, 16 + 26 * ph, paint_stroke(CYAN, a * (1 - ph) * 0.7, 1.4))
         square(c, x, y, 12, CYAN if i == 0 else WHITE, a)
     c.restore()
-    # the analysis / execution switch: large in the centre, then glides to its corner as the shot opens
+    # the analysis / execution switch: large in the centre, flips hard on "실행", then glides to its corner
     k = enter(T, CUE["L25"] - 0.05, 0.6)
     if k > 0:
         a = clamp(k)
         fin = R(110, 176, 470, 100)
-        sc = lerp(1.7, 1.0, zo)
+        sc = lerp(1.8, 1.0, zo)
         cx = lerp(W / 2, fin.centerX(), zo)
         cy = lerp(H / 2 - 30, fin.centerY(), zo)
+        sw = e_out_expo(prog(T, SC20_OUT - 0.04, 0.42))
+        hit = e_out_cubic(prog(T, SC20_OUT - 0.02, 0.16)) * math.exp(-max(0.0, T - (SC20_OUT + 0.14)) * 3.0)
         c.save()
         c.translate(cx, cy)
         c.scale(sc, sc)
         c.translate(-fin.centerX(), -fin.centerY())
         r = fin
         glass(c, r, 50, a, tint=NAVY_800, tint_a=0.5, blur=20, border=0.5, shadow=0.3,
-              glow=math.sin(math.pi * zo) * 0.8, glow_col=CYAN)
-        sw = e_io_cubic(prog(T, SC20_OUT + 0.35, 0.6))
+              glow=0.15 + 0.85 * hit, glow_col=CYAN)
         knob = R(r.left() + 10 + sw * 225, r.top() + 10, 225, 80)
+        if hit > 0.01:
+            c.drawRRect(skia.RRect.MakeRectXY(knob.makeOutset(6 * hit, 6 * hit), 46, 46),
+                        paint_fill(CYAN, 0.35 * hit, blur=14))
         rrect(c, knob, 40, CYAN, a)
-        text(c, "분석", r.left() + 122, r.centerY() + 8, 22, "SemiBold", NAVY_900 if sw < 0.5 else WHITE, a, "center")
-        text(c, "실행", r.left() + 348, r.centerY() + 8, 22, "SemiBold", WHITE if sw < 0.5 else NAVY_900, a, "center")
+        on = sw >= 0.5
+        text(c, "분석", r.left() + 122, r.centerY() + 8, 22, "SemiBold", WHITE if on else NAVY_900, a * (0.7 if on else 1), "center")
+        ex = 1.0 + 0.12 * hit
+        c.save()
+        c.translate(r.left() + 348, r.centerY())
+        c.scale(ex, ex)
+        text(c, "실행", 0, 8, 22, "Bold" if on else "SemiBold", NAVY_900 if on else WHITE, a, "center")
+        c.restore()
         c.restore()
 
 

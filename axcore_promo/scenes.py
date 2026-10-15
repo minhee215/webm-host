@@ -1908,7 +1908,7 @@ def sc20(c, T, t, d):
     """While the shot snaps open, average sub-frames over a 180-degree shutter (motion blur) so the fast
     pull-out reads as one smooth move instead of stepping."""
     v = abs(sc20_zoom(T + 1 / 96) - sc20_zoom(T - 1 / 96))
-    n = 1 if v < 0.004 else int(clamp(v / 0.012, 3, 7))
+    n = 1 if v < 0.003 else int(clamp(v / 0.0045, 4, 16))
     if n == 1:
         return _sc20_frame(c, T, t, d)
     for i in range(n):

@@ -1882,7 +1882,7 @@ SC20_EDGES = [(0, 1), (0, 2), (1, 3), (2, 5), (0, 6), (6, 4), (1, 9), (2, 8), (0
 
 
 SC20_OUT = 89.0          # "실행으로…": the shot snaps open on the word "실행" (voice onset 89.05)
-SC20_DUR = 1.05
+SC20_DUR = 1.0
 
 
 def bezier_ease(x, x1, y1, x2, y2):
@@ -1901,10 +1901,28 @@ def bezier_ease(x, x1, y1, x2, y2):
 
 def sc20_zoom(T):
     """0 = punched in, 1 = open. A short wind-up, then a fast pull-out that glides to rest (no overshoot)."""
-    return bezier_ease(prog(T, SC20_OUT, SC20_DUR), 0.62, 0.0, 0.08, 1.0)
+    return bezier_ease(prog(T, SC20_OUT, SC20_DUR), 0.5, 0.0, 0.12, 1.0)
 
 
 def sc20(c, T, t, d):
+    """While the shot snaps open, average sub-frames over a 180-degree shutter (motion blur) so the fast
+    pull-out reads as one smooth move instead of stepping."""
+    v = abs(sc20_zoom(T + 1 / 96) - sc20_zoom(T - 1 / 96))
+    n = 1 if v < 0.004 else int(clamp(v / 0.012, 3, 7))
+    if n == 1:
+        return _sc20_frame(c, T, t, d)
+    for i in range(n):
+        dt = (i / (n - 1) - 0.5) / 48
+        if i:
+            p_ = skia.Paint()
+            p_.setAlphaf(1.0 / (i + 1))
+            c.saveLayer(None, p_)
+        _sc20_frame(c, T + dt, t + dt, d)
+        if i:
+            c.restore()
+
+
+def _sc20_frame(c, T, t, d):
     zo = sc20_zoom(T)
     creep = e_io_sine(prog(T, CUE["L25"] - 0.4, SC20_OUT - CUE["L25"] + 0.4))   # slow push before the snap
     Z = lerp(1.85 + 0.06 * creep, 1.0, zo)

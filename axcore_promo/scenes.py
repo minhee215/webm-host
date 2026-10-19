@@ -136,7 +136,6 @@ def sc01(c, T, t, d):
 # wrapping the hero object, and leaves on the right exactly on the (hard) cut to the next shot.
 OPEN_V = 1950.0          # head speed, screen px / s - identical in every shot
 OPEN_TAIL = 2300.0       # visible length of the line behind its head (px)
-OPEN_MB = 8              # sub-frame samples for the line's motion blur
 OPEN_SHOTS = {  # clip, path (u, v, behind), occluders (uv polygons), grade, push (scale start, end)
     "op1": ("o1_refinery",
             [(-0.05, 0.78, 0), (0.20, 0.73, 0), (0.42, 0.66, 0), (0.60, 0.60, 0), (0.75, 0.56, 0), (0.80, 0.50, 0),
@@ -179,23 +178,9 @@ def open_shot(name):
         occ = [flow_pts(cam, o) for o in occl]
         L = path_len(pts)
         t_in = s1 - 0.05 - L / OPEN_V           # the head leaves the frame right at the cut
-        head = OPEN_V * (T - t_in)
-        if head > 0 and head - OPEN_TAIL < L + 40:
-            # motion blur: average sub-frame positions of the line over a 180-degree shutter (1/48 s)
-            n = OPEN_MB
-            xs, ys = [q[0] for q in pts], [q[1] for q in pts]
-            bb = R(min(xs) - 90, min(ys) - 90, max(xs) - min(xs) + 180, max(ys) - min(ys) + 180)
-            c.saveLayer(bb, None)
-            for i in range(n):
-                dt = (i / (n - 1) - 0.5) / 48
-                lp = skia.Paint()
-                lp.setAlphaf(1.0 / n)
-                lp.setBlendMode(skia.BlendMode.kPlus)
-                c.saveLayer(bb, lp)
-                light_line(c, pts, head + OPEN_V * dt, OPEN_TAIL, behind=[b for (_, _, b) in path], occluders=occ,
-                           key=name, tsec=T + dt)
-                c.restore()
-            c.restore()
+        # motion blur: the moving head is smeared over a 180-degree shutter (1/48 s of travel)
+        light_line(c, pts, OPEN_V * (T - t_in), OPEN_TAIL, behind=[b for (_, _, b) in path], occluders=occ,
+                   key=name, tsec=T, mb_px=OPEN_V / 48)
         if name == "op1":
             a = 1 - e_out_cubic(prog(T, 0.0, 1.2))
             if a > 0:

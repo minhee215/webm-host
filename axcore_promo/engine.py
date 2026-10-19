@@ -537,15 +537,17 @@ def line_flow(c, pts, head, length=0.5, n=9, spread=14.0, twist=1.6, width=1.3, 
 
 
 def light_line(c, pts, head_px, tail_px=1500.0, width=2.4, alpha=1.0, behind=None, occluders=None,
-               key="ll", tsec=0.0, strands=3, core="#F2F8FF", glow="#2E7BFF", halo="#1757E6", segs=90):
+               key="ll", tsec=0.0, strands=3, core="#F2F8FF", glow="#2E7BFF", halo="#1757E6", segs=90, mb_px=0.0):
     """A thin, refined light line (one bright strand + two hairline companions) drawn along a curve.
     head_px: arc length (screen px) the head has travelled; the line is visible from head_px - tail_px to
     head_px and fades toward its tail. behind: per-control-point flags; spans between two flagged points
-    pass behind the occluder polygons (screen space), so the line wraps around objects."""
+    pass behind the occluder polygons (screen space), so the line wraps around objects.
+    mb_px: motion blur - the head is smeared over this much travel (shutter-centred linear ramp)."""
     if alpha <= 0.003:
         return
     Q, s, L, sc = spline(pts)
-    h, t0 = head_px / L, (head_px - tail_px) / L
+    mbf = mb_px / L
+    h, t0 = (head_px + mb_px / 2) / L, (head_px - tail_px) / L
     if h <= 0 or t0 >= 1:
         return
     tx, ty = np.gradient(Q[:, 0]), np.gradient(Q[:, 1])
@@ -578,7 +580,10 @@ def light_line(c, pts, head_px, tail_px=1500.0, width=2.4, alpha=1.0, behind=Non
         off = off_amp * np.sin(ph + 2 * math.pi * fr * ss + tsec * 1.3) * (1 if k % 2 else -1)
         x, y = x + np.interp(ss, s, nx) * off, y + np.interp(ss, s, ny) * off
         u = np.clip((ss - (hk - ln)) / ln, 0, 1)
-        lines.append((x, y, u ** 1.25, 0.5 + 0.5 * u, [any(p0 <= v <= p1 for p0, p1 in spans) for v in ss],
+        au = u ** 1.25
+        if mbf > 0:
+            au = au * np.clip((hk - ss) / mbf, 0, 1)
+        lines.append((x, y, au, 0.5 + 0.5 * u, [any(p0 <= v <= p1 for p0, p1 in spans) for v in ss],
                       1.0 if main else 0.42))
     if not lines:
         return
@@ -622,10 +627,14 @@ def light_line(c, pts, head_px, tail_px=1500.0, width=2.4, alpha=1.0, behind=Non
     strokes(1.0, 1.0, core, 0.8)
     # head: a small soft flare where the line is being drawn
     x, y, a, w, bf, wt = lines[0]
-    if h <= 1.0 and not bf[-1]:
-        hx, hy = x[-1], y[-1]
-        c.drawCircle(hx, hy, 16, paint_fill(glow, 0.35 * alpha, blur=10, blend=skia.BlendMode.kScreen))
-        c.drawCircle(hx, hy, 3.2, paint_fill(core, 0.95 * alpha, blur=1.5, blend=skia.BlendMode.kScreen))
+    if h - mbf / 2 <= 1.0 and not bf[-1]:
+        k = max(1, int(mbf * len(x) / max(1e-6, h - max(0.0, t0))) + 1) if mbf > 0 else 1
+        k = min(k, 8)
+        for j in range(k):  # the flare is smeared along the path like the head
+            i = max(0, len(x) - 1 - int(j * (len(x) - 1) * mbf / max(1e-6, h - max(0.0, t0)) / max(1, k - 1)))
+            hx, hy = x[i], y[i]
+            c.drawCircle(hx, hy, 16, paint_fill(glow, 0.35 * alpha / k, blur=10, blend=skia.BlendMode.kScreen))
+            c.drawCircle(hx, hy, 3.2, paint_fill(core, 0.95 * alpha / k, blur=1.5, blend=skia.BlendMode.kScreen))
 
 
 def path_len(pts):

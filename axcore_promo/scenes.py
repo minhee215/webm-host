@@ -17,7 +17,7 @@ from engine import (W, H, BLUE, CYAN, CYAN_SOFT, INDIGO, INK, NAVY, NAVY_700, NA
                     hand_in_front, icon, jit, lerp, line, logo, paint_fill, paint_stroke, path_at, poly,
                     prog, pulse, radial, rng, rrect, rrect_stroke, settle, square, streak, text, text_w, vgrad,
                     vis, line_flow, flow_pts, resample_poly, brand_icon, path_seg, plate, SAMP,
-                    light_line, path_len)
+                    light_line, light_beam, path_len)
 
 AUDIO_OFFSET = 0.8
 SAFE_T, SAFE_B = 150, 930     # 21:9 letterbox picture is y 138..942; keep graphics inside this band
@@ -130,65 +130,33 @@ def sc01(c, T, t, d):
         c.drawRect(R(0, 0, W, H), paint_fill(NAVY_950, a))
 
 
-# ============================================================ OPENING (v10): five industries, one light line
-# Refinery -> car body line -> wind farm -> city -> robot cell. Every shot opens clean; a single thin blue
-# line then enters from the left and crosses the frame at the same speed and slope (low left -> high right),
-# wrapping the hero object, and leaves on the right exactly on the (hard) cut to the next shot.
+# ============================================================ OPENING (v11): five industries, one light line
+# Refinery -> car body line -> wind farm -> city -> robot cell, from the client's own stills (animated as they
+# are: no grading, no retouch, no digital push; the film finish is skipped for these shots - see RAW_SCENES).
+# Every shot opens clean; then one continuous light line sweeps up from lower left to upper right along the
+# same curve at the same speed in every shot and leaves the frame exactly on the straight cut to the next.
 OPEN_V = 1950.0          # head speed, screen px / s - identical in every shot
 OPEN_TAIL = 2300.0       # visible length of the line behind its head (px)
-OPEN_STAB = {"op2": 1.08}   # shots whose footage drift is cancelled (set locked, only people move): cover scale
-OPEN_SHOTS = {  # clip, path (u, v, behind), occluders (uv polygons), grade
-    "op1": ("o1_refinery",
-            [(-0.05, 0.78, 0), (0.20, 0.73, 0), (0.42, 0.66, 0), (0.60, 0.60, 0), (0.755, 0.555, 0), (0.80, 0.525, 0),
-             (0.802, 0.483, 0),
-             (0.75, 0.45, 1), (0.67, 0.425, 1), (0.628, 0.40, 0), (0.635, 0.357, 0), (0.70, 0.335, 0), (0.85, 0.31, 0),
-             (1.06, 0.31, 0)],
-            [[(0.685, 0.21), (0.715, 0.21), (0.720, 0.31), (0.765, 0.31), (0.770, 0.72), (0.680, 0.72)]],
-            GRADE_DAY),
-    "op2": ("o2_carline",
-            [(-0.05, 0.74, 0), (0.14, 0.66, 0), (0.30, 0.58, 0), (0.41, 0.54, 0), (0.50, 0.52, 0), (0.60, 0.49, 0),
-             (0.72, 0.45, 0), (0.86, 0.40, 0), (1.06, 0.35, 0)],
-            [],                                 # the workers move: the line stays in front of them
-            GRADE_DAY),
-    "op3": ("o3_wind",
-            [(-0.05, 0.74, 0), (0.10, 0.67, 0), (0.19, 0.63, 1), (0.30, 0.60, 0), (0.46, 0.57, 0), (0.62, 0.53, 0),
-             (0.765, 0.475, 0), (0.802, 0.445, 0), (0.80, 0.405, 0), (0.75, 0.38, 1), (0.69, 0.355, 1), (0.66, 0.325, 0),
-             (0.675, 0.29, 0), (0.75, 0.275, 0),
-             (0.89, 0.30, 0), (1.06, 0.34, 0)],
-            [[(0.150, 0.37), (0.215, 0.37), (0.240, 0.48), (0.225, 0.88), (0.160, 0.88), (0.140, 0.48)],
-             [(0.716, 0.30), (0.736, 0.30), (0.743, 0.76), (0.709, 0.76)]],
-            GRADE_DAY),
-    "op4": ("o4_city",
-            [(-0.05, 0.80, 0), (0.17, 0.71, 0), (0.38, 0.63, 0), (0.56, 0.57, 0), (0.66, 0.53, 1), (0.75, 0.50, 1),
-             (0.84, 0.47, 0), (0.92, 0.40, 0), (1.06, 0.35, 0)],
-            [[(0.664, 0.06), (0.725, 0.05), (0.782, 0.07), (0.786, 0.87), (0.664, 0.87)]],
-            GRADE_CITY),
-    "op5": ("o5_robot",
-            [(-0.05, 0.70, 0), (0.08, 0.62, 0), (0.16, 0.58, 1), (0.26, 0.55, 1), (0.36, 0.52, 0), (0.48, 0.49, 0),
-             (0.60, 0.47, 0), (0.72, 0.44, 0), (0.86, 0.39, 0), (1.06, 0.35, 0)],
-            [[(0.09, 0.42), (0.20, 0.36), (0.30, 0.42), (0.31, 0.64), (0.14, 0.66), (0.085, 0.58)]],
-            GRADE_COOL),
-}
-OPEN_T = {"op1": (0.00, 1.85), "op2": (1.85, 3.30), "op3": (3.30, 5.05), "op4": (5.05, 6.50), "op5": (6.50, 7.95)}
+OPEN_PATH = [(-0.05, 0.85), (0.24, 0.80), (0.48, 0.71), (0.68, 0.58), (0.82, 0.45), (0.93, 0.32), (1.05, 0.17)]
+OPEN_SHOTS = {"op1": "p1_refinery", "op2": "p2_carline", "op3": "p3_wind", "op4": "p4_city", "op5": "p5_robot"}
+OPEN_STAB = {"op2"}      # locked-off shot: cancel the footage's residual drift so only the workers move
+OPEN_T = {"op1": (0.00, 1.85), "op2": (1.85, 3.375), "op3": (3.375, 4.90), "op4": (4.90, 6.425), "op5": (6.425, 7.95)}
+RAW_SCENES = set(OPEN_SHOTS)
 
 
 def open_shot(name):
-    clip, path, occl, grade = OPEN_SHOTS[name]
+    clip = OPEN_SHOTS[name]
     s0, s1 = OPEN_T[name]
+    pts = [(u * W, v * H) for (u, v) in OPEN_PATH]     # screen space: the line's flow is identical in every shot
+    L = path_len(pts)
+    t_in = s1 - 0.05 - L / OPEN_V                       # the head leaves the frame right at the cut
 
     def draw(c, T, t, d):
         if name in OPEN_STAB:
-            k = OPEN_STAB[name]
-            cam = draw_plate(c, clip, t, d, s=(k, k), grade=grade, stab=True)   # no digital push either
+            draw_plate(c, clip, t, d, s=(1.04, 1.04), stab=True)
         else:
-            cam = draw_plate(c, clip, t, d, s=(1.0, 1.05), grade=grade)
-        pts = flow_pts(cam, [(u, v) for (u, v, _) in path])
-        occ = [flow_pts(cam, o) for o in occl]
-        L = path_len(pts)
-        t_in = s1 - 0.05 - L / OPEN_V           # the head leaves the frame right at the cut
-        # motion blur: the moving head is smeared over a 180-degree shutter (1/48 s of travel)
-        light_line(c, pts, OPEN_V * (T - t_in), OPEN_TAIL, behind=[b for (_, _, b) in path], occluders=occ,
-                   key=name, tsec=T, mb_px=OPEN_V / 48)
+            draw_plate(c, clip, t, d, s=(1.0, 1.0))
+        light_beam(c, pts, OPEN_V * (T - t_in), OPEN_TAIL, mb_px=OPEN_V / 48)
         if name == "op1":
             a = 1 - e_out_cubic(prog(T, 0.0, 1.2))
             if a > 0:
@@ -197,6 +165,7 @@ def open_shot(name):
 
 
 op1, op2, op3, op4, op5 = (open_shot(n) for n in ("op1", "op2", "op3", "op4", "op5"))
+
 
 
 # ============================================================ SC02 tower (line particles spiral up the building)
@@ -2395,8 +2364,8 @@ def fin(c, T, t, d):
 # Scenes are written in narration time of the original read (CUE). PAUSES insert silence before the
 # lines that carry the emphasis; each scene keeps its own clock (shifted), the shot before a pause
 # simply runs longer. The finale is written directly in film time.
-_TIMELINE = [("op1", 0.00, op1), ("op2", 1.85, op2), ("op3", 3.30, op3), ("op4", 5.05, op4),
-             ("op5", 6.50, op5), ("sc03", 7.95, sc03), ("sc04", 13.10, sc04),
+_TIMELINE = [("op1", 0.00, op1), ("op2", 1.85, op2), ("op3", 3.375, op3), ("op4", 4.90, op4),
+             ("op5", 6.425, op5), ("sc03", 7.95, sc03), ("sc04", 13.10, sc04),
              ("sc05", 17.25, sc05), ("sc07", 25.80, sc07), ("sc09", 33.85, sc09), ("sc10", 40.60, sc10),
              ("sc11", 44.55, sc11), ("sc12", 48.75, sc12), ("sc13", 53.62, sc13), ("sc14", 58.15, sc14),
              ("sc15", 68.10, sc15), ("sc16", 71.80, sc16), ("sc17", 78.70, sc17), ("sc18", 80.90, sc18),

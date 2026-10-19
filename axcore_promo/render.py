@@ -86,7 +86,10 @@ class Renderer:
             c.scale(SCALE, SCALE)
             E.TRANSITIONS[typ](c, A, B, p, **kw)
             c.restore()
-        out = self.finish.apply(self.main, f)
+        if tr is None and S.SCENES[i][0] in getattr(S, "RAW_SCENES", ()):
+            out = self.main.makeImageSnapshot().toarray()[..., :3].copy()   # client footage: no film finish
+        else:
+            out = self.finish.apply(self.main, f)
         if LETTERBOX:
             out[:LETTERBOX] = 0
             out[-LETTERBOX:] = 0

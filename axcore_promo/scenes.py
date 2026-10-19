@@ -136,7 +136,7 @@ def sc01(c, T, t, d):
 # wrapping the hero object, and leaves on the right exactly on the (hard) cut to the next shot.
 OPEN_V = 1950.0          # head speed, screen px / s - identical in every shot
 OPEN_TAIL = 2300.0       # visible length of the line behind its head (px)
-OPEN_STAB = {"op2": 1.07}   # shots whose footage drift is cancelled (set locked, only people move): cover scale
+OPEN_STAB = {"op2": 1.08}   # shots whose footage drift is cancelled (set locked, only people move): cover scale
 OPEN_SHOTS = {  # clip, path (u, v, behind), occluders (uv polygons), grade
     "op1": ("o1_refinery",
             [(-0.05, 0.78, 0), (0.20, 0.73, 0), (0.42, 0.66, 0), (0.60, 0.60, 0), (0.755, 0.555, 0), (0.80, 0.525, 0),
@@ -179,7 +179,7 @@ def open_shot(name):
     def draw(c, T, t, d):
         if name in OPEN_STAB:
             k = OPEN_STAB[name]
-            cam = draw_plate(c, clip, t, d, s=(k, k + 0.025), grade=grade, stab=True)
+            cam = draw_plate(c, clip, t, d, s=(k, k), grade=grade, stab=True)   # no digital push either
         else:
             cam = draw_plate(c, clip, t, d, s=(1.0, 1.05), grade=grade)
         pts = flow_pts(cam, [(u, v) for (u, v, _) in path])

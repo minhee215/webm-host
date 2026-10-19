@@ -536,8 +536,8 @@ def line_flow(c, pts, head, length=0.5, n=9, spread=14.0, twist=1.6, width=1.3, 
                                                                   alpha * 0.85 * tw_ * u, blend=bm))
 
 
-def light_line(c, pts, head_px, tail_px=1500.0, width=1.7, alpha=1.0, behind=None, occluders=None,
-               key="ll", tsec=0.0, strands=3, core="#EAF4FF", glow="#2F8CFF", halo="#1C64F2", segs=90):
+def light_line(c, pts, head_px, tail_px=1500.0, width=2.4, alpha=1.0, behind=None, occluders=None,
+               key="ll", tsec=0.0, strands=3, core="#F2F8FF", glow="#2E7BFF", halo="#1757E6", segs=90):
     """A thin, refined light line (one bright strand + two hairline companions) drawn along a curve.
     head_px: arc length (screen px) the head has travelled; the line is visible from head_px - tail_px to
     head_px and fades toward its tail. behind: per-control-point flags; spans between two flagged points
@@ -607,17 +607,19 @@ def light_line(c, pts, head_px, tail_px=1500.0, width=1.7, alpha=1.0, behind=Non
             if back:
                 c.restore()
 
-    def glow_layer(sigma, wmul, amul, colr):
+    def glow_layer(sigma, wmul, amul, colr, blend):
         lp = skia.Paint()
         lp.setImageFilter(skia.ImageFilters.Blur(sigma, sigma, skia.TileMode.kDecal))
-        lp.setBlendMode(skia.BlendMode.kScreen)
+        lp.setBlendMode(blend)
         c.saveLayer(bounds, lp)
         strokes(wmul, amul, colr)
         c.restore()
 
-    glow_layer(14, 7.0, 0.30, halo)
-    glow_layer(4, 2.6, 0.75, glow)
-    strokes(1.0, 1.0, core, 0.6)
+    # saturated blue body (normal blend so it reads over bright skies), then a screen bloom and a white core
+    glow_layer(16, 7.5, 0.42, halo, skia.BlendMode.kSrcOver)
+    glow_layer(4.5, 3.0, 0.95, glow, skia.BlendMode.kSrcOver)
+    glow_layer(2.0, 1.8, 0.6, "#8FC2FF", skia.BlendMode.kScreen)
+    strokes(1.0, 1.0, core, 0.8)
     # head: a small soft flare where the line is being drawn
     x, y, a, w, bf, wt = lines[0]
     if h <= 1.0 and not bf[-1]:
@@ -1364,7 +1366,7 @@ def tr_match(c, A, B, p, push=0.035, **kw):
         draw_scaled(c, B, 1 + push * (1 - p) * 0.5, alpha=k)
 
 
-def tr_flow(c, A, B, p, angle=-9.0, feather=0.55, **kw):
+def tr_flow(c, A, B, p, angle=-9.0, feather=0.38, **kw):
     """Directional soft wipe that travels with the light line (left to right, along its slope): the next
     shot flows in behind the line that just left the frame. Wide feather, no hard edge."""
     q = e_io_sine(p)

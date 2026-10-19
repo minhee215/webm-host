@@ -133,11 +133,24 @@ def sc01(c, T, t, d):
 # ============================================================ OPENING (v11): five industries, one light line
 # Refinery -> car body line -> wind farm -> city -> robot cell, from the client's own stills (animated as they
 # are: no grading, no retouch, no digital push; the film finish is skipped for these shots - see RAW_SCENES).
-# Every shot opens clean; then one continuous light line sweeps up from lower left to upper right along the
-# same curve at the same speed in every shot and leaves the frame exactly on the straight cut to the next.
+# Every shot opens clean; then one continuous light line sweeps through it from left to right at the same speed
+# in every shot and leaves the frame exactly on the straight cut to the next.
 OPEN_V = 1950.0          # head speed, screen px / s - identical in every shot
 OPEN_TAIL = 2300.0       # visible length of the line behind its head (px)
-OPEN_PATH = [(-0.05, 0.85), (0.24, 0.80), (0.48, 0.71), (0.68, 0.58), (0.82, 0.45), (0.93, 0.32), (1.05, 0.17)]
+# Each shot has its own sweep that follows its composition; consecutive shots hand the line over: it leaves
+# the right edge at the height and heading at which it enters the next shot from the left (one line, one speed).
+OPEN_PATHS = {
+    "op1": [(-0.05, 0.82), (0.14, 0.79), (0.32, 0.76), (0.50, 0.70), (0.66, 0.60), (0.80, 0.50), (0.92, 0.43),
+            (1.05, 0.38)],                                    # low over the pipe racks, rising past the columns
+    "op2": [(-0.05, 0.40), (0.08, 0.36), (0.22, 0.38), (0.38, 0.48), (0.52, 0.58), (0.66, 0.61), (0.80, 0.57),
+            (0.92, 0.50), (1.05, 0.44)],                      # dips through the workers along the line
+    "op3": [(-0.05, 0.45), (0.08, 0.41), (0.20, 0.43), (0.34, 0.55), (0.50, 0.62), (0.65, 0.57), (0.76, 0.45),
+            (0.82, 0.34), (0.91, 0.27), (1.05, 0.24)],        # skims the grass, climbs past the turbine
+    "op4": [(-0.05, 0.26), (0.10, 0.25), (0.24, 0.31), (0.36, 0.45), (0.48, 0.59), (0.62, 0.70), (0.78, 0.78),
+            (0.92, 0.82), (1.05, 0.84)],                      # dives from the skyline down along the highway
+    "op5": [(-0.05, 0.83), (0.10, 0.84), (0.24, 0.80), (0.40, 0.71), (0.56, 0.61), (0.70, 0.50), (0.82, 0.40),
+            (0.93, 0.31), (1.05, 0.25)],                      # rises along the conveyor through the arms
+}
 OPEN_SHOTS = {"op1": "p1_refinery", "op2": "p2_carline", "op3": "p3_wind", "op4": "p4_city", "op5": "p5_robot"}
 OPEN_STAB = {"op2"}      # locked-off shot: cancel the footage's residual drift so only the workers move
 OPEN_T = {"op1": (0.00, 1.85), "op2": (1.85, 3.375), "op3": (3.375, 4.90), "op4": (4.90, 6.425), "op5": (6.425, 7.95)}
@@ -147,7 +160,7 @@ RAW_SCENES = set(OPEN_SHOTS)
 def open_shot(name):
     clip = OPEN_SHOTS[name]
     s0, s1 = OPEN_T[name]
-    pts = [(u * W, v * H) for (u, v) in OPEN_PATH]     # screen space: the line's flow is identical in every shot
+    pts = [(u * W, v * H) for (u, v) in OPEN_PATHS[name]]   # screen space, handed over from shot to shot
     L = path_len(pts)
     t_in = s1 - 0.05 - L / OPEN_V                       # the head leaves the frame right at the cut
 

@@ -4,7 +4,7 @@ Every Nano Banana Pro plate can have a Kling image-to-video clip generated from 
 (the plate is the clip's first frame, so plate-normalized coordinates stay valid).
 This module plays those clips frame-accurately inside the skia compositor:
 
-- ClipReader: sequential ffmpeg decoder (normalized 1920x1080 / 24 fps clips)
+- ClipReader: sequential ffmpeg decoder (normalized 24 fps clips, 1920x1080 or native 3840x2160)
 - proxies:    small memory-mapped frame stacks for photo tiles and the AX mosaic
 - tracks:     per-frame homographies (planar surfaces / camera drift), optical-flow
               points and MediaPipe hand landmarks, produced by track.py
@@ -69,6 +69,7 @@ def clip_index(name, t):
 class ClipReader:
     def __init__(self, name):
         self.path = os.path.join(CLIP_DIR, name + ".mp4")
+        self.w, self.h = (clip_info(name) or {}).get("res", (CW, CH))
         self.proc = None
         self.cur = -1
         self.img = None
@@ -79,14 +80,15 @@ class ClipReader:
             self.proc.wait()
         self.proc = subprocess.Popen(
             ["ffmpeg", "-loglevel", "error", "-threads", "2", "-ss", "%.4f" % (fi / FPS), "-i", self.path, "-f", "rawvideo",
-             "-pix_fmt", "rgba", "-"], stdout=subprocess.PIPE, bufsize=CW * CH * 4 * 2)
+             "-pix_fmt", "rgba", "-"], stdout=subprocess.PIPE, bufsize=self.w * self.h * 4 * 2)
         self.cur = fi - 1
 
     def _read(self):
-        buf = self.proc.stdout.read(CW * CH * 4)
-        if len(buf) < CW * CH * 4:
+        n = self.w * self.h * 4
+        buf = self.proc.stdout.read(n)
+        if len(buf) < n:
             return False
-        arr = np.frombuffer(buf, np.uint8).reshape(CH, CW, 4)
+        arr = np.frombuffer(buf, np.uint8).reshape(self.h, self.w, 4)
         self.img = skia.Image.fromarray(arr.copy(), colorType=skia.ColorType.kRGBA_8888_ColorType)
         self.cur += 1
         return True

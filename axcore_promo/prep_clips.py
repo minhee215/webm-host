@@ -1,6 +1,6 @@
 """Download the Kling clips listed in assets/clips.json and normalize them.
 
-For each clip: 1920x1080 / 24 fps CFR H.264 (frame-accurate seeking), a 480x270
+For each clip: 1920x1080 (or its 'res', e.g. native 4K) / 24 fps CFR H.264 (frame-accurate seeking), a 480x270
 proxy frame stack (.npy) for tiles and mosaics, and <name>.json with the duration.
 Usage: python3 prep_clips.py [clip_dir]
 """
@@ -26,10 +26,11 @@ def prep(item):
         return name, "cached"
     raw = os.path.join(OUT, name + "_src.mp4")
     urllib.request.urlretrieve(info["file"] if info["file"].startswith("http") else MANIFEST["base"] + info["file"], raw)
+    w, h = info.get("res", (1920, 1080))
     subprocess.check_call(["ffmpeg", "-loglevel", "error", "-y", "-i", raw, "-an", "-vf",
-                           "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,fps=24",
-                           "-c:v", "libx264", "-preset", "veryfast", "-crf", "14", "-g", "12", "-pix_fmt", "yuv420p",
-                           dst])
+                           "scale=%d:%d:force_original_aspect_ratio=increase:flags=lanczos,crop=%d:%d,fps=24" % (w, h, w, h),
+                           "-c:v", "libx264", "-preset", "veryfast", "-crf", "12" if w > 1920 else "14", "-g", "12",
+                           "-pix_fmt", "yuv420p", dst])
     raw_px = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", dst, "-vf", "scale=%d:%d" % (PW, PH),
                              "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], check=True, capture_output=True).stdout
     frames = np.frombuffer(raw_px, np.uint8).reshape(-1, PH, PW, 3)

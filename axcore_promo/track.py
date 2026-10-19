@@ -31,6 +31,8 @@ def read_frames(path):
         ok, f = cap.read()
         if not ok:
             break
+        if f.shape[1] > 1920:  # native 4K clips: tracking works in normalized coordinates, 1080p is plenty
+            f = cv2.resize(f, (1920, 1080), interpolation=cv2.INTER_AREA)
         out.append(f)
     return out
 

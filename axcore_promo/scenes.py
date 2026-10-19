@@ -136,10 +136,13 @@ def sc01(c, T, t, d):
 # wrapping the hero object, and leaves on the right exactly on the (hard) cut to the next shot.
 OPEN_V = 1950.0          # head speed, screen px / s - identical in every shot
 OPEN_TAIL = 2300.0       # visible length of the line behind its head (px)
-OPEN_SHOTS = {  # clip, path (u, v, behind), occluders (uv polygons), grade, push (scale start, end)
+OPEN_STAB = {"op2": 1.07}   # shots whose footage drift is cancelled (set locked, only people move): cover scale
+OPEN_SHOTS = {  # clip, path (u, v, behind), occluders (uv polygons), grade
     "op1": ("o1_refinery",
-            [(-0.05, 0.78, 0), (0.20, 0.73, 0), (0.42, 0.66, 0), (0.60, 0.60, 0), (0.75, 0.56, 0), (0.80, 0.50, 0),
-             (0.75, 0.45, 1), (0.67, 0.42, 1), (0.63, 0.37, 0), (0.71, 0.33, 0), (0.85, 0.31, 0), (1.06, 0.31, 0)],
+            [(-0.05, 0.78, 0), (0.20, 0.73, 0), (0.42, 0.66, 0), (0.60, 0.60, 0), (0.755, 0.555, 0), (0.80, 0.525, 0),
+             (0.802, 0.483, 0),
+             (0.75, 0.45, 1), (0.67, 0.425, 1), (0.628, 0.40, 0), (0.635, 0.357, 0), (0.70, 0.335, 0), (0.85, 0.31, 0),
+             (1.06, 0.31, 0)],
             [[(0.685, 0.21), (0.715, 0.21), (0.720, 0.31), (0.765, 0.31), (0.770, 0.72), (0.680, 0.72)]],
             GRADE_DAY),
     "op2": ("o2_carline",
@@ -149,7 +152,8 @@ OPEN_SHOTS = {  # clip, path (u, v, behind), occluders (uv polygons), grade, pus
             GRADE_DAY),
     "op3": ("o3_wind",
             [(-0.05, 0.74, 0), (0.10, 0.67, 0), (0.19, 0.63, 1), (0.30, 0.60, 0), (0.46, 0.57, 0), (0.62, 0.53, 0),
-             (0.76, 0.48, 0), (0.80, 0.42, 0), (0.74, 0.38, 1), (0.68, 0.35, 1), (0.665, 0.31, 0), (0.75, 0.28, 0),
+             (0.765, 0.475, 0), (0.802, 0.445, 0), (0.80, 0.405, 0), (0.75, 0.38, 1), (0.69, 0.355, 1), (0.66, 0.325, 0),
+             (0.675, 0.29, 0), (0.75, 0.275, 0),
              (0.89, 0.30, 0), (1.06, 0.34, 0)],
             [[(0.150, 0.37), (0.215, 0.37), (0.240, 0.48), (0.225, 0.88), (0.160, 0.88), (0.140, 0.48)],
              [(0.716, 0.30), (0.736, 0.30), (0.743, 0.76), (0.709, 0.76)]],
@@ -165,7 +169,7 @@ OPEN_SHOTS = {  # clip, path (u, v, behind), occluders (uv polygons), grade, pus
             [[(0.09, 0.42), (0.20, 0.36), (0.30, 0.42), (0.31, 0.64), (0.14, 0.66), (0.085, 0.58)]],
             GRADE_COOL),
 }
-OPEN_T = {"op1": (0.00, 1.95), "op2": (1.95, 3.45), "op3": (3.45, 4.95), "op4": (4.95, 6.45), "op5": (6.45, 7.95)}
+OPEN_T = {"op1": (0.00, 1.85), "op2": (1.85, 3.30), "op3": (3.30, 5.05), "op4": (5.05, 6.50), "op5": (6.50, 7.95)}
 
 
 def open_shot(name):
@@ -173,7 +177,11 @@ def open_shot(name):
     s0, s1 = OPEN_T[name]
 
     def draw(c, T, t, d):
-        cam = draw_plate(c, clip, t, d, s=(1.0, 1.05), grade=grade)
+        if name in OPEN_STAB:
+            k = OPEN_STAB[name]
+            cam = draw_plate(c, clip, t, d, s=(k, k + 0.025), grade=grade, stab=True)
+        else:
+            cam = draw_plate(c, clip, t, d, s=(1.0, 1.05), grade=grade)
         pts = flow_pts(cam, [(u, v) for (u, v, _) in path])
         occ = [flow_pts(cam, o) for o in occl]
         L = path_len(pts)
@@ -2387,8 +2395,8 @@ def fin(c, T, t, d):
 # Scenes are written in narration time of the original read (CUE). PAUSES insert silence before the
 # lines that carry the emphasis; each scene keeps its own clock (shifted), the shot before a pause
 # simply runs longer. The finale is written directly in film time.
-_TIMELINE = [("op1", 0.00, op1), ("op2", 1.95, op2), ("op3", 3.45, op3), ("op4", 4.95, op4),
-             ("op5", 6.45, op5), ("sc03", 7.95, sc03), ("sc04", 13.10, sc04),
+_TIMELINE = [("op1", 0.00, op1), ("op2", 1.85, op2), ("op3", 3.30, op3), ("op4", 5.05, op4),
+             ("op5", 6.50, op5), ("sc03", 7.95, sc03), ("sc04", 13.10, sc04),
              ("sc05", 17.25, sc05), ("sc07", 25.80, sc07), ("sc09", 33.85, sc09), ("sc10", 40.60, sc10),
              ("sc11", 44.55, sc11), ("sc12", 48.75, sc12), ("sc13", 53.62, sc13), ("sc14", 58.15, sc14),
              ("sc15", 68.10, sc15), ("sc16", 71.80, sc16), ("sc17", 78.70, sc17), ("sc18", 80.90, sc18),

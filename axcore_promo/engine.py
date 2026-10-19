@@ -794,7 +794,7 @@ def grade_filter(bright=1.0, contrast=1.0, sat=1.0, tint=(0.0, 0.0, 0.0)):
 
 
 def draw_plate(c, name, t, dur, s=(1.0, 1.04), x=(0, 0), y=(0, 0), r=(0, 0), alpha=1.0,
-               defocus=0.0, grade=None, beats=()):
+               defocus=0.0, grade=None, beats=(), stab=False):
     """Draw the shot: the live-action clip made from this plate when it exists (falls back to
     the still plate), with a gentle digital drift on top. Returns the Cam for tracked overlays.
     beats: [(time, extra_scale)] decisive push-ins landing on the hero."""
@@ -811,8 +811,18 @@ def draw_plate(c, name, t, dur, s=(1.0, 1.04), x=(0, 0), y=(0, 0), r=(0, 0), alp
     for bt, amt in beats:
         sc += amt * e_out_expo(prog(t, bt, 0.9))
     cam = Cam(img, sc, lerp(x[0], x[1], p), lerp(y[0], y[1], p), lerp(r[0], r[1], p))
+    lock = None
     if media.clip_info(name):
-        cam.attach(media.track(name), fi)
+        trk = media.track(name)
+        if stab and trk is not None and trk.H("global", fi) is not None:
+            # stabilise: undo the footage's own camera drift so the set stays put (frame-0 geometry);
+            # overlays then map straight to frame-0 coordinates
+            S = np.diag([img.width(), img.height(), 1.0])
+            Mi = S @ np.linalg.inv(trk.H("global", fi)) @ np.linalg.inv(S)
+            Mi = Mi / Mi[2, 2]
+            lock = skia.Matrix.MakeAll(*[float(v) for v in Mi.flatten()])
+        else:
+            cam.attach(trk, fi)
     if alpha <= 0.003:
         return cam
     paint = skia.Paint(AntiAlias=True)
@@ -821,6 +831,8 @@ def draw_plate(c, name, t, dur, s=(1.0, 1.04), x=(0, 0), y=(0, 0), r=(0, 0), alp
         paint.setColorFilter(grade)
     c.save()
     c.concat(cam.m)
+    if lock is not None:
+        c.concat(lock)
     c.drawImage(img, 0, 0, SAMP, paint)
     if defocus > 0.01:
         pb = skia.Paint(AntiAlias=True)

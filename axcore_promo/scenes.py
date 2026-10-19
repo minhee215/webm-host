@@ -135,7 +135,7 @@ def sc01(c, T, t, d):
 # line then enters from the left and crosses the frame at the same speed and slope (low left -> high right),
 # wrapping the hero object, and leaves on the right just as the next shot flows in behind it (tr_flow).
 OPEN_V = 1950.0          # head speed, screen px / s - identical in every shot
-OPEN_TAIL = 1450.0       # visible length of the line behind its head (px)
+OPEN_TAIL = 2300.0       # visible length of the line behind its head (px)
 OPEN_SHOTS = {  # clip, path (u, v, behind), occluders (uv polygons), grade, push (scale start, end)
     "op1": ("o1_refinery",
             [(-0.05, 0.78, 0), (0.20, 0.73, 0), (0.42, 0.66, 0), (0.60, 0.60, 0), (0.75, 0.56, 0), (0.80, 0.50, 0),

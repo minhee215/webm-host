@@ -578,7 +578,7 @@ def light_line(c, pts, head_px, tail_px=1500.0, width=2.4, alpha=1.0, behind=Non
         off = off_amp * np.sin(ph + 2 * math.pi * fr * ss + tsec * 1.3) * (1 if k % 2 else -1)
         x, y = x + np.interp(ss, s, nx) * off, y + np.interp(ss, s, ny) * off
         u = np.clip((ss - (hk - ln)) / ln, 0, 1)
-        lines.append((x, y, u ** 1.6, 0.45 + 0.55 * u, [any(p0 <= v <= p1 for p0, p1 in spans) for v in ss],
+        lines.append((x, y, u ** 1.25, 0.5 + 0.5 * u, [any(p0 <= v <= p1 for p0, p1 in spans) for v in ss],
                       1.0 if main else 0.42))
     if not lines:
         return
@@ -616,7 +616,7 @@ def light_line(c, pts, head_px, tail_px=1500.0, width=2.4, alpha=1.0, behind=Non
         c.restore()
 
     # saturated blue body (normal blend so it reads over bright skies), then a screen bloom and a white core
-    glow_layer(16, 7.5, 0.42, halo, skia.BlendMode.kSrcOver)
+    glow_layer(16, 8.0, 0.5, halo, skia.BlendMode.kSrcOver)
     glow_layer(4.5, 3.0, 0.95, glow, skia.BlendMode.kSrcOver)
     glow_layer(2.0, 1.8, 0.6, "#8FC2FF", skia.BlendMode.kScreen)
     strokes(1.0, 1.0, core, 0.8)

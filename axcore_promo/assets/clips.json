@@ -216,6 +216,31 @@
      ]
     }
    }
+  },
+  "o1_refinery": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_071320_77131a88-e007-45c0-83d6-81aa46e051a0.mp4",
+   "track": {},
+   "pre": 0.0
+  },
+  "o2_carline": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_071319_7442470a-0328-4c5e-be91-aa7752975df6.mp4",
+   "track": {},
+   "pre": 0.3
+  },
+  "o3_wind": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_071320_bf7a6a6b-ff11-4745-9ad2-8655ac876cf3.mp4",
+   "track": {},
+   "pre": 0.3
+  },
+  "o4_city": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_071323_97de2036-9744-4207-ada2-af614810cb77.mp4",
+   "track": {},
+   "pre": 0.3
+  },
+  "o5_robot": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_071320_0f17761e-f7ce-4520-85db-3e6f311e3482.mp4",
+   "track": {},
+   "pre": 0.3
   }
  }
 }

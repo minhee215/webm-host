@@ -536,6 +536,100 @@ def line_flow(c, pts, head, length=0.5, n=9, spread=14.0, twist=1.6, width=1.3, 
                                                                   alpha * 0.85 * tw_ * u, blend=bm))
 
 
+def light_line(c, pts, head_px, tail_px=1500.0, width=1.7, alpha=1.0, behind=None, occluders=None,
+               key="ll", tsec=0.0, strands=3, core="#EAF4FF", glow="#2F8CFF", halo="#1C64F2", segs=90):
+    """A thin, refined light line (one bright strand + two hairline companions) drawn along a curve.
+    head_px: arc length (screen px) the head has travelled; the line is visible from head_px - tail_px to
+    head_px and fades toward its tail. behind: per-control-point flags; spans between two flagged points
+    pass behind the occluder polygons (screen space), so the line wraps around objects."""
+    if alpha <= 0.003:
+        return
+    Q, s, L, sc = spline(pts)
+    h, t0 = head_px / L, (head_px - tail_px) / L
+    if h <= 0 or t0 >= 1:
+        return
+    tx, ty = np.gradient(Q[:, 0]), np.gradient(Q[:, 1])
+    tn = np.hypot(tx, ty) + 1e-9
+    nx, ny = -ty / tn, tx / tn
+    spans = []
+    if behind is not None and occluders:
+        for i in range(len(behind) - 1):
+            if behind[i] and behind[i + 1]:
+                spans.append((sc[i], sc[i + 1]))
+    occ = None
+    if spans:
+        occ = skia.Path()
+        for o in occluders:
+            occ.addPath(poly(o, True))
+    r = rng(key)
+    lines = []          # (xs, ys, alphas, widths, behind_flags, weight)
+    for k in range(strands):
+        main = k == 0
+        off_amp = 0.0 if main else r.uniform(3.0, 8.0)
+        ph, fr = r.uniform(0, 2 * math.pi), r.uniform(1.2, 2.4)
+        ln = tail_px * (1.0 if main else r.uniform(0.45, 0.75)) / L
+        dh = 0.0 if main else -r.uniform(0.0, 0.03)
+        hk = h + dh
+        a0, a1 = max(0.0, hk - ln), min(1.0, hk)
+        if a1 <= a0:
+            continue
+        ss = np.linspace(a0, a1, segs + 1)
+        x, y = np.interp(ss, s, Q[:, 0]), np.interp(ss, s, Q[:, 1])
+        off = off_amp * np.sin(ph + 2 * math.pi * fr * ss + tsec * 1.3) * (1 if k % 2 else -1)
+        x, y = x + np.interp(ss, s, nx) * off, y + np.interp(ss, s, ny) * off
+        u = np.clip((ss - (hk - ln)) / ln, 0, 1)
+        lines.append((x, y, u ** 1.6, 0.45 + 0.55 * u, [any(p0 <= v <= p1 for p0, p1 in spans) for v in ss],
+                      1.0 if main else 0.42))
+    if not lines:
+        return
+    allx = np.concatenate([l_[0] for l_ in lines])
+    ally = np.concatenate([l_[1] for l_ in lines])
+    bounds = R(allx.min() - 60, ally.min() - 60, allx.max() - allx.min() + 120, ally.max() - ally.min() + 120)
+
+    def strokes(wmul, amul, colr, wmin=0.0):
+        paint = skia.Paint(AntiAlias=True, Style=skia.Paint.kStroke_Style, StrokeCap=skia.Paint.kRound_Cap)
+        for back in (False, True):
+            if back and occ is None:
+                continue
+            if back:
+                c.save()
+                c.clipPath(occ, skia.ClipOp.kDifference, True)
+            for (x, y, a, w, bf, wt) in lines:
+                for i in range(len(x) - 1):
+                    if bf[i] != back:
+                        continue
+                    ai = alpha * amul * wt * (a[i] + a[i + 1]) / 2
+                    if ai < 0.008:
+                        continue
+                    paint.setColor4f(col(colr, clamp(ai)))
+                    paint.setStrokeWidth(max(wmin, width * wmul * (w[i] + w[i + 1]) / 2 * (1 if wt == 1 else 0.6)))
+                    c.drawLine(x[i], y[i], x[i + 1], y[i + 1], paint)
+            if back:
+                c.restore()
+
+    def glow_layer(sigma, wmul, amul, colr):
+        lp = skia.Paint()
+        lp.setImageFilter(skia.ImageFilters.Blur(sigma, sigma, skia.TileMode.kDecal))
+        lp.setBlendMode(skia.BlendMode.kScreen)
+        c.saveLayer(bounds, lp)
+        strokes(wmul, amul, colr)
+        c.restore()
+
+    glow_layer(14, 7.0, 0.30, halo)
+    glow_layer(4, 2.6, 0.75, glow)
+    strokes(1.0, 1.0, core, 0.6)
+    # head: a small soft flare where the line is being drawn
+    x, y, a, w, bf, wt = lines[0]
+    if h <= 1.0 and not bf[-1]:
+        hx, hy = x[-1], y[-1]
+        c.drawCircle(hx, hy, 16, paint_fill(glow, 0.35 * alpha, blur=10, blend=skia.BlendMode.kScreen))
+        c.drawCircle(hx, hy, 3.2, paint_fill(core, 0.95 * alpha, blur=1.5, blend=skia.BlendMode.kScreen))
+
+
+def path_len(pts):
+    return spline(pts)[2]
+
+
 def flow_pts(cam, uv, region=None):
     """Control points given in frame uv -> screen (follows the tracked plate)."""
     return [cam.map(u, v, region) for (u, v) in uv]
@@ -1270,8 +1364,28 @@ def tr_match(c, A, B, p, push=0.035, **kw):
         draw_scaled(c, B, 1 + push * (1 - p) * 0.5, alpha=k)
 
 
+def tr_flow(c, A, B, p, angle=-9.0, feather=0.55, **kw):
+    """Directional soft wipe that travels with the light line (left to right, along its slope): the next
+    shot flows in behind the line that just left the frame. Wide feather, no hard edge."""
+    q = e_io_sine(p)
+    ang = math.radians(angle)
+    dx, dy = math.cos(ang), math.sin(ang)
+    span = abs(dx) * W + abs(dy) * H
+    fw = feather * W
+    front = lerp(-span / 2 - fw / 2, span / 2 + fw / 2, q)
+    blit(c, A)
+    c.saveLayer(None, None)
+    blit(c, B)
+    p0 = skia.Point(W / 2 + dx * (front - fw / 2), H / 2 + dy * (front - fw / 2))
+    p1 = skia.Point(W / 2 + dx * (front + fw / 2), H / 2 + dy * (front + fw / 2))
+    sh = skia.GradientShader.MakeLinear([p0, p1], [skia.Color4f(1, 1, 1, 1).toColor(), skia.Color4f(1, 1, 1, 0).toColor()])
+    mp = skia.Paint(Shader=sh, BlendMode=skia.BlendMode.kDstIn)
+    c.drawRect(R(-W, -H, 3 * W, 3 * H), mp)
+    c.restore()
+
+
 TRANSITIONS = {
-    "lines": tr_lines, "match": tr_match,
+    "lines": tr_lines, "match": tr_match, "flow": tr_flow,
     "dissolve": tr_dissolve, "zoom": tr_zoom, "whip": tr_whip, "streak": tr_streak,
     "blocks": tr_blocks, "shrink": tr_shrink, "expand": tr_expand,
 }

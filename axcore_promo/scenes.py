@@ -130,30 +130,35 @@ def sc01(c, T, t, d):
         c.drawRect(R(0, 0, W, H), paint_fill(NAVY_950, a))
 
 
-# ============================================================ OPENING (v11): five industries, one light line
-# Refinery -> car body line -> wind farm -> city -> robot cell, from the client's own stills (animated as they
+# ============================================================ OPENING (v12): six industries, one light line
+# Refinery -> car body line -> silos -> wind farm -> city -> robot cell, from the client's own stills (animated as they
 # are: no grading, no retouch, no digital push; the film finish is skipped for these shots - see RAW_SCENES).
 # Every shot opens clean; then one continuous light line sweeps through it from left to right at the same speed
 # in every shot and leaves the frame exactly on the straight cut to the next.
-OPEN_V = 1950.0          # head speed, screen px / s - identical in every shot
+OPEN_V = 2600.0          # head speed, screen px / s - identical in every shot (fast, SK AX-like sweep)
 OPEN_TAIL = 2300.0       # visible length of the line behind its head (px)
+OPEN_MB = OPEN_V / 24    # motion blur: head smeared over a full-frame (360-degree) shutter for a fluid sweep
 # Each shot has its own sweep that follows its composition; consecutive shots hand the line over: it leaves
 # the right edge at the height and heading at which it enters the next shot from the left (one line, one speed).
 OPEN_PATHS = {
     "op1": [(-0.05, 0.82), (0.14, 0.79), (0.32, 0.76), (0.50, 0.70), (0.66, 0.60), (0.80, 0.50), (0.92, 0.43),
-            (1.05, 0.38)],                                    # low over the pipe racks, rising past the columns
+            (1.05, 0.38)],                                    # low over the pipe racks, rising past the stacks
     "op2": [(-0.05, 0.40), (0.08, 0.36), (0.22, 0.38), (0.38, 0.48), (0.52, 0.58), (0.66, 0.61), (0.80, 0.57),
             (0.92, 0.50), (1.05, 0.44)],                      # dips through the workers along the line
-    "op3": [(-0.05, 0.45), (0.08, 0.41), (0.20, 0.43), (0.34, 0.55), (0.50, 0.62), (0.65, 0.57), (0.76, 0.45),
-            (0.82, 0.34), (0.91, 0.27), (1.05, 0.24)],        # skims the grass, climbs past the turbine
-    "op4": [(-0.05, 0.26), (0.10, 0.25), (0.24, 0.31), (0.36, 0.45), (0.48, 0.59), (0.62, 0.70), (0.78, 0.78),
-            (0.92, 0.82), (1.05, 0.84)],                      # dives from the skyline down along the highway
-    "op5": [(-0.05, 0.83), (0.10, 0.84), (0.24, 0.80), (0.40, 0.71), (0.56, 0.61), (0.70, 0.50), (0.82, 0.40),
+    "op3": [(-0.05, 0.45), (0.10, 0.40), (0.26, 0.40), (0.42, 0.48), (0.56, 0.60), (0.70, 0.68), (0.84, 0.70),
+            (1.05, 0.66)],                                    # threads the sky gap between the silos
+    "op4": [(-0.05, 0.67), (0.12, 0.62), (0.30, 0.60), (0.48, 0.64), (0.64, 0.58), (0.76, 0.45), (0.84, 0.34),
+            (0.93, 0.27), (1.05, 0.24)],                      # skims the grass, climbs past the turbine
+    "op5": [(-0.05, 0.26), (0.10, 0.25), (0.24, 0.31), (0.36, 0.45), (0.48, 0.59), (0.62, 0.70), (0.78, 0.78),
+            (0.92, 0.82), (1.05, 0.84)],                      # dives from the skyline down toward the boulevard
+    "op6": [(-0.05, 0.83), (0.10, 0.84), (0.24, 0.80), (0.40, 0.71), (0.56, 0.61), (0.70, 0.50), (0.82, 0.40),
             (0.93, 0.31), (1.05, 0.25)],                      # rises along the conveyor through the arms
 }
-OPEN_SHOTS = {"op1": "p1_refinery", "op2": "p2_carline", "op3": "p3_wind", "op4": "p4_city", "op5": "p5_robot"}
+OPEN_SHOTS = {"op1": "q1_refinery", "op2": "p2_carline", "op3": "q3_silos", "op4": "p3_wind", "op5": "q5_city",
+              "op6": "p5_robot"}
 OPEN_STAB = {"op2"}      # locked-off shot: cancel the footage's residual drift so only the workers move
-OPEN_T = {"op1": (0.00, 1.85), "op2": (1.85, 3.375), "op3": (3.375, 4.90), "op4": (4.90, 6.425), "op5": (6.425, 7.95)}
+OPEN_T = {"op1": (0.00, 1.55), "op2": (1.55, 2.83), "op3": (2.83, 4.11), "op4": (4.11, 5.39), "op5": (5.39, 6.67),
+          "op6": (6.67, 7.95)}
 RAW_SCENES = set(OPEN_SHOTS)
 
 
@@ -169,7 +174,7 @@ def open_shot(name):
             draw_plate(c, clip, t, d, s=(1.04, 1.04), stab=True)
         else:
             draw_plate(c, clip, t, d, s=(1.0, 1.0))
-        light_beam(c, pts, OPEN_V * (T - t_in), OPEN_TAIL, mb_px=OPEN_V / 48)
+        light_beam(c, pts, OPEN_V * (T - t_in), OPEN_TAIL, mb_px=OPEN_MB)
         if name == "op1":
             a = 1 - e_out_cubic(prog(T, 0.0, 1.2))
             if a > 0:
@@ -177,7 +182,7 @@ def open_shot(name):
     return draw
 
 
-op1, op2, op3, op4, op5 = (open_shot(n) for n in ("op1", "op2", "op3", "op4", "op5"))
+op1, op2, op3, op4, op5, op6 = (open_shot(n) for n in ("op1", "op2", "op3", "op4", "op5", "op6"))
 
 
 
@@ -2377,8 +2382,8 @@ def fin(c, T, t, d):
 # Scenes are written in narration time of the original read (CUE). PAUSES insert silence before the
 # lines that carry the emphasis; each scene keeps its own clock (shifted), the shot before a pause
 # simply runs longer. The finale is written directly in film time.
-_TIMELINE = [("op1", 0.00, op1), ("op2", 1.85, op2), ("op3", 3.375, op3), ("op4", 4.90, op4),
-             ("op5", 6.425, op5), ("sc03", 7.95, sc03), ("sc04", 13.10, sc04),
+_TIMELINE = [("op1", 0.00, op1), ("op2", 1.55, op2), ("op3", 2.83, op3), ("op4", 4.11, op4),
+             ("op5", 5.39, op5), ("op6", 6.67, op6), ("sc03", 7.95, sc03), ("sc04", 13.10, sc04),
              ("sc05", 17.25, sc05), ("sc07", 25.80, sc07), ("sc09", 33.85, sc09), ("sc10", 40.60, sc10),
              ("sc11", 44.55, sc11), ("sc12", 48.75, sc12), ("sc13", 53.62, sc13), ("sc14", 58.15, sc14),
              ("sc15", 68.10, sc15), ("sc16", 71.80, sc16), ("sc17", 78.70, sc17), ("sc18", 80.90, sc18),

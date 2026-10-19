@@ -306,6 +306,33 @@
     3840,
     2160
    ]
+  },
+  "q1_refinery": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_090629_793956a4-a91c-445f-86d5-081a21b60cae.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "q3_silos": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_090246_8f16b76c-8a2a-4fd0-a6a4-5a109b6f5a50.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2560
+   ]
+  },
+  "q5_city": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_090253_19798f24-6293-49c6-857d-9beb2f40eb33.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2160
+   ]
   }
  }
 }

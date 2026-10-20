@@ -694,6 +694,76 @@ def light_beam(c, pts, head_px, tail_px=2300.0, width=4.4, alpha=1.0, mb_px=0.0,
             c.drawCircle(hx, hy, 4.5, paint_fill(core, 0.9 * alpha / n * 2, blur=2, blend=skia.BlendMode.kScreen))
 
 
+def light_streak(c, pts, head_px, tail_px=1400.0, width=3.4, alpha=1.0, mb_px=0.0, core="#FFFFFF",
+                 color="#3CCBFF", bloom="#1A7BFF", flare=1.0, segs=120):
+    """Reference look (client still): a thin, near-straight beam with a white-hot core and cyan glow that fades
+    out toward its tail, led by a bright star flare with a horizontal anamorphic streak at the head.
+    head_px may run past the path end (the head then leaves the frame and the tail follows)."""
+    if alpha <= 0.003:
+        return
+    Q, s, L, _ = spline(pts)
+    h, t0 = (head_px + mb_px / 2) / L, (head_px - tail_px) / L
+    if h <= 0 or t0 >= 1:
+        return
+    a0, a1 = max(0.0, t0), min(1.0, h)
+    if a1 <= a0:
+        return
+    ss = np.linspace(a0, a1, segs + 1)
+    x, y = np.interp(ss, s, Q[:, 0]), np.interp(ss, s, Q[:, 1])
+    u = np.clip((ss - t0) / max(1e-6, h - t0), 0, 1)
+    av = u ** 1.6
+    if mb_px > 0:
+        av = av * np.clip((h - ss) * L / mb_px, 0, 1)
+    wv = 0.3 + 0.7 * u
+    bounds = R(x.min() - 80, y.min() - 80, x.max() - x.min() + 160, y.max() - y.min() + 160)
+
+    def strokes(wmul, amul, colr):
+        paint = skia.Paint(AntiAlias=True, Style=skia.Paint.kStroke_Style, StrokeCap=skia.Paint.kRound_Cap)
+        for i in range(segs):
+            ai = alpha * amul * (av[i] + av[i + 1]) / 2
+            if ai < 0.006:
+                continue
+            paint.setColor4f(col(colr, clamp(ai)))
+            paint.setStrokeWidth(width * wmul * (wv[i] + wv[i + 1]) / 2)
+            c.drawLine(x[i], y[i], x[i + 1], y[i + 1], paint)
+
+    def layer(sigma, wmul, amul, colr, blend):
+        lp = skia.Paint()
+        lp.setImageFilter(skia.ImageFilters.Blur(sigma, sigma, skia.TileMode.kDecal))
+        lp.setBlendMode(blend)
+        c.saveLayer(bounds, lp)
+        strokes(wmul, amul, colr)
+        c.restore()
+
+    layer(18, 10.0, 0.60, bloom, skia.BlendMode.kScreen)
+    layer(5, 3.6, 0.85, color, skia.BlendMode.kSrcOver)       # saturated cyan body reads on light surfaces too
+    layer(2, 2.2, 0.9, color, skia.BlendMode.kScreen)
+    layer(0.8, 1.6, 0.95, "#C8F4FF", skia.BlendMode.kSrcOver)
+    strokes(1.0, 1.0, core)
+    # the head: star flare + horizontal anamorphic streak
+    if flare > 0 and head_px <= L + 40:
+        q = min(1.0, max(0.0, head_px / L))
+        hx, hy = float(np.interp(q, s, Q[:, 0])), float(np.interp(q, s, Q[:, 1]))
+        k = alpha * flare
+        sb = skia.BlendMode.kScreen
+        for half, aa in ((640, 0.45), (300, 0.65)):
+            sh = skia.GradientShader.MakeLinear(
+                [skia.Point(hx - half, hy), skia.Point(hx + half, hy)],
+                [colint(color, 0.0), colint(color, aa * k), colint("#FFFFFF", min(1.0, aa * 1.6 * k)),
+                 colint(color, aa * k), colint(color, 0.0)], [0.0, 0.42, 0.5, 0.58, 1.0])
+            pp = skia.Paint(AntiAlias=True, Shader=sh, BlendMode=sb, Style=skia.Paint.kStroke_Style,
+                            StrokeWidth=3.0 if half > 400 else 1.8)
+            pp.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 1.6))
+            c.drawLine(hx - half, hy, hx + half, hy, pp)
+        for ang, ln in ((90, 70), (45, 38), (-45, 38)):
+            dx, dy = math.cos(math.radians(ang)) * ln, math.sin(math.radians(ang)) * ln
+            c.drawLine(hx - dx, hy - dy, hx + dx, hy + dy, paint_stroke("#FFFFFF", 0.7 * k, 1.8, blur=1.4, blend=sb))
+        c.drawCircle(hx, hy, 80, paint_fill(bloom, 0.45 * k, blur=40, blend=sb))
+        c.drawCircle(hx, hy, 28, paint_fill(color, 0.85 * k, blur=14, blend=sb))
+        c.drawCircle(hx, hy, 10, paint_fill(core, 1.0 * k, blur=4, blend=sb))
+        c.drawCircle(hx, hy, 4.5, paint_fill(core, 1.0 * k, blur=1.2))
+
+
 def path_len(pts):
     return spline(pts)[2]
 

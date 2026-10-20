@@ -333,6 +333,16 @@
     3840,
     2160
    ]
+  },
+  "r5_robot": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261020_084105_a672b202-ff59-4728-a37b-e219d3391983.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    854,
+    480
+   ],
+   "_note": "Seedance 2.5 480p draft (job a672b202-ff59-4728-a37b-e219d3391983), can be finalized to 1080p"
   }
  }
 }

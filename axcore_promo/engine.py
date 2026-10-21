@@ -765,10 +765,11 @@ def light_streak(c, pts, head_px, tail_px=1400.0, width=3.4, alpha=1.0, mb_px=0.
 
 
 def light_ribbon(c, pts, head, tail=0.45, behind=None, occluder=None, width=3.0, alpha=1.0, core="#FFFFFF",
-                 color="#3E9BFF", bloom="#1F6BFF", mb=0.0, segs=260):
+                 color="#3E9BFF", bloom="#1F6BFF", mb=0.0, segs=260, back_dim=None):
     """Smooth luminous line for dense, analytically generated curves (helices, loops): no control-point
     kinks. head / tail / mb are arc-length fractions of the path (head may run past 1). behind: per-point
-    flags; spans flagged True are hidden inside `occluder` (screen path) so the line wraps around objects."""
+    flags; spans flagged True are hidden inside `occluder` (screen path) so the line wraps around objects,
+    or, with back_dim and no occluder, simply dimmed (depth cue without breaking the line)."""
     if alpha <= 0.003 or head <= 0 or head - tail >= 1:
         return
     P = np.asarray(pts, float)
@@ -787,6 +788,9 @@ def light_ribbon(c, pts, head, tail=0.45, behind=None, occluder=None, width=3.0,
     av = u * u * (3 - 2 * u)
     if mb > 0:
         av = av * np.clip((h - ss) / mb, 0, 1)
+    if back_dim is not None and behind is not None:
+        far = np.interp(ss, sfrac, np.convolve(np.asarray(behind, float), np.ones(9) / 9, mode="same"))
+        av = av * (1 - (1 - back_dim) * far)                      # smooth fade into / out of the far side
     wv = 0.45 + 0.55 * u
     bounds = R(x.min() - 90, y.min() - 90, x.max() - x.min() + 180, y.max() - y.min() + 180)
 

@@ -12,7 +12,6 @@ import numpy as np
 import skia
 
 import engine as E
-import scenes as S
 
 out = sys.argv[1]
 dur = float(sys.argv[2]) if len(sys.argv) > 2 else 3.4
@@ -21,27 +20,34 @@ width = int(round(height * 16 / 9 / 2)) * 2
 W, H = E.W, E.H
 
 
-def helix(n=420, turns=1.7, r0=0.56, r1=0.05, theta0=math.pi * 0.92, flat=0.20, lag=0.0, rscale=1.0):
-    """Frame-0 uv points of a spiral climbing the tower, plus per-point 'behind' flags (far side)."""
-    bx, by, tx, ty = 0.50 * W, 1.10 * H, 0.505 * W, 0.08 * H
+def helix(n=480, turns=1.5, lag=0.0, rscale=1.0):
+    """Frame-0 uv points of a smooth vortex around the tower: enters wide from off-screen left, tightens into
+    wide flat perspective loops around the tower (front = lower half of each ellipse, far side passes behind
+    the tower) and opens out again to leave the frame upper right. Radius and centre are smooth functions of
+    the angle, so the curve has no corners. The far side is dimmed rather than cut, so the line never breaks."""
     uv, back = [], []
     for i in range(n):
         s = i / (n - 1)
-        k = s ** 0.85
-        cx, cy = bx + (tx - bx) * k, by + (ty - by) * k
-        r = (r0 + (r1 - r0) * s) * W * rscale
-        th = theta0 + 2 * math.pi * turns * (s - lag)
-        x, y = cx + r * math.cos(th), cy + r * flat * math.sin(th)
+        th = math.pi - 2 * math.pi * turns * (s - lag)
+        k = s * s * (3 - 2 * s)
+        cx = (0.47 + 0.03 * k) * W
+        cy = (0.88 - 0.66 * k) * H
+        rx = (0.26 + 0.62 * (2 * s - 1) ** 2) * W * rscale          # wide -> tight -> wide
+        ry = rx * (0.24 - 0.06 * k)
+        x, y = cx + rx * math.cos(th), cy + ry * math.sin(th)
         uv.append((x / W, y / H))
-        back.append(math.sin(th) < 0)            # upper half of the ellipse = far side of the tower
+        back.append(math.sin(th) < 0)
     return uv, back
+
+
+TOWER = [(0.085, 1.03), (0.43, 0.12), (0.465, 0.12), (1.03, 0.62), (1.03, 1.03)]   # frame-0 silhouette
 
 
 STRANDS = [  # (helix kwargs, width, alpha, head delay)
     (dict(), 3.0, 1.0, 0.0),
-    (dict(rscale=1.06, lag=0.025, theta0=math.pi * 0.95), 1.6, 0.55, 0.06),
+    (dict(rscale=1.05, lag=0.02), 1.5, 0.5, 0.05),
 ]
-TAIL, T0, TRAVEL = 0.55, 0.1, 3.1
+TAIL, T0, TRAVEL = 0.5, -0.3, 3.4
 
 E.configure(E.SEED, E.CHAOS)
 surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(W, H, skia.ColorType.kRGBA_8888_ColorType,
@@ -63,12 +69,11 @@ for f in range(int(round(dur * E.FPS))):
     c = surf.getCanvas()
     c.clear(skia.Color4f(0, 0, 0, 1))
     cam = E.draw_plate(c, "02_tower", t, dur, s=(1.0, 1.0))
-    occ = E.poly(E.flow_pts(cam, S.SC02_TOWER, "tower"), True)
     for (kw, wd, al, delay), (uv, back) in zip(STRANDS, paths):
         pts = E.flow_pts(cam, uv, "tower")
         hd = head_at(t, delay)
         mb = abs(head_at(t + 1 / 96, delay) - head_at(t - 1 / 96, delay)) * 2     # full-frame shutter
-        E.light_ribbon(c, pts, hd, TAIL, behind=back, occluder=occ, width=wd, alpha=al, mb=mb)
+        E.light_ribbon(c, pts, hd, TAIL, behind=back, width=wd, alpha=al, mb=mb, back_dim=0.35)
     enc.stdin.write(surf.makeImageSnapshot().toarray()[..., :3].tobytes())
 enc.stdin.close()
 enc.wait()

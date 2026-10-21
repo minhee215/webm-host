@@ -9,9 +9,11 @@ layered core):
              up and gets its label as the line passes; spokes link the areas to the core
   2.95-3.90  "것부터 시작됩니다": the camera tilts from the top view into SC05's isometric view; the core's
              glass layers separate
-  last 0.42  dissolves into SC05's own opening frames, so the cut to SC05 at 18:11 is continuous
+  last 0.42  the glass cards fill with SC05's footage tiles (SC05 with its opening build already complete)
+--sc05-head renders the matching replacement for SC05's opening, timeline 18:11-20:08 (from 20:09 on it is
+identical to the original SC05), so the map never disappears and rebuilds at the cut.
 23.976 fps, 21:9 letterbox. Labels in English (Pretendard, same pill style as SC05).
-Usage: python3 seg_understand.py <out.mp4> [height=480] [frames=102] [first last]
+Usage: python3 seg_understand.py [--sc05-head] <out.mp4> [height=480] [frames=102] [first last]
 """
 import math
 import subprocess
@@ -196,13 +198,41 @@ def render(c, t, f, nf):
         lp.setAlphaf(a_s)
         c.saveLayer(None, lp)
         Tn = T_SC05_LAST - (nf - 1 - f) / 24.0
-        S.sc05(c, Tn, Tn - S.SC05_T0, 9.75)
+        sc05_formed(c, Tn)
         c.restore()
 
 
 e_out_expo = E.e_out_expo
 
+_ENTER, _PROG = S.enter, S.prog
+
+
+def _formed_enter(t, t0, d=0.6, *a, **kw):
+    return 1.0 if 17.29 < t0 < 18.2 else _ENTER(t, t0, d, *a, **kw)
+
+
+def _formed_prog(t, t0, d):
+    if (abs(t0 - 17.3) < 1e-6 and abs(d - 1.2) < 1e-6) or (17.6 <= t0 <= 18.45 and abs(d - 0.9) < 1e-6):
+        return 1.0
+    return _PROG(t, t0, d)
+
+
+def sc05_formed(c, T):
+    """SC05 with its opening build already complete (tiles, links, grid and core in place): the map built in
+    this segment simply becomes SC05. From T >= 19.32 it is identical to the original SC05."""
+    S.enter, S.prog = _formed_enter, _formed_prog
+    try:
+        S.sc05(c, T, T - S.SC05_T0, 9.75)
+    finally:
+        S.enter, S.prog = _ENTER, _PROG
+
+
+SC05_HEAD = (443, 489)           # timeline frames 18:11 .. 20:08 replace SC05's opening build
+
 if __name__ == "__main__":
+    HEAD = sys.argv[1] == "--sc05-head"
+    if HEAD:
+        sys.argv.pop(1)
     out = sys.argv[1]
     height = int(sys.argv[2]) if len(sys.argv) > 2 else 480
     NF = int(sys.argv[3]) if len(sys.argv) > 3 else NF_DEFAULT
@@ -219,13 +249,17 @@ if __name__ == "__main__":
                             "-vf", "scale=%d:%d:flags=lanczos" % (width, height),
                             "-c:v", "libx264", "-preset", "medium", "-crf", "18" if SC == 1 else "14",
                             "-pix_fmt", "yuv420p", "-movflags", "+faststart", out], stdin=subprocess.PIPE)
-    for f in range(F0, F1):
+    frames = range(*SC05_HEAD) if HEAD else range(F0, F1)
+    for f in frames:
         t = f * DT
         c = surf.getCanvas()
         c.clear(skia.Color4f(0, 0, 0, 1))
         c.save()
         c.scale(SC, SC)
-        render(c, t, f, NF)
+        if HEAD:
+            sc05_formed(c, f / 24.0 - 1.0)       # timeline frame -> SC05 scene time
+        else:
+            render(c, t, f, NF)
         c.drawRect(R(0, 0, W, BAR), paint_fill("#000000"))
         c.drawRect(R(0, H - BAR, W, BAR), paint_fill("#000000"))
         c.restore()

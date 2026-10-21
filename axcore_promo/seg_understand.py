@@ -142,7 +142,7 @@ def scan_sweep(c, quad, k, a):
 
 def render(c, t, f, nf):
     t_last = (nf - 1) * DT
-    T_iso = T_SC05_LAST
+    T_iso = T_SC05_LAST - (nf - 1 - f) / 24.0              # running SC05 clock: footage plays, lands on SC05
     Pi, _ = S.s5_iso(T_iso)
     tw = where_t(t)
     cam = where_cam(tw)

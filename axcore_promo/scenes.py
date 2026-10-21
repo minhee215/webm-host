@@ -880,7 +880,7 @@ def projection(c, cam, screen_uv, panel, a):
 
 
 # ============================================================ SC09 enterprise: add / remove the 8 core modules
-# Front close-up of a hand tapping a tablet; above it a glass M-AI-Works workspace (layout after the
+# Front close-up of a hand tapping a tablet; above it a glass Workspace panel (layout after the
 # product sheet: Ontology AI bar, 8 core function columns, AI Agent column, BI row). Each tap sends a
 # module up from the screen into its column; one module is removed and drops back into the tablet.
 ENT_COLS = [("경영관리", ["인사", "급여", "회계"]), ("제품설계", ["도면", "BOM"]), ("생산관리", ["모니터링", "작업 지시"]),
@@ -946,7 +946,7 @@ def sc09(c, T, t, d):
     a = clamp(pk * 1.4)
     solid = e_io_cubic(prog(T, ENT_DONE, 0.8))
     glass(c, P, 24, a, tint=WHITE, tint_a=lerp(0.55, 0.72, solid), blur=30, border=0.95, shadow=0.24, highlight=0.18)
-    text(c, "M-AI-Works", P.left() + 32, P.top() + 46, 26, "Bold", INK, a)
+    text(c, "Workspace", P.left() + 32, P.top() + 46, 26, "Bold", INK, a)
     dk = e_out_expo(prog(T, ENT_DONE, 0.6))
     text(c, "우리 회사 맞춤 워크스페이스", P.right() - 32, P.top() + 44, 18, "SemiBold", BLUE, a * dk, "right")
     mx0, mw = P.left() + 216, P.width() - 240
@@ -1050,9 +1050,7 @@ def sc09(c, T, t, d):
         glass(c, chip, 20, 1.0 - (0.6 * f if out else 0), tint=WHITE, tint_a=0.85, blur=10, border=0.9, shadow=0.2,
               glow=0.8, glow_col=BLUE if not out else STEEL)
         text(c, name, chip.centerX(), chip.centerY() + 6, 15, "SemiBold", INK, 1.0 - (0.6 * f if out else 0), "center")
-    for i in range(8):
-        ripple(c, tip[0], tip[1], T, ENT_ADD0 + i * ENT_ADDS - 0.05)
-    ripple(c, tip[0], tip[1], T, ENT_RM_T + 0.15, STEEL)
+    # (no tap ripples at the fingertip: they read as a cursor chasing the hand)
 
 
 # ============================================================ SC10 one connected work environment (glass cards around a glass core)

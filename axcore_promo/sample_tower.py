@@ -47,7 +47,7 @@ STRANDS = [  # (helix kwargs, width, alpha, head delay)
     (dict(), 3.0, 1.0, 0.0),
     (dict(rscale=1.05, lag=0.02), 1.5, 0.5, 0.05),
 ]
-TAIL, T0, TRAVEL = 0.5, -0.3, 3.4
+TAIL, T0, TRAVEL = 0.6, -0.9, 4.2
 
 E.configure(E.SEED, E.CHAOS)
 surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(W, H, skia.ColorType.kRGBA_8888_ColorType,

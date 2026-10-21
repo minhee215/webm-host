@@ -1,5 +1,5 @@
-"""Low-res sample of the wind-farm shot with the same light ribbon as the tower sample: one flowing curve
-that sweeps in from the left and wraps the turbines in wide tilted loops (reference: client still).
+"""Low-res sample of the wind-farm shot with the same light ribbon as the tower sample: one long, smooth
+sweep from lower left to upper right between the turbines (no loops around them).
 
 The curve is a cubic B-spline of a control polygon, so it is C2-smooth - it cannot kink. Far sides of the
 loops are dimmed (never cut). Lines follow the tracked footage.
@@ -20,17 +20,11 @@ height = int(sys.argv[4]) if len(sys.argv) > 4 else 480
 width = int(round(height * 16 / 9 / 2)) * 2
 W, H = E.W, E.H
 
-# One flowing curve (control polygon, frame uv, Seedance framing) that sweeps in low from the left, wraps the
-# middle turbine in a wide tilted loop, flows on and wraps the big turbine, then leaves upper right.
-# Third value: 1 on the far side of a loop (dimmed there, never cut).
+# One long, smooth sweep (control polygon, frame uv, Seedance framing): in low from the left past the engineer,
+# a gentle dip between the turbines, then rising away to the upper right. No loops around anything.
 CTRL = [
-    (-0.12, 0.82, 0), (0.05, 0.77, 0), (0.18, 0.72, 0), (0.30, 0.675, 0),
-    # middle turbine (tower u 0.435): tilted loop at mid-tower - front low-left to right, behind across, back
-    (0.40, 0.645, 0), (0.50, 0.61, 0), (0.545, 0.545, 1), (0.47, 0.50, 1), (0.385, 0.52, 1), (0.40, 0.58, 0),
-    (0.50, 0.575, 0), (0.58, 0.55, 0),
-    # big turbine (tower u 0.655): larger tilted loop at mid-tower, then off to the upper right
-    (0.66, 0.53, 0), (0.755, 0.49, 0), (0.78, 0.425, 1), (0.69, 0.38, 1), (0.60, 0.40, 1), (0.61, 0.465, 0),
-    (0.72, 0.46, 0), (0.85, 0.41, 0), (0.98, 0.36, 0), (1.14, 0.31, 0),
+    (-0.12, 0.85, 0), (0.06, 0.78, 0), (0.22, 0.69, 0), (0.36, 0.62, 0), (0.50, 0.60, 0), (0.62, 0.57, 0),
+    (0.73, 0.50, 0), (0.83, 0.40, 0), (0.93, 0.31, 0), (1.14, 0.22, 0),
 ]
 
 
@@ -44,7 +38,7 @@ def ribbon(rscale=1.0, n=900):
     return [(x, y) for x, y in B[:, :2]], list(B[:, 2])
 
 
-STRANDS = [(dict(), 3.0, 1.0, 0.0), (dict(rscale=1.04), 1.5, 0.5, 0.035)]
+STRANDS = [(dict(), 3.0, 1.0, 0.0), (dict(rscale=1.06), 1.5, 0.5, 0.035)]
 TAIL, T0, TRAVEL = 0.9, -0.15, 2.15
 
 E.configure(E.SEED, E.CHAOS)

@@ -174,6 +174,9 @@ def render(c, t, f, nf):
                                          tw + 0.31 * SW.ORDER.index(CELL_CLIP[r_c])), q, 1 - swap, SW.GRADE)
         if swap > 0:
             S.s5_video(c, name, q, T_iso + list(clip_of).index(lab) * 0.7, swap, foc)
+        dim = 0.62 * (1 - e_io_sine(prog(t, 0.3, 0.9)))     # the previous scene ends with these windows dimmed
+        if dim > 0.003:
+            c.drawPath(E.poly(q, True), paint_fill("#030814", dim))
         # glass edge: SC05's slab once the tile has landed, lit cyan as the workflow passes it
         edge_a = clamp(u * 1.3 - 0.3)
         if edge_a > 0:

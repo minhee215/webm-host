@@ -25,15 +25,27 @@ import engine as E
 import media
 from engine import W, H, R, clamp, lerp, prog, e_io_cubic, e_out_cubic, e_io_sine, paint_fill, paint_stroke, col
 
-out = sys.argv[1]
-height = int(sys.argv[2]) if len(sys.argv) > 2 else 480
-NF = int(sys.argv[3]) if len(sys.argv) > 3 else 146
-F0, F1 = (int(sys.argv[4]), int(sys.argv[5])) if len(sys.argv) > 5 else (0, NF)
-HD = height > 1080
-if HD:
-    media.MAX_READERS = 24          # every panel streams its full-resolution clip
+out, height, NF, F0, F1, HD = None, 480, 146, 0, 146, False
 HD_NAME = {"r3_wind": "r3_wind_hd"}
-width = int(round(height * 16 / 9 / 2)) * 2
+width = 854
+
+
+def setup(argv=None, hd=None):
+    """Command-line settings (also used when another segment imports this one)."""
+    global out, height, NF, F0, F1, HD, width
+    if argv:
+        out = argv[1]
+        height = int(argv[2]) if len(argv) > 2 else 480
+        NF = int(argv[3]) if len(argv) > 3 else 146
+        F0, F1 = (int(argv[4]), int(argv[5])) if len(argv) > 5 else (0, NF)
+        HD = height > 1080
+    if hd is not None:
+        HD = hd
+    if HD:
+        media.MAX_READERS = 24          # every panel streams its full-resolution clip
+    width = int(round(height * 16 / 9 / 2)) * 2
+
+
 FPS_NUM, FPS_DEN = 24000, 1001
 DT = FPS_DEN / FPS_NUM
 BAR = 138                      # 21:9 letterbox in 1080 logical px (276 at 4K)
@@ -400,27 +412,29 @@ def render(c, t):
     c.restore()
 
 
-E.configure(E.SEED, E.CHAOS)
-SC = max(1.0, height / H)            # above 1080p the composite is drawn natively at the output size
-SW, SH = int(round(W * SC)), int(round(H * SC))
-surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(SW, SH, skia.ColorType.kRGBA_8888_ColorType,
-                                                   skia.AlphaType.kPremul_AlphaType))
-enc = subprocess.Popen(["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
-                        "-s", "%dx%d" % (SW, SH), "-r", "%d/%d" % (FPS_NUM, FPS_DEN), "-i", "-",
-                        "-vf", "scale=%d:%d:flags=lanczos" % (width, height),
-                        "-c:v", "libx264", "-preset", "medium", "-crf", "18" if not HD else "14",
-                        "-pix_fmt", "yuv420p", "-movflags", "+faststart", out], stdin=subprocess.PIPE)
-for f in range(F0, F1):
-    t = f * DT
-    c = surf.getCanvas()
-    c.clear(skia.Color4f(0, 0, 0, 1))
-    c.save()
-    c.scale(SC, SC)
-    render(c, t)
-    c.drawRect(R(0, 0, W, BAR), paint_fill("#000000"))
-    c.drawRect(R(0, H - BAR, W, BAR), paint_fill("#000000"))
-    c.restore()
-    enc.stdin.write(surf.makeImageSnapshot().toarray()[..., :3].tobytes())
-enc.stdin.close()
-enc.wait()
-print(out)
+if __name__ == "__main__":
+    setup(sys.argv)
+    E.configure(E.SEED, E.CHAOS)
+    SC = max(1.0, height / H)            # above 1080p the composite is drawn natively at the output size
+    SW, SH = int(round(W * SC)), int(round(H * SC))
+    surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(SW, SH, skia.ColorType.kRGBA_8888_ColorType,
+                                                       skia.AlphaType.kPremul_AlphaType))
+    enc = subprocess.Popen(["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
+                            "-s", "%dx%d" % (SW, SH), "-r", "%d/%d" % (FPS_NUM, FPS_DEN), "-i", "-",
+                            "-vf", "scale=%d:%d:flags=lanczos" % (width, height),
+                            "-c:v", "libx264", "-preset", "medium", "-crf", "18" if not HD else "14",
+                            "-pix_fmt", "yuv420p", "-movflags", "+faststart", out], stdin=subprocess.PIPE)
+    for f in range(F0, F1):
+        t = f * DT
+        c = surf.getCanvas()
+        c.clear(skia.Color4f(0, 0, 0, 1))
+        c.save()
+        c.scale(SC, SC)
+        render(c, t)
+        c.drawRect(R(0, 0, W, BAR), paint_fill("#000000"))
+        c.drawRect(R(0, H - BAR, W, BAR), paint_fill("#000000"))
+        c.restore()
+        enc.stdin.write(surf.makeImageSnapshot().toarray()[..., :3].tobytes())
+    enc.stdin.close()
+    enc.wait()
+    print(out)

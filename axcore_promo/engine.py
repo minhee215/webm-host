@@ -823,6 +823,7 @@ def light_ribbon(c, pts, head, tail=0.45, behind=None, occluder=None, width=3.0,
         c.restore()
 
     layer(22, 11.0, 0.55, bloom, skia.BlendMode.kScreen)        # soft bloom
+    layer(5, 4.2, 0.55, color, skia.BlendMode.kSrcOver)         # saturated blue body (reads on bright skies)
     layer(6, 4.0, 0.85, color, skia.BlendMode.kScreen)          # blue glow
     layer(1.5, 2.0, 0.9, "#BFE0FF", skia.BlendMode.kScreen)     # pale rim
     strokes(1.0, 1.0, core)                                      # white core

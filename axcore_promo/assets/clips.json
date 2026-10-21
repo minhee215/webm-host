@@ -343,6 +343,16 @@
     480
    ],
    "_note": "Seedance 2.5 480p draft (job a672b202-ff59-4728-a37b-e219d3391983), can be finalized to 1080p"
+  },
+  "r3_wind": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261021_020820_4d5cad02-e889-4237-82e7-ad605a5fd3d7.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    854,
+    480
+   ],
+   "_note": "Seedance 2.5 480p draft (job 4d5cad02-e889-4237-82e7-ad605a5fd3d7), can be finalized to 1080p"
   }
  }
 }

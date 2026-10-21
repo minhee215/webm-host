@@ -1,9 +1,8 @@
-"""Low-res sample of the wind-farm shot with one smooth light ribbon that sweeps in from the left and wraps
-each turbine in a wide, flat perspective loop (reference: client still with looping lines).
+"""Low-res sample of the wind-farm shot with the same light ribbon as the tower sample: one flowing curve
+that sweeps in from the left and wraps the turbines in wide tilted loops (reference: client still).
 
-The curve is analytic and densely sampled: a gentle baseline from lower left to upper right, plus loops whose
-radius swells from zero and back around each turbine while the angle turns one full revolution - no kinks.
-Far sides of the loops are dimmed (never cut). Lines follow the tracked footage.
+The curve is a cubic B-spline of a control polygon, so it is C2-smooth - it cannot kink. Far sides of the
+loops are dimmed (never cut). Lines follow the tracked footage.
 Usage: python3 sample_wind.py <clip> <out.mp4> [seconds=2.0] [height=480]
 """
 import math
@@ -21,41 +20,29 @@ height = int(sys.argv[4]) if len(sys.argv) > 4 else 480
 width = int(round(height * 16 / 9 / 2)) * 2
 W, H = E.W, E.H
 
-BASE = [(-0.08, 0.80), (0.15, 0.72), (0.30, 0.65), (0.435, 0.60), (0.55, 0.555), (0.655, 0.51), (0.80, 0.45),
-        (1.10, 0.36)]                                         # frame uv (Seedance framing), lower left -> upper right
-LOOPS = [  # (turbine u, half-width rx as fraction of W, flatness ry/rx); the loop hangs on the baseline
-    (0.435, 0.062, 0.26),
-    (0.655, 0.088, 0.26),
+# One flowing curve (control polygon, frame uv, Seedance framing) that sweeps in low from the left, wraps the
+# middle turbine in a wide tilted loop, flows on and wraps the big turbine, then leaves upper right.
+# Third value: 1 on the far side of a loop (dimmed there, never cut).
+CTRL = [
+    (-0.12, 0.78, 0), (0.06, 0.72, 0), (0.20, 0.67, 0), (0.31, 0.63, 0),
+    (0.40, 0.615, 0), (0.50, 0.585, 0), (0.53, 0.54, 1), (0.44, 0.515, 1), (0.355, 0.545, 1), (0.39, 0.59, 0),
+    (0.50, 0.575, 0), (0.60, 0.525, 0), (0.70, 0.49, 0), (0.775, 0.44, 0), (0.76, 0.395, 1),
+    (0.65, 0.385, 1), (0.555, 0.425, 1), (0.585, 0.475, 0), (0.71, 0.455, 0), (0.83, 0.405, 0),
+    (0.96, 0.355, 0), (1.14, 0.30, 0),
 ]
 
 
-def ribbon(n=700, m=320, rscale=1.0):
-    """Baseline with one full perspective ellipse spliced in at each turbine. Each ellipse starts and ends at
-    its lowest (front) point, where its tangent points right like the baseline's, so the splice is seamless:
-    no corners anywhere. Far side of each loop flagged for dimming."""
-    Q, _, _, _ = E.spline([(u * W, v * H) for (u, v) in BASE], n=1200)
-    xs = np.linspace(-0.08, 1.10, n) * W
-    ys = np.interp(xs, Q[:, 0], Q[:, 1])
-    pts, back = [], []
-    loops = sorted(LOOPS)
-    k = 0
-    for i in range(n):
-        pts.append((xs[i] / W, ys[i] / H))
-        back.append(False)
-        while k < len(loops) and i + 1 < n and xs[i] <= loops[k][0] * W < xs[i + 1]:
-            cu, rx, flat = loops[k]
-            rx, ry = rx * W * rscale, rx * W * rscale * flat
-            by = np.interp(cu * W, xs, ys)
-            cx, cy = cu * W, by - ry                                  # lowest point sits on the baseline
-            for j in range(1, m):
-                th = math.pi / 2 - 2 * math.pi * j / m               # front (moving right) -> right -> back -> left
-                pts.append(((cx + rx * math.cos(th)) / W, (cy + ry * math.sin(th)) / H))
-                back.append(math.sin(th) < 0)
-            k += 1
-    return pts, back
+def ribbon(rscale=1.0, n=900):
+    """Smooth B-spline of the control polygon; rscale widens the loops slightly for the companion strand."""
+    C = np.asarray(CTRL, float)
+    if rscale != 1.0:
+        c = C[:, :2].mean(0)
+        C[:, :2] = c + (C[:, :2] - c) * [1.0, rscale]
+    B = E.bspline(C, n)
+    return [(x, y) for x, y in B[:, :2]], list(B[:, 2])
 
 
-STRANDS = [(dict(), 3.2, 1.0, 0.0), (dict(rscale=1.08), 1.6, 0.5, 0.035)]
+STRANDS = [(dict(), 3.0, 1.0, 0.0), (dict(rscale=1.04), 1.5, 0.5, 0.035)]
 TAIL, T0, TRAVEL = 0.75, -0.25, 2.3
 
 E.configure(E.SEED, E.CHAOS)

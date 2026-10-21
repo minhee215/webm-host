@@ -823,7 +823,6 @@ def light_ribbon(c, pts, head, tail=0.45, behind=None, occluder=None, width=3.0,
         c.restore()
 
     layer(22, 11.0, 0.55, bloom, skia.BlendMode.kScreen)        # soft bloom
-    layer(5, 4.2, 0.55, color, skia.BlendMode.kSrcOver)         # saturated blue body (reads on bright skies)
     layer(6, 4.0, 0.85, color, skia.BlendMode.kScreen)          # blue glow
     layer(1.5, 2.0, 0.9, "#BFE0FF", skia.BlendMode.kScreen)     # pale rim
     strokes(1.0, 1.0, core)                                      # white core
@@ -831,6 +830,21 @@ def light_ribbon(c, pts, head, tail=0.45, behind=None, occluder=None, width=3.0,
         hx, hy = x[-1], y[-1]
         c.drawCircle(hx, hy, 26, paint_fill(color, 0.45 * alpha, blur=14, blend=skia.BlendMode.kScreen))
         c.drawCircle(hx, hy, 6, paint_fill(core, 0.9 * alpha, blur=2.5, blend=skia.BlendMode.kScreen))
+
+
+def bspline(ctrl, n=600):
+    """Clamped uniform cubic B-spline through a control polygon (C2-smooth: it can never form a corner).
+    ctrl rows may carry extra columns (e.g. a 'behind' weight) that are smoothed along with the position."""
+    P = np.asarray(ctrl, float)
+    P = np.vstack([P[:1], P[:1], P, P[-1:], P[-1:]])
+    segs = len(P) - 3
+    t = np.linspace(0, segs, n, endpoint=False)
+    i = np.minimum(t.astype(int), segs - 1)
+    u = (t - i)[:, None]
+    b0, b1 = (1 - u) ** 3 / 6, (3 * u ** 3 - 6 * u ** 2 + 4) / 6
+    b2, b3 = (-3 * u ** 3 + 3 * u ** 2 + 3 * u + 1) / 6, u ** 3 / 6
+    out = b0 * P[i] + b1 * P[i + 1] + b2 * P[i + 2] + b3 * P[i + 3]
+    return np.vstack([out, P[-1:]])
 
 
 def path_len(pts):

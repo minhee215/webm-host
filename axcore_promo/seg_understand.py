@@ -3,12 +3,12 @@
 Graphic bridge between the locked facade grid (end of seg_where) and SC05 (isometric glass tiles around a
 layered core):
   0.00-0.30  continues the locked grid exactly, then dissolves into this scene
-  0.25-1.40  "기업의 AI 전환은": the windows drain to glass cards and glide (top view) into a ring - the eight
-             business areas of SC05 at their SC05 positions; the locked window becomes the central core
-  1.45-3.20  "업무를 이해하는": one smooth blue line runs the whole workflow around the ring, each area lights
-             up and gets its label as the line passes; spokes link the areas to the core
-  2.95-3.90  "것부터 시작됩니다": the camera tilts from the top view into SC05's isometric view; the core's
-             glass layers separate
+  0.30-1.80  "기업의 AI 전환은": the facade lies down - each window travels straight into its SC05 tile in
+             the isometric view, its footage turning into that business area's footage; the locked window
+             drops into the centre and rises as SC05's layered glass core (no flat top view, no empty cards)
+  1.25-3.30  "업무를 이해하는": one smooth blue line runs through every business area; each tile lights, a scan
+             band reads across it and its label comes up as the line passes
+  2.90-3.60  "것부터 시작됩니다": spokes link every area to the core, the core pulses
   last 0.42  the glass cards fill with SC05's footage tiles (SC05 with its opening build already complete)
 --sc05-head renders the matching replacement for SC05's opening, timeline 18:11-20:08 (from 20:09 on it is
 identical to the original SC05), so the map never disappears and rebuilds at the cut.
@@ -121,65 +121,90 @@ RING_AT = {lab: float(RING_S[_FIRST][np.argmin(np.linalg.norm(RING_W[_FIRST] - n
 
 
 def head_at(t):
-    return 1.42 * e_io_sine(prog(t, 1.45, 1.75)) - 0.02
+    return 1.40 * e_io_sine(prog(t, 1.25, 2.05)) - 0.02
+
+
+def scan_sweep(c, quad, k, a):
+    """A bright band sweeping across a tile (k 0..1) - the area being read."""
+    if a <= 0.003 or not 0 < k < 1:
+        return
+    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = quad
+    u0, u1 = max(0.0, k - 0.12), min(1.0, k)
+    band = [(lerp(x0, x1, u0), lerp(y0, y1, u0)), (lerp(x0, x1, u1), lerp(y0, y1, u1)),
+            (lerp(x3, x2, u1), lerp(y3, y2, u1)), (lerp(x3, x2, u0), lerp(y3, y2, u0))]
+    c.save()
+    c.clipPath(E.poly(quad, True), skia.ClipOp.kIntersect, True)
+    c.drawPath(E.poly(band, True), paint_fill(S.CYAN, 0.28 * a, blur=6, blend=skia.BlendMode.kScreen))
+    lead = [(lerp(x0, x1, u1), lerp(y0, y1, u1)), (lerp(x3, x2, u1), lerp(y3, y2, u1))]
+    c.drawPath(E.poly(lead), paint_stroke("#E6F7FF", 0.9 * a, 2.0))
+    c.restore()
 
 
 def render(c, t, f, nf):
     t_last = (nf - 1) * DT
     T_iso = T_SC05_LAST
-    k = e_io_cubic(prog(t, 2.95, 0.95))                     # top view -> SC05 iso view
-    P = make_P(k, T_iso)
+    Pi, _ = S.s5_iso(T_iso)
     tw = where_t(t)
     cam = where_cam(tw)
-    b = e_io_cubic(prog(t, 0.1, 0.9))                       # facade wall -> SC05 stage
+    b = e_io_cubic(prog(t, 0.15, 1.1))                      # facade wall -> SC05 stage
 
     c.clear(col("#040A14"))
-    stage(c, P, b)
+    stage(c, Pi, b)
     SW.facade_wall(c, 1 - b, cam)
 
-    # windows -> glass cards (top view), locked window -> core
     head = head_at(t)
-    labels = []
+    labels, tiles = [], []
+    clip_of = {lab: (name, foc) for (name, _, lab, _, foc) in S.S5_TILES}
     for i, ((r, cc), lab) in enumerate(CELL_AREA.items()):
-        u = e_io_cubic(prog(t, 0.25 + 0.035 * i, 1.0))
-        wq = SW.project(SW.cell_params(CELL_CLIP[(r, cc)]), cam)
+        # the facade lies down: each window travels straight into its SC05 tile (no flat top view)
+        u = e_io_cubic(prog(t, 0.3 + 0.045 * i, 1.35))
         x, z = TILES[lab]
-        q = qmix(wq, card_quad(P, x, z), u)
-        foot = 1 - e_io_cubic(prog(t, 0.2, 0.75))
-        lit = e_out_cubic(clamp((head - RING_AT[lab]) / 0.05)) if head > 0 else 0.0
-        fade = 1 - e_io_sine(prog(t, t_last - 0.42, 0.42))  # hand over to SC05's own tiles
-        if foot > 0:
-            SW.draw_quad(c, SW.frame_img(CELL_CLIP[(r, cc)], tw + 0.31 * SW.ORDER.index(CELL_CLIP[(r, cc)])),
-                         q, foot, SW.GRADE)
-            c.drawPath(E.poly(q, True), paint_fill("#030814", 0.62 * foot))
-        glass_card(c, q, fade, lit)
-        card_glyph(c, P, x, z, fade * u * (1 - foot), lit)
-        # spokes to the core (same links SC05 draws)
-        g = e_out_expo(prog(t, 2.75 + 0.04 * i, 0.6))
+        y = 0.25 + 0.06 * math.sin(T_iso * 1.1 + [l for (_, _, l, _, _) in S.S5_TILES].index(lab))
+        wq = SW.project(SW.cell_params(CELL_CLIP[(r, cc)]), cam)
+        tq = card_quad(Pi, x, z, y)
+        q = qmix(wq, tq, u)
+        tiles.append((q, tq, x, y, z, lab, u, i))
+    tiles.sort(key=lambda it: it[1][0][1])                 # far (upper) tiles first
+    for (q, tq, x, y, z, lab, u, i) in tiles:
+        name, foc = clip_of[lab]
+        swap = e_io_sine(prog(t, 0.55 + 0.04 * i, 0.9))       # window footage -> this area's footage
+        lit = e_out_cubic(clamp((head - RING_AT[lab]) / 0.04)) if head > 0 else 0.0
+        if swap < 1:
+            SW.draw_quad(c, SW.frame_img(CELL_CLIP[(r_c := [k_ for k_, v in CELL_AREA.items() if v == lab][0])],
+                                         tw + 0.31 * SW.ORDER.index(CELL_CLIP[r_c])), q, 1 - swap, SW.GRADE)
+        if swap > 0:
+            S.s5_video(c, name, q, T_iso + list(clip_of).index(lab) * 0.7, swap, foc)
+        # glass edge: SC05's slab once the tile has landed, lit cyan as the workflow passes it
+        edge_a = clamp(u * 1.3 - 0.3)
+        if edge_a > 0:
+            S.s5_slab(c, Pi, x, z, 2.5, 1.6, y, edge_a, top=0.0, edge=S.CYAN if lit > 0.5 else "#7FA6FF",
+                      glow=0.9 * lit * (1 - 0.6 * e_io_sine(prog(t, 3.4, 0.6))))
+        c.drawPath(E.poly(q, True), paint_stroke("#9AD8FF", 0.6 * (1 - edge_a), 1.4))
+        scan_sweep(c, tq, clamp((head - RING_AT[lab]) / 0.10), 1.0)
+        # spokes to the core (the links SC05 draws)
+        g = e_out_expo(prog(t, 2.9 + 0.04 * i, 0.6))
         if g > 0:
-            p0, p1 = P(x * 0.62, 0.02, z * 0.62), P(x * 0.3, 0.02, z * 0.3)
-            E.line(c, E.poly([p0, p1]), S.CYAN, 0.8 * fade, 1.4, (0, g), glow=0.5)
-        lx, ly = P(x - 1.25, 0.25, z + 0.8)
-        la = clamp(u * 1.4 - 0.4) * (0.45 + 0.55 * lit) * fade
-        labels.append((lx + 6, ly + 22, lab, la))
+            p0, p1 = Pi(x * 0.62, 0.02, z * 0.62), Pi(x * 0.3, 0.02, z * 0.3)
+            E.line(c, E.poly([p0, p1]), S.CYAN, 0.8, 1.4, (0, g), glow=0.5)
+        lx, ly = Pi(x - 1.25, y, z + 0.8)
+        labels.append((lx + 6, ly + 22, lab, clamp(u * 1.6 - 0.6) * (0.55 + 0.45 * max(lit, prog(t, 3.4, 0.5)))))
 
-    # core: the locked window shrinks into the centre and becomes SC05's layered glass core
+    # core: the locked window drops into the centre and rises as SC05's layered glass core
     tq = SW.project(SW.cell_params(SW.TARGET), cam)
-    u = e_io_cubic(prog(t, 0.25, 1.0))
-    core_q = qmix(tq, card_quad(P, 0, 0, 0.0, 1.9, 1.9), u)
-    core_a = e_out_cubic(prog(t, 0.75, 0.6))
-    foot = 1 - e_io_cubic(prog(t, 0.2, 0.75))
+    u = e_io_cubic(prog(t, 0.3, 1.2))
+    core_q = qmix(tq, card_quad(Pi, 0, 0, 0.0, 1.9, 1.9), u)
+    foot = 1 - e_io_cubic(prog(t, 0.45, 0.9))
     if foot > 0:
         SW.draw_quad(c, SW.frame_img(SW.TARGET, tw, True), core_q, foot, None)
         SW.brackets(c, core_q, foot)
-    glass_card(c, core_q, (1 - core_a), 1.0)
-    S.s5_core(c, P, T_iso, core_a, pulse_=0.3 * e_out_cubic(prog(t, 3.0, 0.5)))
+    core_a = e_out_cubic(prog(t, 0.9, 0.7))
+    S.s5_core(c, Pi, T_iso, core_a, pulse_=0.35 * e_out_cubic(prog(t, 3.0, 0.5)))
 
-    # the workflow: one smooth blue line around every business area
+    # the workflow: one smooth blue line through every business area
     if head > 0:
-        pts = [P(*p) for p in RING_W]
+        pts = [Pi(*p) for p in RING_W]
         mb = abs(head_at(t + DT / 2) - head_at(t - DT / 2)) * 2
-        E.light_ribbon(c, pts, head, 0.42, width=3.0, alpha=1 - e_io_sine(prog(t, t_last - 0.5, 0.45)), mb=mb)
+        E.light_ribbon(c, pts, head, 0.38, width=3.2, alpha=1 - e_io_sine(prog(t, 3.35, 0.55)), mb=mb)
 
     for (lx, ly, lab, la) in labels:
         S.s5_label(c, lx, ly, lab, la)
@@ -192,7 +217,7 @@ def render(c, t, f, nf):
         c.saveLayer(None, lp)
         SW.render(c, tw)
         c.restore()
-    a_s = e_io_sine(prog(t, t_last - 0.42, 0.42))
+    a_s = e_io_sine(prog(t, t_last - 0.35, 0.35))
     if a_s > 0.003:
         lp = skia.Paint()
         lp.setAlphaf(a_s)

@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>츄엔자임 오픈예정 상세페이지</title>
+<style>
+/* 720px 고정 캔버스(와디즈 스토리 이미지 기준) · 섹션 단위로 잘라 PNG로 내보냄 */
+@font-face {
+  font-family: "Pretendard";
+  src: url("assets/PretendardVariable.woff2") format("woff2-variations");
+  font-weight: 45 920;
+  font-display: block;
+}
+:root {
+  --g-950: #062f1b;
+  --g-800: #0a5c33;
+  --g-700: #007a36;
+  --g-600: #009941;
+  --g-500: #2bb062;
+  --g-300: #93d8ae;
+  --g-200: #c6ebd5;
+  --g-100: #e5f5ec;
+  --g-50: #f3faf6;
+  --ink: #15241c;
+  --ink-2: #46574e;
+  --ink-3: #87958d;
+  --line: #d4e6db;
+  --paper: #ffffff;
+  --frame: #dfe7e2;
+  --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--frame);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  word-break: keep-all;
+}
+.page { width: 720px; margin: 0 auto; background: var(--paper); overflow: hidden; }
+.s { position: relative; overflow: hidden; padding: 96px 56px; }
+h1, h2, h3, p { margin: 0; }
+em { font-style: normal; color: var(--g-600); }
+.center { text-align: center; }
+
+/* 공통 요소 */
+.pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 52px; padding: 0 30px; border-radius: 999px;
+  font-size: 24px; font-weight: 800; letter-spacing: .04em; color: #fff;
+  background: linear-gradient(180deg, #a9b5ae 0%, #7f8c85 100%);
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.45), 0 6px 14px rgba(40,70,55,.18);
+}
+.pill.green { background: linear-gradient(180deg, var(--g-500) 0%, var(--g-700) 100%); }
+.h2 { font-size: 40px; line-height: 1.32; font-weight: 800; letter-spacing: -.02em; text-wrap: balance; }
+.lead { font-size: 21px; line-height: 1.75; color: var(--ink-2); font-weight: 450; }
+.note { font-size: 14px; line-height: 1.6; color: var(--ink-3); }
+.ghost {
+  position: absolute; left: -12px; font-weight: 900; line-height: .86; letter-spacing: -.03em;
+  color: rgba(0,153,65,.065); white-space: nowrap; pointer-events: none;
+}
+.drop {
+  position: absolute; border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 28%, rgba(255,255,255,.95) 0 7%, rgba(255,255,255,0) 17%),
+    radial-gradient(circle at 50% 58%, rgba(0,153,65,.06) 0%, rgba(0,153,65,.30) 68%, rgba(0,110,52,.55) 100%);
+  box-shadow: inset -6px -10px 18px rgba(0,90,45,.22), inset 5px 7px 12px rgba(255,255,255,.65), 0 14px 26px rgba(0,80,40,.14);
+}
+.tablet { display: block; }
+.tablet svg { display: block; width: 100%; height: auto; overflow: visible; }
+
+/* 01 HERO */
+.hero {
+  padding: 64px 0 88px;
+  background: linear-gradient(180deg, #f7fcf9 0%, #e6f5ec 48%, #c5e8d3 100%);
+  text-align: center;
+}
+.hero .logo { width: 168px; display: block; margin: 0 auto 64px; }
+.hero .badge-row { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.hero .badge-row span { font-size: 18px; font-weight: 600; color: var(--ink-3); letter-spacing: .02em; }
+.hero .ask { margin-top: 40px; font-size: 24px; font-weight: 500; color: var(--ink-2); }
+.hero h1 { margin-top: 14px; font-size: 48px; line-height: 1.28; font-weight: 800; letter-spacing: -.03em; }
+.hero .stage { position: relative; height: 510px; margin-top: 8px; }
+.hero .ghost { top: 70px; font-size: 168px; }
+.hero .hand { position: absolute; left: 150px; bottom: 8px; width: 720px; }
+.hero .stage .tablet { position: absolute; left: 262px; top: 250px; width: 200px; transform: rotate(-4deg); }
+.hero .stage .spark { position: absolute; left: 212px; top: 204px; width: 300px; }
+.hero .bubble {
+  position: absolute; right: 74px; top: 92px;
+  padding: 14px 22px; border-radius: 999px; background: var(--paper);
+  font-size: 19px; font-weight: 700; color: var(--g-700);
+  box-shadow: 0 10px 24px rgba(0,80,40,.12);
+}
+.hero .bubble::after {
+  content: ""; position: absolute; left: 34px; bottom: -10px; width: 20px; height: 20px;
+  background: var(--paper); transform: rotate(45deg); border-radius: 3px;
+}
+.hero .char { position: absolute; left: 58px; top: 64px; width: 138px; }
+.hero .name { margin-top: 20px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.hero .name small { font-size: 18px; font-weight: 600; color: var(--g-700); letter-spacing: .02em; }
+.hero .name b { font-size: 76px; line-height: 1; font-weight: 900; letter-spacing: -.04em; color: var(--g-800); }
+.hero .name i { font-style: normal; font-size: 22px; font-weight: 700; color: var(--g-700); padding: 6px 18px; border: 2px solid var(--g-600); border-radius: 999px; }
+.hero .intro {
+  margin: 44px 56px 0; padding: 26px 24px; border-radius: 20px;
+  background: rgba(255,255,255,.72); font-size: 22px; line-height: 1.55; font-weight: 600; color: var(--ink);
+}
+.hero .intro em { font-weight: 800; }
+
+/* 02 TABLET */
+.tab { background: var(--paper); padding-bottom: 72px; }
+.tab .head { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 28px; }
+.tab .shot {
+  position: relative; height: 520px; margin: 24px -56px 0;
+  background: radial-gradient(ellipse 70% 62% at 58% 56%, #d3eedf 0%, #eaf7f0 55%, var(--paper) 80%);
+}
+.tab .ghost { top: 60px; font-size: 150px; color: rgba(0,153,65,.05); }
+.tab .shot .tablet { position: absolute; left: 300px; top: 108px; width: 340px; transform: rotate(-4deg); }
+.callout { position: absolute; display: flex; align-items: center; }
+.callout .box {
+  padding: 14px 26px; border-radius: 999px; text-align: left;
+  font-size: 22px; font-weight: 800; line-height: 1.25;
+}
+.callout .box small { display: block; font-size: 17px; font-weight: 500; margin-top: 2px; }
+.callout .box.solid { background: var(--g-700); color: #fff; }
+.callout .box.solid small { color: rgba(255,255,255,.82); }
+.callout .box.out { border: 2px solid var(--g-600); color: var(--g-700); background: rgba(255,255,255,.85); }
+.callout .box.out small { color: var(--ink-2); }
+.callout .wire { height: 2px; background: var(--g-600); position: relative; }
+.callout .wire::after { content: ""; position: absolute; right: -6px; top: -5px; width: 12px; height: 12px; border-radius: 50%; background: var(--g-600); box-shadow: 0 0 0 4px rgba(255,255,255,.9); }
+.dim { position: absolute; left: 318px; top: 404px; width: 300px; display: flex; align-items: center; gap: 10px; color: var(--g-700); font-size: 18px; font-weight: 800; }
+.dim::before, .dim::after { content: ""; flex: 1; height: 2px; background: linear-gradient(90deg, var(--g-600), var(--g-600)); }
+.dim .cap { width: 2px; height: 16px; background: var(--g-600); }
+.tab .copy { margin-top: 36px; }
+
+.inside { margin-top: 88px; display: grid; grid-template-columns: 1fr 210px; gap: 24px; align-items: center; }
+.inside h3 { font-size: 32px; font-weight: 800; letter-spacing: -.02em; }
+.inside h3 + p { margin-top: 8px; font-size: 17px; color: var(--ink-3); font-weight: 500; }
+.ing { list-style: none; margin: 28px 0 0; padding: 0; }
+.ing li { display: grid; grid-template-columns: 30px 1fr auto; gap: 14px; align-items: center; padding: 18px 0; border-bottom: 1px solid var(--line); }
+.ing li:first-child { border-top: 1px solid var(--line); }
+.ing .plus { width: 26px; height: 26px; border-radius: 50%; background: var(--g-500); position: relative; }
+.ing .plus::before, .ing .plus::after { content: ""; position: absolute; left: 50%; top: 50%; background: #fff; border-radius: 2px; transform: translate(-50%,-50%); }
+.ing .plus::before { width: 12px; height: 3px; }
+.ing .plus::after { width: 3px; height: 12px; }
+.ing b { display: block; font-size: 21px; font-weight: 700; color: var(--g-700); }
+.ing span { display: block; margin-top: 2px; font-size: 15px; color: var(--ink-3); }
+.ing .amt { font-size: 20px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.spheres { position: relative; height: 300px; }
+.inside-note {
+  margin-top: 32px; padding: 24px 28px; border-radius: 18px; background: var(--g-50);
+  font-size: 18px; line-height: 1.7; color: var(--ink-2);
+}
+
+.mint { margin-top: 64px; padding: 40px 36px 32px; border-radius: 24px; background: linear-gradient(180deg, var(--g-50), var(--g-100)); }
+.mint h3 { font-size: 30px; font-weight: 800; text-align: center; }
+.mint .desc { margin-top: 14px; text-align: center; font-size: 18px; line-height: 1.7; color: var(--ink-2); }
+.meter { margin-top: 30px; display: grid; gap: 18px; }
+.meter .row { display: grid; grid-template-columns: 196px 1fr 44px; gap: 14px; align-items: center; }
+.meter .lbl { font-size: 18px; font-weight: 700; color: var(--ink); }
+.meter .lbl.base { color: var(--ink-3); font-weight: 600; }
+.meter .dots { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; }
+.meter .dots i { height: 18px; border-radius: 5px; background: rgba(0,122,54,.1); }
+.meter .dots i.on { background: var(--g-600); }
+.meter .row.base .dots i.on { background: #a3b1aa; }
+.meter .row.cool .dots i.on { background: var(--g-300); }
+.meter .val { font-size: 24px; font-weight: 900; text-align: right; color: var(--g-700); font-variant-numeric: tabular-nums; }
+.meter .row.base .val { color: var(--ink-3); }
+.scale { margin-left: 210px; margin-right: 58px; display: flex; justify-content: space-between; font-size: 14px; color: var(--ink-3); font-weight: 500; }
+.mint .note { margin-top: 20px; text-align: center; }
+
+/* 03 SCENE */
+.scene { background: linear-gradient(180deg, var(--g-50) 0%, var(--paper) 30%); }
+.scene .head { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.scene .who { font-size: 18px; color: var(--ink-3); font-weight: 600; }
+.ba { margin-top: 48px; display: grid; grid-template-columns: 1fr 64px 1fr; align-items: center; }
+.ba figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.ba .circ { width: 236px; height: 236px; border-radius: 50%; display: grid; place-items: center; }
+.ba .before .circ { background: #eef1ef; }
+.ba .after .circ { background: radial-gradient(circle at 50% 45%, #ffffff 0%, var(--g-100) 62%, var(--g-200) 100%); box-shadow: 0 0 0 10px rgba(0,153,65,.08); }
+.ba figcaption { font-size: 20px; font-weight: 700; color: var(--ink-3); }
+.ba .after figcaption { color: var(--g-700); font-weight: 800; }
+.ba .arrow { justify-self: center; width: 44px; }
+.scene .then { margin-top: 48px; text-align: center; font-size: 34px; line-height: 1.45; font-weight: 800; letter-spacing: -.02em; }
+.scene .then span { display: block; margin-top: 6px; font-size: 24px; font-weight: 600; color: var(--ink-2); }
+
+.cuts { margin-top: 80px; border-top: 2px solid var(--g-600); }
+.cut { display: grid; grid-template-columns: 300px 1fr; border-bottom: 1px solid var(--g-300); }
+.cut .vis { position: relative; width: 300px; height: 280px; overflow: hidden; }
+.cut .vis > svg { display: block; width: 300px; height: 280px; }
+.cut .vis .tablet { position: absolute; }
+.cut .txt { padding: 0 0 0 36px; display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+.cut .k { font-size: 15px; font-weight: 800; letter-spacing: .12em; color: var(--g-500); }
+.cut h3 { font-size: 28px; font-weight: 800; color: var(--g-700); letter-spacing: -.02em; }
+.cut p { font-size: 19px; line-height: 1.65; color: var(--ink-2); }
+
+.how { margin-top: 56px; padding: 34px 32px; border-radius: 22px; background: var(--g-800); color: #fff; text-align: center; }
+.how .t { font-size: 17px; font-weight: 800; letter-spacing: .14em; color: var(--g-300); }
+.how p { margin-top: 12px; font-size: 24px; line-height: 1.55; font-weight: 700; }
+.sweet { margin-top: 16px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 16px; font-size: 15.5px; line-height: 1.65; color: var(--ink-2); }
+.sweet b { color: var(--ink); }
+
+/* 04 BENEFIT */
+.benefit { background: linear-gradient(180deg, #0b5f35 0%, #07432a 34%, #e8f4ee 34.01%, #e8f4ee 100%); padding-top: 92px; }
+.benefit .head { text-align: center; color: #fff; display: flex; flex-direction: column; align-items: center; gap: 26px; }
+.benefit .head .pill { background: rgba(255,255,255,.14); box-shadow: inset 0 0 0 2px rgba(255,255,255,.35); }
+.benefit .head .h2 em { color: #9be3b8; }
+.benefit .head p { font-size: 19px; line-height: 1.6; color: rgba(255,255,255,.8); }
+.best {
+  margin-top: 48px; position: relative; padding: 34px 36px; border-radius: 26px; background: var(--paper);
+  box-shadow: 0 24px 48px rgba(3,40,22,.22); display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 12px;
+}
+.best .tag { display: inline-flex; gap: 8px; align-items: center; font-size: 16px; font-weight: 800; color: #fff; background: var(--g-600); padding: 8px 16px; border-radius: 999px; }
+.best .limit { margin-left: 8px; font-size: 16px; font-weight: 700; color: var(--g-700); }
+.best h3 { margin-top: 18px; font-size: 32px; font-weight: 800; letter-spacing: -.02em; }
+.best h3 small { font-size: 20px; font-weight: 600; color: var(--ink-3); margin-left: 6px; }
+.best .meta { margin-top: 10px; font-size: 18px; color: var(--ink-2); font-weight: 500; }
+.best .price { text-align: right; }
+.best .price b { display: block; font-size: 52px; font-weight: 900; letter-spacing: -.03em; color: var(--g-700); line-height: 1; font-variant-numeric: tabular-nums; }
+.best .price b span { font-size: 26px; font-weight: 800; margin-left: 2px; }
+.best .price small { display: block; margin-top: 10px; font-size: 17px; font-weight: 700; color: var(--g-600); }
+.plans { margin-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.plan { padding: 26px 20px 22px; border-radius: 22px; background: var(--paper); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.plan h4 { margin: 0; font-size: 22px; font-weight: 800; }
+.plan h4 small { font-size: 16px; color: var(--ink-3); font-weight: 600; margin-left: 4px; }
+.plan .p { margin-top: 10px; font-size: 30px; font-weight: 900; letter-spacing: -.03em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.plan .p span { font-size: 18px; font-weight: 800; }
+.plan dl { margin: 14px 0 0; padding-top: 14px; border-top: 1px dashed var(--line); display: grid; grid-template-columns: auto 1fr; gap: 6px 8px; font-size: 15px; }
+.plan dt { color: var(--ink-3); }
+.plan dd { margin: 0; text-align: right; font-weight: 700; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.plan dd.free { color: var(--g-600); }
+
+.pack { margin-top: 40px; padding: 36px; border-radius: 24px; background: var(--paper); display: grid; grid-template-columns: 210px 1fr; gap: 28px; align-items: center; }
+.pack .count { position: relative; height: 170px; }
+.pack .count .num { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font-size: 15px; font-weight: 700; color: var(--ink-3); }
+.pack .count .num b { display: block; font-size: 46px; font-weight: 900; color: var(--g-700); line-height: 1.05; letter-spacing: -.03em; }
+.pack .count .num b span { font-size: 22px; color: var(--ink-3); font-weight: 800; }
+.pack h3 { font-size: 25px; line-height: 1.4; font-weight: 800; letter-spacing: -.02em; }
+.pack p { margin-top: 12px; font-size: 17px; line-height: 1.7; color: var(--ink-2); }
+.ship { margin-top: 16px; padding: 24px 32px; border-radius: 20px; background: var(--paper); display: flex; align-items: center; gap: 18px; }
+.ship svg { width: 44px; height: 44px; flex: none; }
+.ship b { font-size: 22px; font-weight: 800; }
+.ship span { display: block; font-size: 15px; color: var(--ink-3); margin-top: 4px; }
+.cta {
+  margin-top: 40px; padding: 30px 32px; border-radius: 999px; text-align: center;
+  background: linear-gradient(180deg, var(--g-500), var(--g-700)); color: #fff;
+  font-size: 26px; font-weight: 800; letter-spacing: -.01em;
+  box-shadow: 0 16px 30px rgba(0,110,50,.28), inset 0 2px 0 rgba(255,255,255,.3);
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+}
+.cta svg { width: 30px; height: 30px; }
+
+/* 05 BRAND */
+.brand { background: var(--paper); text-align: center; padding-top: 104px; padding-bottom: 72px; }
+.brand .char { width: 176px; margin: 0 auto; display: block; }
+.brand .eg { margin-top: 32px; font-size: 46px; font-weight: 900; letter-spacing: -.01em; color: var(--g-700); }
+.brand .sub { margin-top: 10px; font-size: 24px; font-weight: 700; color: var(--ink); }
+.brand .bel { margin-top: 22px; font-size: 18px; line-height: 1.7; color: var(--ink-2); }
+.brand .logo { width: 170px; margin: 56px auto 0; display: block; }
+.legal { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); list-style: none; padding-left: 0; text-align: left; display: grid; gap: 6px; }
+.legal li { font-size: 13.5px; line-height: 1.6; color: var(--ink-3); padding-left: 12px; position: relative; }
+.legal li::before { content: "*"; position: absolute; left: 0; }
+
+@media (max-width: 719px) { body { background: var(--paper); } }
+</style>
+</head>
+<body>
+<main class="page">
+
+  <!-- 01 첫 화면 · 정제 컷 -->
+  <section class="s hero" id="s01" data-name="01_hero">
+    <img class="logo" src="assets/easydaybio-logo.svg" alt="이지데이바이오">
+    <div class="badge-row">
+      <div class="pill">COMING SOON</div>
+      <span>와디즈 오픈예정</span>
+    </div>
+    <p class="ask">식후 효소, 좀 더 간편할 수 없을까요?</p>
+    <h1>식후마다 부담 없이 한 알,<br><em>물 없이 어디서든</em></h1>
+
+    <div class="stage">
+      <div class="ghost">CHEW<br>ENZYME</div>
+      <span class="drop" style="left:96px; top:300px; width:46px; height:46px"></span>
+      <span class="drop" style="right:92px; top:236px; width:64px; height:64px"></span>
+      <span class="drop" style="right:150px; top:330px; width:26px; height:26px"></span>
+      <span class="drop" style="left:150px; top:216px; width:22px; height:22px"></span>
+      <img class="char" src="assets/character.svg" alt="">
+      <div class="bubble">식후엔 한 알!</div>
+      <svg class="hand" viewBox="0 0 600 330" aria-hidden="true">
+        <g fill="#fff" stroke="#009b33" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M296 236 C294 206 314 182 340 176 C358 172 368 188 358 202 C350 214 346 224 348 236"/>
+          <path d="M620 216 C520 218 420 230 320 236 C240 240 160 238 112 226 C94 220 82 210 72 206 C62 204 56 214 60 224 C66 240 82 254 100 264 C150 288 220 298 300 298 C400 298 520 290 620 286 Z"/>
+        </g>
+        <g fill="none" stroke="#009b33" stroke-width="3.5" stroke-linecap="round" opacity=".75">
+          <path d="M96 232 C92 244 94 254 102 262"/>
+          <path d="M128 238 C124 252 128 264 138 272"/>
+          <path d="M164 242 C162 256 166 268 176 278"/>
+        </g>
+      </svg>
+      <svg class="spark" viewBox="0 0 300 60" aria-hidden="true"><g stroke="#2bb062" stroke-width="5" stroke-linecap="round"><path d="M40 52 L22 34"/><path d="M62 40 L56 14"/><path d="M262 52 L280 34"/></g></svg>
+      <div class="tablet" data-tablet></div>
+    </div>
+
+    <div class="name">
+      <small>의사·약사와 함께 연구개발한</small>
+      <b>츄엔자임</b>
+      <i>츄어블 효소</i>
+    </div>
+    <p class="intro">츄엔자임은 <em>물 없이 씹어 먹는 민트향 츄어블 효소</em>입니다.</p>
+  </section>
+
+  <!-- 02 정제 디테일 -->
+  <section class="s tab" id="s02" data-name="02_tablet">
+    <div class="head">
+      <div class="pill green">ONE TABLET</div>
+      <h2 class="h2">민트 캔디를 꺼내 먹듯,<br><em>씹어 먹는 효소</em></h2>
+    </div>
+    <div class="shot">
+      <div class="ghost">CHEWABLE</div>
+      <span class="drop" style="left:250px; top:70px; width:34px; height:34px"></span>
+      <span class="drop" style="right:44px; top:330px; width:52px; height:52px"></span>
+      <div class="tablet" data-tablet></div>
+      <div class="callout" style="left:56px; top:150px">
+        <div class="box solid">지름 1.5cm<small>1정 1,000mg</small></div>
+        <div class="wire" style="width:150px"></div>
+      </div>
+      <div class="callout" style="left:56px; top:290px">
+        <div class="box out">민트향 츄어블<small>물 없이 씹어서</small></div>
+        <div class="wire" style="width:110px"></div>
+      </div>
+      <div class="dim"><span class="cap"></span><span>1.5cm</span><span class="cap"></span></div>
+    </div>
+    <p class="lead center copy">지름 1.5cm 한 알을 물 없이 씹어 먹습니다.<br>씹어도 역한 냄새나 맛 없이, 민트처럼 상쾌합니다.</p>
+
+    <div class="inside">
+      <div>
+        <h3>한 알에 담은 것</h3>
+        <p>1정 1,000mg 기준</p>
+        <ul class="ing">
+          <li><i class="plus"></i><div><b>아스퍼질러스발효분말 Alpha</b><span>누룩곰팡이 발효 분말</span></div><span class="amt">270mg</span></li>
+          <li><i class="plus"></i><div><b>아스퍼질러스발효분말 Pro</b><span>누룩곰팡이 발효 분말</span></div><span class="amt">135mg</span></li>
+          <li><i class="plus"></i><div><b>표고버섯균사체</b><span>버섯의 뿌리 같은 균사체</span></div><span class="amt">50mg</span></li>
+          <li><i class="plus"></i><div><b>아밀라아제 · 프로테아제</b><span>효소 역가 표시</span></div><span class="amt"></span></li>
+        </ul>
+      </div>
+      <div class="spheres" aria-hidden="true">
+        <span class="drop" style="left:20px; top:40px; width:150px; height:150px"></span>
+        <span class="drop" style="left:120px; top:6px; width:62px; height:62px"></span>
+        <span class="drop" style="left:12px; top:196px; width:74px; height:74px"></span>
+        <span class="drop" style="left:120px; top:200px; width:38px; height:38px"></span>
+      </div>
+    </div>
+    <p class="inside-note">누룩곰팡이(아스퍼질러스)로 발효한 분말에 아밀라아제와 프로테아제가 들어 있고, 버섯의 뿌리 같은 표고버섯균사체를 함께 담았습니다.</p>
+
+    <div class="mint">
+      <h3>민트 맛, 어느 정도일까요?</h3>
+      <p class="desc">강한 민트 캔디를 9라고 하면, 츄엔자임의 민트 향은 6 정도입니다.<br>여기에 자일리톨의 시원함이 더해져 시원함은 5 정도로 느껴집니다.<br>강한 민트 캔디보다 한결 순한 편이에요.</p>
+      <div class="meter">
+        <div class="row base"><span class="lbl base">강한 민트 캔디 (기준)</span><span class="dots" data-v="9"></span><span class="val">9</span></div>
+        <div class="row"><span class="lbl">츄엔자임 민트 향</span><span class="dots" data-v="6"></span><span class="val">6</span></div>
+        <div class="row cool"><span class="lbl">츄엔자임 시원함</span><span class="dots" data-v="5"></span><span class="val">5</span></div>
+      </div>
+      <div class="scale" style="margin-top:12px"><span>1 은은함</span><span>10 아주 강함</span></div>
+      <p class="note">출시 전 시식 기준이며, 느끼는 정도는 사람마다 다를 수 있습니다.</p>
+    </div>
+  </section>
+
+  <!-- 03 사용 장면 -->
+  <section class="s scene" id="s03" data-name="03_scene">
+    <div class="head">
+      <div class="pill green">AFTER MEALS</div>
+      <h2 class="h2">저처럼 식후마다<br>민트 캔디나 탄산을 찾던 분이라면</h2>
+      <p class="who">츄엔자임을 만든 이지데이바이오 대표 홍가희</p>
+    </div>
+
+    <div class="ba">
+      <figure class="before">
+        <div class="circ">
+          <svg width="170" height="130" viewBox="0 0 170 130" aria-hidden="true">
+            <g fill="none" stroke="#a7b3ad" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 60 L4 46 L6 82 Z" fill="#e3e8e5"/>
+              <path d="M72 60 L86 46 L84 82 Z" fill="#e3e8e5"/>
+              <circle cx="45" cy="64" r="26" fill="#fff"/>
+              <path d="M30 52 C38 60 40 70 34 82 M46 40 C54 52 56 70 48 88 M60 48 C66 58 66 70 62 80" stroke="#c7d0cb"/>
+              <rect x="104" y="24" width="50" height="88" rx="10" fill="#fff"/>
+              <path d="M108 36 H150 M108 100 H150"/>
+              <path d="M120 24 C120 16 140 16 140 24"/>
+              <path d="M118 58 C126 66 136 54 144 62" stroke="#c7d0cb"/>
+            </g>
+          </svg>
+        </div>
+        <figcaption>식후의 민트 캔디 · 탄산</figcaption>
+      </figure>
+      <svg class="arrow" viewBox="0 0 44 30" aria-hidden="true"><path d="M2 15 H38 M26 4 L40 15 L26 26" fill="none" stroke="#009941" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <figure class="after">
+        <div class="circ"><div class="tablet" data-tablet style="width:150px"></div></div>
+        <figcaption>츄엔자임 한 알</figcaption>
+      </figure>
+    </div>
+
+    <p class="then">이제 식후엔 <em>츄엔자임 한 알.</em><span>많이 드신 날엔 1정 더.</span></p>
+
+    <div class="cuts">
+      <div class="cut">
+        <div class="vis">
+        <svg viewBox="0 0 300 280" aria-hidden="true">
+          <defs>
+            <linearGradient id="bg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eef8f2"/><stop offset="1" stop-color="#cdeedb"/></linearGradient>
+            <radialGradient id="pl" cx=".45" cy=".4" r=".6"><stop offset="0" stop-color="#ffffff"/><stop offset=".8" stop-color="#f6f8f7"/><stop offset="1" stop-color="#e6ece9"/></radialGradient>
+            <linearGradient id="sv" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c9d1cd"/><stop offset=".5" stop-color="#f4f6f5"/><stop offset="1" stop-color="#b8c2bd"/></linearGradient>
+            <filter id="sh1" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#0a5c33" flood-opacity=".18"/></filter>
+          </defs>
+          <rect width="300" height="280" fill="url(#bg1)"/>
+          <path d="M0 214 L300 168 L300 280 L0 280 Z" fill="#009941" opacity=".1"/>
+          <circle cx="138" cy="140" r="104" fill="url(#pl)" filter="url(#sh1)"/>
+          <circle cx="138" cy="140" r="74" fill="none" stroke="#e3e9e6" stroke-width="2"/>
+          <g filter="url(#sh1)">
+            <rect x="262" y="40" width="12" height="200" rx="6" fill="url(#sv)"/>
+            <rect x="256" y="34" width="24" height="56" rx="12" fill="url(#sv)"/>
+          </g>
+        </svg>
+          <div class="tablet" data-tablet style="left:88px; top:96px; width:100px"></div>
+        </div>
+        <div class="txt">
+          <span class="k">SCENE 01</span>
+          <h3>식사를 마치고, 한 알</h3>
+          <p>밥을 다 먹고 일어서기 전,<br>물 없이 한 알을 씹어 드세요.</p>
+        </div>
+      </div>
+      <div class="cut">
+        <div class="vis">
+        <svg viewBox="0 0 300 280" aria-hidden="true">
+          <defs>
+            <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5f2ec"/><stop offset="1" stop-color="#e9e3d8"/></linearGradient>
+            <linearGradient id="pc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2bb062"/><stop offset="1" stop-color="#007a36"/></linearGradient>
+            <filter id="sh2" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="2" dy="8" stdDeviation="7" flood-color="#3b2f1c" flood-opacity=".18"/></filter>
+          </defs>
+          <rect width="300" height="280" fill="url(#bg2)"/>
+          <g filter="url(#sh2)">
+            <g transform="rotate(-10 120 120)">
+              <rect x="34" y="62" width="172" height="112" rx="22" fill="url(#pc)"/>
+              <path d="M44 84 H196" stroke="#06502a" stroke-width="3" stroke-dasharray="5 4" opacity=".55"/>
+              <rect x="186" y="74" width="30" height="20" rx="6" fill="#d9e7df"/>
+              <path d="M60 136 C90 144 140 144 170 136" stroke="#fff" stroke-width="3" opacity=".35" fill="none" stroke-linecap="round"/>
+            </g>
+            <rect x="196" y="22" width="78" height="54" rx="20" fill="#fbfbfa"/>
+            <path d="M196 46 H274" stroke="#d7dcd9" stroke-width="2"/>
+            <circle cx="235" cy="58" r="3" fill="#c5ccc8"/>
+            <g transform="rotate(14 250 200)">
+              <rect x="200" y="176" width="96" height="60" rx="8" fill="#fff"/>
+              <rect x="200" y="190" width="96" height="10" fill="#009941" opacity=".85"/>
+            </g>
+            <g fill="none" stroke="#b9a37c" stroke-width="5" stroke-linecap="round">
+              <circle cx="58" cy="214" r="18"/>
+              <path d="M72 226 L104 252 M90 240 L96 232 M98 246 L104 240"/>
+            </g>
+          </g>
+        </svg>
+          <div class="tablet" data-tablet style="left:110px; top:168px; width:68px"></div>
+          <div class="tablet" data-tablet data-rot="22" style="left:158px; top:186px; width:60px"></div>
+        </div>
+        <div class="txt">
+          <span class="k">SCENE 02</span>
+          <h3>물 없이, 어디서든</h3>
+          <p>물을 찾지 않아도 괜찮아요.<br>가방 속에서 꺼내 바로 씹는 한 알.</p>
+        </div>
+      </div>
+      <div class="cut">
+        <div class="vis">
+        <svg viewBox="0 0 300 280" aria-hidden="true">
+          <defs>
+            <radialGradient id="bg3" cx=".5" cy=".55" r=".75"><stop offset="0" stop-color="#e9f7ef"/><stop offset="1" stop-color="#b8e3c9"/></radialGradient>
+          </defs>
+          <rect width="300" height="280" fill="url(#bg3)"/>
+          <circle cx="234" cy="76" r="32" fill="#009941"/>
+          <text x="234" y="87" text-anchor="middle" font-family="Pretendard, sans-serif" font-size="30" font-weight="900" fill="#fff">+1</text>
+        </svg>
+          <div class="tablet" data-tablet data-rot="-8" style="left:34px; top:78px; width:126px"></div>
+          <div class="tablet" data-tablet data-rot="10" style="left:138px; top:112px; width:126px"></div>
+        </div>
+        <div class="txt">
+          <span class="k">SCENE 03</span>
+          <h3>많이 드신 날엔 1정 더</h3>
+          <p>든든하게 먹은 날에는<br>한 알을 더 씹어 드셔도 됩니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="how">
+      <div class="t">이렇게 드세요</div>
+      <p>식후 1정을 물 없이 씹어 드세요.<br>많이 드신 날은 1정 더 드셔도 됩니다.</p>
+    </div>
+    <p class="sweet"><b>단맛에 대해</b> · 츄엔자임은 설탕 대신 대체당인 당알코올(자일리톨·소비톨)로 단맛을 냈습니다. 평소 제로 음료나 제로 간식을 즐겨 드신다면 당알코올이 쌓여 배가 아플 수 있어요. 정해진 양보다 많이 드시지 않도록 주의해 주세요.</p>
+  </section>
+
+  <!-- 04 혜택 안내 -->
+  <section class="s benefit" id="s04" data-name="04_benefit">
+    <div class="head">
+      <div class="pill">OPEN BENEFIT</div>
+      <h2 class="h2">처음 만나는 츄엔자임,<br><em>나에게 맞는 구성으로</em></h2>
+      <p>오픈 알림을 신청하시면<br>첫 출시 한정 구성을 가장 먼저 만나실 수 있어요.</p>
+    </div>
+
+    <div class="best">
+      <div>
+        <span class="tag">첫 출시 한정</span><span class="limit">선착순 ○○세트</span>
+        <h3>3병<small>40정 × 3</small></h3>
+        <p class="meta">병당 약 18,333원 · 무료배송</p>
+      </div>
+      <div class="price"><b>55,000<span>원</span></b><small>가장 알뜰한 구성</small></div>
+    </div>
+
+    <div class="plans">
+      <div class="plan">
+        <h4>1병<small>40정</small></h4>
+        <div class="p">24,900<span>원</span></div>
+        <dl><dt>병당</dt><dd>24,900원</dd><dt>배송비</dt><dd>3,000원</dd></dl>
+      </div>
+      <div class="plan">
+        <h4>2병<small>80정</small></h4>
+        <div class="p">42,000<span>원</span></div>
+        <dl><dt>병당</dt><dd>21,000원</dd><dt>배송비</dt><dd class="free">무료</dd></dl>
+      </div>
+      <div class="plan">
+        <h4>3병<small>120정</small></h4>
+        <div class="p">57,000<span>원</span></div>
+        <dl><dt>병당</dt><dd>19,000원</dd><dt>배송비</dt><dd class="free">무료</dd></dl>
+      </div>
+    </div>
+
+    <div class="pack">
+      <div class="count" aria-hidden="true">
+        <div class="tablet" data-tablet style="position:absolute; left:18px; top:4px; width:96px" data-rot="-10"></div>
+        <div class="tablet" data-tablet style="position:absolute; left:96px; top:20px; width:96px" data-rot="12"></div>
+        <div class="num"><b>40<span>정</span></b>30정 + 10정</div>
+      </div>
+      <div>
+        <h3>완충 비닐 대신,<br>10정을 더 담았습니다</h3>
+        <p>불필요한 비닐은 줄이고, 조금이라도 더 담아 드리고 싶었습니다. 배송 중 깨진 정제는 교환이 어렵지만, 그대로 드셔도 괜찮습니다.</p>
+      </div>
+    </div>
+
+    <div class="ship">
+      <svg viewBox="0 0 44 44" aria-hidden="true"><g fill="none" stroke="#009941" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><rect x="5" y="9" width="34" height="30" rx="6"/><path d="M5 18 H39 M14 5 V12 M30 5 V12"/><path d="M15 28 L20 32 L29 24"/></g></svg>
+      <div><b>12월 ○일부터 순차 발송</b><span>정확한 발송일은 오픈 시 안내해 드립니다.</span></div>
+    </div>
+
+    <div class="cta">
+      <svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 4 C10 4 7 8 7 13 V18 L4 22 H26 L23 18 V13 C23 8 20 4 15 4 Z M12 25 C12.5 27 13.6 28 15 28 C16.4 28 17.5 27 18 25" fill="none" stroke="#fff" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      오픈 알림 신청하고 가장 먼저 만나보세요
+    </div>
+  </section>
+
+  <!-- 05 브랜드 -->
+  <section class="s brand" id="s05" data-name="05_brand">
+    <img class="char" src="assets/character.svg" alt="">
+    <p class="eg">EASY GUT, EASY DAY</p>
+    <p class="sub">속이 편해야 하루가 편하니까</p>
+    <p class="bel">이지데이바이오는 ‘속이 편해야 하루가 편하다’는 믿음으로 제품을 만듭니다.</p>
+    <img class="logo" src="assets/easydaybio-logo.svg" alt="이지데이바이오">
+    <ul class="legal">
+      <li>츄엔자임은 의약품(소화제)이 아닌 식품(캔디류)입니다.</li>
+      <li>민트 맛 수치는 출시 전 시식 기준이며, 느끼는 정도는 사람마다 다를 수 있습니다.</li>
+      <li>리워드 구성과 가격, 발송 일정은 펀딩 오픈 시 최종 확정됩니다.</li>
+      <li>이미지는 이해를 돕기 위한 연출이며, 실제 제품과 다를 수 있습니다.</li>
+    </ul>
+  </section>
+
+</main>
+
+<script>
+// 정제 렌더: 실물 사진 기준 베이지 + 갈색 반점, 3/4 시점의 납작한 원기둥
+(function () {
+  var n = 0;
+  function rng(seed) { return function () { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }; }
+  function tablet(rot) {
+    var id = "t" + (n++), r = rng(1000 + n * 77), dots = "";
+    var cols = ["#9b7550", "#86684a", "#c08b55", "#6d5947", "#b49a7c"];
+    for (var i = 0; i < 230; i++) {
+      var a = r() * Math.PI * 2, d = Math.sqrt(r());
+      var x = 100 + Math.cos(a) * d * 88, y = 60 + Math.sin(a) * d * 53;
+      dots += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + (0.35 + r() * 1.05).toFixed(2) + '" fill="' + cols[(r() * cols.length) | 0] + '" opacity="' + (0.3 + r() * 0.55).toFixed(2) + '"/>';
+    }
+    for (var j = 0; j < 70; j++) {
+      var t = r() * Math.PI, sx = 100 - Math.cos(t) * 90, sy = 60 + Math.sin(t) * 55 + 4 + r() * 24;
+      dots += '<circle cx="' + sx.toFixed(1) + '" cy="' + sy.toFixed(1) + '" r="' + (0.35 + r() * 0.9).toFixed(2) + '" fill="' + cols[(r() * cols.length) | 0] + '" opacity="' + (0.25 + r() * 0.45).toFixed(2) + '"/>';
+    }
+    return '<svg viewBox="0 0 200 150" style="transform:rotate(' + (rot || 0) + 'deg)">' +
+      '<defs>' +
+      '<radialGradient id="' + id + 'top" cx=".4" cy=".34" r=".72"><stop offset="0" stop-color="#f7eee2"/><stop offset=".55" stop-color="#ecdcc7"/><stop offset="1" stop-color="#dcc8ae"/></radialGradient>' +
+      '<linearGradient id="' + id + 'side" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d3bfa3"/><stop offset=".35" stop-color="#e7d7c1"/><stop offset=".7" stop-color="#d9c5aa"/><stop offset="1" stop-color="#bfa98b"/></linearGradient>' +
+      '<linearGradient id="' + id + 'sideV" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#4a3622" stop-opacity=".18"/></linearGradient>' +
+      '<filter id="' + id + 'g" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="' + n + '"/><feColorMatrix values="0 0 0 0 .45  0 0 0 0 .34  0 0 0 0 .22  0 0 0 .55 -.18"/><feComposite in2="SourceGraphic" operator="in"/></filter>' +
+      '<filter id="' + id + 'b" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="6"/></filter>' +
+      '<clipPath id="' + id + 'c"><path d="M10 60 V88 A90 55 0 0 0 190 88 V60 A90 55 0 0 0 10 60 Z"/></clipPath>' +
+      '</defs>' +
+      '<ellipse cx="104" cy="104" rx="86" ry="22" fill="#1f4a33" opacity=".26" filter="url(#' + id + 'b)"/>' +
+      '<g clip-path="url(#' + id + 'c)">' +
+      '<path d="M10 60 V88 A90 55 0 0 0 190 88 V60 Z" fill="url(#' + id + 'side)"/>' +
+      '<path d="M10 60 V88 A90 55 0 0 0 190 88 V60 Z" fill="url(#' + id + 'sideV)"/>' +
+      '<ellipse cx="100" cy="60" rx="90" ry="55" fill="url(#' + id + 'top)"/>' +
+      '<ellipse cx="100" cy="61" rx="84" ry="50.5" fill="none" stroke="#c9b597" stroke-opacity=".38" stroke-width="3"/>' +
+      '<ellipse cx="100" cy="58.5" rx="89" ry="54" fill="none" stroke="#fffaf2" stroke-opacity=".7" stroke-width="1.6"/>' +
+      dots +
+      '<rect x="0" y="0" width="200" height="150" fill="#fff" filter="url(#' + id + 'g)" opacity=".5"/>' +
+      '</g></svg>';
+  }
+  document.querySelectorAll("[data-tablet]").forEach(function (el) { el.innerHTML = tablet(el.getAttribute("data-rot")); });
+  document.querySelectorAll(".dots").forEach(function (el) {
+    var v = +el.getAttribute("data-v"), h = "";
+    for (var i = 1; i <= 10; i++) h += '<i class="' + (i <= v ? "on" : "") + '"></i>';
+    el.innerHTML = h;
+  });
+  // 720px보다 좁은 화면에서는 캔버스 전체를 비율대로 축소
+  function fit() {
+    var w = document.documentElement.clientWidth, p = document.querySelector(".page");
+    p.style.zoom = w < 720 ? String(w / 720) : "";
+  }
+  window.addEventListener("resize", fit);
+  fit();
+})();
+</script>
+</body>
+</html>

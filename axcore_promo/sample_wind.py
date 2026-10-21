@@ -3,7 +3,7 @@ sweep from lower left to upper right between the turbines (no loops around them)
 
 The curve is a cubic B-spline of a control polygon, so it is C2-smooth - it cannot kink. Far sides of the
 loops are dimmed (never cut). Lines follow the tracked footage.
-Usage: python3 sample_wind.py <clip> <out.mp4> [seconds=2.0] [height=480]
+Usage: python3 sample_wind.py <clip> <out.mp4> [seconds=2.0] [height=480, e.g. 1440 for 2K]
 """
 import math
 import subprocess
@@ -42,13 +42,15 @@ STRANDS = [(dict(), 3.0, 1.0, 0.0), (dict(rscale=1.06), 1.5, 0.5, 0.035)]
 TAIL, T0, TRAVEL = 0.9, -0.15, 2.15
 
 E.configure(E.SEED, E.CHAOS)
-surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(W, H, skia.ColorType.kRGBA_8888_ColorType,
+SC = max(1.0, height / H)            # above 1080p the composite is drawn natively at the output size
+SW, SH = int(round(W * SC)), int(round(H * SC))
+surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(SW, SH, skia.ColorType.kRGBA_8888_ColorType,
                                                    skia.AlphaType.kPremul_AlphaType))
 enc = subprocess.Popen(["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
-                        "-s", "%dx%d" % (W, H), "-r", str(E.FPS), "-i", "-",
+                        "-s", "%dx%d" % (SW, SH), "-r", str(E.FPS), "-i", "-",
                         "-vf", "scale=%d:%d:flags=lanczos" % (width, height),
-                        "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
-                        "-movflags", "+faststart", out], stdin=subprocess.PIPE)
+                        "-c:v", "libx264", "-preset", "medium", "-crf", "18" if SC == 1 else "14",
+                        "-pix_fmt", "yuv420p", "-movflags", "+faststart", out], stdin=subprocess.PIPE)
 
 
 def head_at(t, delay):
@@ -60,12 +62,15 @@ for f in range(int(round(dur * E.FPS))):
     t = f / E.FPS
     c = surf.getCanvas()
     c.clear(skia.Color4f(0, 0, 0, 1))
+    c.save()
+    c.scale(SC, SC)
     cam = E.draw_plate(c, clip, t, dur, s=(1.0, 1.0))
     for (kw, wd, al, delay), (uv, back) in zip(STRANDS, paths):
         pts = E.flow_pts(cam, uv)
         hd = head_at(t, delay)
         mb = abs(head_at(t + 1 / 96, delay) - head_at(t - 1 / 96, delay)) * 2
         E.light_ribbon(c, pts, hd, TAIL, behind=back, width=wd, alpha=al, mb=mb, back_dim=0.4)
+    c.restore()
     enc.stdin.write(surf.makeImageSnapshot().toarray()[..., :3].tobytes())
 enc.stdin.close()
 enc.wait()

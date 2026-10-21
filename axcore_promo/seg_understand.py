@@ -112,7 +112,9 @@ def ring_path(n=700):
 RING_W = ring_path()
 _d = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(RING_W, axis=0), axis=1))])
 RING_S = _d / _d[-1]
-RING_AT = {lab: float(RING_S[np.argmin(np.linalg.norm(RING_W - np.array([TILES[lab][0], 0.3, TILES[lab][1]]), axis=1))])
+_FIRST = RING_S < 0.93                                  # first pass (the loop closes back on Planning)
+RING_AT = {lab: float(RING_S[_FIRST][np.argmin(np.linalg.norm(RING_W[_FIRST] - np.array([TILES[lab][0], 0.3,
+                                                                                          TILES[lab][1]]), axis=1))])
            for lab in RING}
 
 

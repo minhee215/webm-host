@@ -50,7 +50,8 @@ SLOTS = {
     "19_aerial": (-2000, -150, 2700, 700, 394, -0.5),
     "q3_silos": (2000, 200, 2700, 700, 394, 0.5),
 }
-# facade windows (wall at Z=F, so world == screen offsets): 3x3 cells of 560x240
+# facade windows: 3x3 cells of 560x240 on a wall a little behind the 1:1 plane, so the facade shows around them
+Z_WALL = 1270.0
 CW, CH, GX, GY = 560, 240, 600, 270
 CELLS = {
     "r3_wind": (0, 0), "20_team": (0, 1), "05_warehouse": (0, 2),
@@ -63,7 +64,7 @@ ORDER = list(SLOTS)            # fly-in order
 
 def cell_params(name):
     r, cidx = CELLS[name]
-    return ((cidx - 1) * GX, (r - 1) * GY, F, CW, CH, 0.0)
+    return ((cidx - 1) * GX, (r - 1) * GY, Z_WALL, CW, CH, 0.0)
 
 
 def project(p, cam):
@@ -161,7 +162,7 @@ def facade_wall(c, a, cam):
         for k in range(-4, 5):
             if abs(r) <= 1 and abs(k) <= 1:
                 continue
-            q = project((k * GX, r * GY, F, CW, CH, 0.0), cam)
+            q = project((k * GX, r * GY, Z_WALL, CW, CH, 0.0), cam)
             lit = rng.uniform() < 0.22
             c.drawPath(E.poly(q, True), paint_fill("#1B3550" if lit else "#0D1C2E", 0.9))
             if lit:
@@ -170,12 +171,12 @@ def facade_wall(c, a, cam):
     for k in range(-5, 6):
         for j in range(4):
             xw = k * GX - GX / 2 + j * GX / 4
-            q1 = project((xw, 0, F, 0.1, 9 * GY, 0.0), cam)
+            q1 = project((xw, 0, Z_WALL, 0.1, 9 * GY, 0.0), cam)
             c.drawLine(q1[0][0], q1[0][1], q1[3][0], q1[3][1], paint_stroke("#3B5A78", 0.55 if j == 0 else 0.25,
                                                                               3.0 if j == 0 else 1.2))
     for r in range(-4, 5):
         yw = r * GY - GY / 2
-        q1 = project((0, yw, F, 11 * GX, 0.1, 0.0), cam)
+        q1 = project((0, yw, Z_WALL, 11 * GX, 0.1, 0.0), cam)
         c.drawLine(q1[0][0], q1[0][1], q1[1][0], q1[1][1], paint_stroke("#3B5A78", 0.5, 3.0))
     c.restore()
     c.restore()
@@ -230,12 +231,12 @@ def render(c, t):
     lock = e_out_cubic(prog(t, 3.72, 0.35))
     push = e_io_cubic(prog(t, 4.55, 1.35))
     drift = math.sin(t * 0.6) * 18
-    cam = (drift * (1 - wall), 0.0, -60 * prog(t, 0.0, 2.2) * (1 - wall))
+    cam = (drift * (1 - wall), 0.0, -60 * prog(t, 0.0, 2.2) * (1 - wall) + 90 * e_io_sine(prog(t, 2.6, 2.0)))
 
     background(c, t, wall)
     # zoom into the target window for the push-in (2D, about the target centre)
-    zoom = lerp(1.0, (W + 8) / CW, push)
     tq = project(cell_params(TARGET), cam)
+    zoom = lerp(1.0, (W + 8) / (tq[1][0] - tq[0][0]), push)
     tcx, tcy = sum(p[0] for p in tq) / 4, sum(p[1] for p in tq) / 4
     c.save()
     c.translate(lerp(tcx, W / 2, push), lerp(tcy, H / 2, push))
@@ -243,7 +244,7 @@ def render(c, t):
     c.translate(-tcx, -tcy)
 
     # centre facade panel grows into the wall
-    cen = mix(CENTER, (0, 0, F, 11 * GX, 9 * GY, 0.0), wall)
+    cen = mix(CENTER, (0, 0, Z_WALL, 11 * GX, 9 * GY, 0.0), wall)
     cq = project(cen, cam)
     if wall < 0.999:
         a_in = e_out_cubic(prog(t, 0.55, 0.6))
@@ -319,7 +320,7 @@ def render(c, t):
         (r0, c0), (r1, c1) = path_cells[i0], path_cells[i0 + 1]
         rr, cc = lerp(r0, r1, f_), lerp(c0, c1, f_)
         cx_w, cy_w = (cc - 1) * GX, (rr - 1) * GY
-        q = project((cx_w, cy_w, F, CW, CH, 0.0), cam)
+        q = project((cx_w, cy_w, Z_WALL, CW, CH, 0.0), cam)
         x0, y0 = min(p[0] for p in q), min(p[1] for p in q)
         x1, y1 = max(p[0] for p in q), max(p[1] for p in q)
         mxc, myc = (x0 + x1) / 2, (y0 + y1) / 2

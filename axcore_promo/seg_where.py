@@ -10,7 +10,9 @@ Motion graphic (references: floating industry panels around a facade; a facade g
                holds on the locked grid with a slow push (no zoom into the window - the bridge to the next
                scene is designed with that scene)
 All footage is the project's own generated clips. 23.976 fps, 21:9 letterbox to match the edit.
-Usage: python3 seg_where.py <out.mp4> [height=480] [frames=146]
+Usage: python3 seg_where.py <out.mp4> [height=480] [frames=146] [first last]
+  height > 1080 renders natively at that size with full-resolution footage in every panel (e.g. 1440 = 2K);
+  first/last render a frame range (for parallel chunks). Text is set in Pretendard (engine.text).
 """
 import math
 import subprocess
@@ -26,6 +28,11 @@ from engine import W, H, R, clamp, lerp, prog, e_io_cubic, e_out_cubic, e_io_sin
 out = sys.argv[1]
 height = int(sys.argv[2]) if len(sys.argv) > 2 else 480
 NF = int(sys.argv[3]) if len(sys.argv) > 3 else 146
+F0, F1 = (int(sys.argv[4]), int(sys.argv[5])) if len(sys.argv) > 5 else (0, NF)
+HD = height > 1080
+if HD:
+    media.MAX_READERS = 24          # every panel streams its full-resolution clip
+HD_NAME = {"r3_wind": "r3_wind_hd"}
 width = int(round(height * 16 / 9 / 2)) * 2
 FPS_NUM, FPS_DEN = 24000, 1001
 DT = FPS_DEN / FPS_NUM
@@ -84,7 +91,10 @@ def mix(a, b, k):
     return tuple(lerp(x, y, k) for x, y in zip(a, b))
 
 
-def frame_img(name, t, full=False):
+def frame_img(name, t, full=False, far=False):
+    if HD and not far:
+        name = HD_NAME.get(name, name)
+        full = True
     if full:
         return media.frame(name, t)[0]
     img = media.proxy_frame(name, t)
@@ -142,7 +152,7 @@ def background(c, t, wall):
             sz = rng.uniform(260, 520)
             p = (x * z / F + 60 * t * z / F * 0.15, y * z / F, z, sz * 1.6, sz * 0.9, rng.uniform(-0.3, 0.3))
             q = project(p, (0, 0, 0))
-            draw_quad(c, frame_img(n, t + i * 0.37), q, 0.8, GRADE)
+            draw_quad(c, frame_img(n, t + i * 0.37, far=True), q, 0.8, GRADE)
         c.restore()
 
 
@@ -391,21 +401,25 @@ def render(c, t):
 
 
 E.configure(E.SEED, E.CHAOS)
-surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(W, H, skia.ColorType.kRGBA_8888_ColorType,
+SC = max(1.0, height / H)            # above 1080p the composite is drawn natively at the output size
+SW, SH = int(round(W * SC)), int(round(H * SC))
+surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(SW, SH, skia.ColorType.kRGBA_8888_ColorType,
                                                    skia.AlphaType.kPremul_AlphaType))
-SC = max(1.0, height / H)
 enc = subprocess.Popen(["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
-                        "-s", "%dx%d" % (W, H), "-r", "%d/%d" % (FPS_NUM, FPS_DEN), "-i", "-",
+                        "-s", "%dx%d" % (SW, SH), "-r", "%d/%d" % (FPS_NUM, FPS_DEN), "-i", "-",
                         "-vf", "scale=%d:%d:flags=lanczos" % (width, height),
-                        "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
-                        "-movflags", "+faststart", out], stdin=subprocess.PIPE)
-for f in range(NF):
+                        "-c:v", "libx264", "-preset", "medium", "-crf", "18" if not HD else "14",
+                        "-pix_fmt", "yuv420p", "-movflags", "+faststart", out], stdin=subprocess.PIPE)
+for f in range(F0, F1):
     t = f * DT
     c = surf.getCanvas()
     c.clear(skia.Color4f(0, 0, 0, 1))
+    c.save()
+    c.scale(SC, SC)
     render(c, t)
     c.drawRect(R(0, 0, W, BAR), paint_fill("#000000"))
     c.drawRect(R(0, H - BAR, W, BAR), paint_fill("#000000"))
+    c.restore()
     enc.stdin.write(surf.makeImageSnapshot().toarray()[..., :3].tobytes())
 enc.stdin.close()
 enc.wait()

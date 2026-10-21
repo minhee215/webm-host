@@ -109,7 +109,34 @@ em { font-style: normal; color: var(--g-600); }
 }
 .hero .intro em { font-weight: 800; }
 
-/* 02·03 사진 컷: 4:5 사진 위에 글자를 얹는 구조 */
+/* 02 정제 컷: 진한 그린 위 유리 구슬 + 콜아웃 (포인트 섹션 구조) */
+.pt { padding: 88px 0 0; text-align: center; color: #fff;
+  background: radial-gradient(ellipse 80% 46% at 50% 56%, #149a50 0%, rgba(20,154,80,0) 70%), linear-gradient(180deg, #0a7a3d 0%, #076635 100%); }
+.pt .ring { display: inline-flex; align-items: center; height: 54px; padding: 0 30px; border: 2.5px solid rgba(255,255,255,.92); border-radius: 999px; font-size: 22px; font-weight: 800; letter-spacing: .06em; }
+.pt .pre { margin-top: 34px; font-size: 32px; font-weight: 700; letter-spacing: -.02em; color: rgba(255,255,255,.92); }
+.pt h2 { margin-top: 12px; display: flex; justify-content: center; align-items: center; gap: 14px; font-size: 68px; line-height: 1; font-weight: 900; letter-spacing: -.04em; }
+.pt h2 mark { background: #fff; color: var(--g-700); padding: 10px 16px 12px; border-radius: 4px; }
+.pt .brandline { margin-top: 26px; display: flex; align-items: center; justify-content: center; gap: 14px; font-size: 16px; font-weight: 800; letter-spacing: .32em; color: #f2dcb4; }
+.pt .brandline::before, .pt .brandline::after { content: ""; width: 36px; height: 2px; background: #f2dcb4; }
+.pt .stage { position: relative; height: 760px; margin-top: 18px; }
+.pt .bubble {
+  position: absolute; left: 130px; top: 150px; width: 460px; height: 460px; border-radius: 50%;
+  background:
+    radial-gradient(circle at 28% 20%, rgba(255,255,255,.55) 0%, rgba(255,255,255,0) 20%),
+    radial-gradient(circle at 74% 84%, rgba(255,255,255,.22) 0%, rgba(255,255,255,0) 16%),
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,0) 54%, rgba(220,255,235,.12) 76%, rgba(230,255,240,.42) 100%);
+  border: 2px solid rgba(255,255,255,.55);
+  box-shadow: inset 0 0 60px rgba(255,255,255,.16), inset -16px -26px 46px rgba(0,60,30,.28), 0 34px 70px rgba(0,40,20,.3);
+}
+.pt .bubble::before { content: ""; position: absolute; left: 62px; top: 46px; width: 120px; height: 60px; border-radius: 50%; border-top: 5px solid rgba(255,255,255,.55); transform: rotate(-36deg); filter: blur(1px); }
+.pt .bubble::after { content: ""; position: absolute; inset: 8px; border-radius: 50%; border: 3px solid transparent; border-top-color: rgba(255,236,190,.4); border-left-color: rgba(170,225,255,.3); border-bottom-color: rgba(200,255,220,.18); transform: rotate(-18deg); }
+.pt .cluster { position: absolute; left: 212px; top: 66px; width: 308px; filter: drop-shadow(0 26px 30px rgba(0,30,15,.38)); }
+.pt .lines { position: absolute; inset: 0; width: 720px; height: 760px; }
+.pt .lab { position: absolute; width: 170px; font-size: 27px; line-height: 1.3; font-weight: 800; color: #f2dcb4; letter-spacing: -.02em; }
+.pt .lab small { display: block; margin-top: 4px; font-size: 16px; font-weight: 600; color: rgba(255,255,255,.72); letter-spacing: 0; }
+.pt .band { position: relative; margin-top: -6px; padding: 54px 56px 64px; background: #15924d; border-radius: 120px 0 0 0; font-size: 23px; line-height: 1.7; font-weight: 600; }
+.pt .band em { color: #f2dcb4; font-weight: 800; }
+/* 03·04 사진 컷: 4:5 사진 위에 글자를 얹는 구조 */
 .photo { padding: 0; height: 900px; background: #eef4f0 center / cover no-repeat; }
 .photo .over { position: absolute; left: 56px; right: 56px; }
 .photo .kicker { display: inline-flex; align-items: center; height: 40px; padding: 0 20px; border-radius: 999px; font-size: 17px; font-weight: 800; letter-spacing: .08em; color: #fff; background: rgba(0,122,54,.9); }
@@ -230,15 +257,34 @@ em { font-style: normal; color: var(--g-600); }
   </section>
 
   <!-- 02 정제 컷 -->
-  <section class="s photo tab" id="s02" data-name="02_tablet" style="background-image:url('assets/photos/tablet.jpg')">
-    <div class="over" style="top:76px">
-      <span class="kicker">ONE TABLET</span>
-      <h2>민트 캔디를 꺼내 먹듯,<br><em>씹어 먹는 효소</em></h2>
-      <p class="sub">씹어도 역한 냄새나 맛 없이, 민트처럼 상쾌합니다.</p>
+  <section class="s pt" id="s02" data-name="02_tablet">
+    <span class="ring">ONE TABLET</span>
+    <p class="pre">민트 캔디를 꺼내 먹듯,</p>
+    <h2><mark>씹어 먹는</mark>효소</h2>
+    <p class="brandline">CHEWENZYME</p>
+
+    <div class="stage">
+      <div class="bubble"></div>
+      <svg class="lines" viewBox="0 0 720 760" aria-hidden="true">
+        <g fill="none" stroke="#f2dcb4" stroke-width="2">
+          <path d="M112 252 V292 H214"/>
+          <path d="M608 252 V312 H500"/>
+          <path d="M112 548 V500 H226"/>
+          <path d="M608 548 V476 H520"/>
+        </g>
+        <g fill="#f2dcb4">
+          <circle cx="112" cy="252" r="6"/><circle cx="608" cy="252" r="6"/>
+          <circle cx="112" cy="548" r="6"/><circle cx="608" cy="548" r="6"/>
+        </g>
+      </svg>
+      <img class="cluster" src="assets/photos/tablets_cut.png" alt="츄엔자임 정제">
+      <p class="lab" style="left:28px; top:166px">지름<br>1.5cm</p>
+      <p class="lab" style="right:28px; top:166px">1정<br>1,000mg</p>
+      <p class="lab" style="left:28px; top:566px">물 없이<br>씹어서</p>
+      <p class="lab" style="right:28px; top:566px">민트향<br>츄어블</p>
     </div>
-    <div class="over chips" style="bottom:52px">
-      <span>지름 <b>1.5cm</b></span><span>1정 <b>1,000mg</b></span><span>물 없이 <b>씹어서</b></span><span><b>민트향</b> 츄어블</span>
-    </div>
+
+    <p class="band">지름 1.5cm 한 알을 <em>물 없이 씹어</em> 먹습니다.<br>씹어도 역한 냄새나 맛 없이, <em>민트처럼 상쾌</em>합니다.</p>
   </section>
 
   <!-- 03 사용 장면 -->

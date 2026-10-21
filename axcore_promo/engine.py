@@ -764,6 +764,70 @@ def light_streak(c, pts, head_px, tail_px=1400.0, width=3.4, alpha=1.0, mb_px=0.
         c.drawCircle(hx, hy, 4.5, paint_fill(core, 1.0 * k, blur=1.2))
 
 
+def light_ribbon(c, pts, head, tail=0.45, behind=None, occluder=None, width=3.0, alpha=1.0, core="#FFFFFF",
+                 color="#3E9BFF", bloom="#1F6BFF", mb=0.0, segs=260):
+    """Smooth luminous line for dense, analytically generated curves (helices, loops): no control-point
+    kinks. head / tail / mb are arc-length fractions of the path (head may run past 1). behind: per-point
+    flags; spans flagged True are hidden inside `occluder` (screen path) so the line wraps around objects."""
+    if alpha <= 0.003 or head <= 0 or head - tail >= 1:
+        return
+    P = np.asarray(pts, float)
+    d = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(P, axis=0).T))])
+    L = max(d[-1], 1e-6)
+    sfrac = d / L
+    h = head + mb / 2
+    a0, a1 = max(0.0, head - tail), min(1.0, h)
+    if a1 <= a0:
+        return
+    ss = np.linspace(a0, a1, segs + 1)
+    x, y = np.interp(ss, sfrac, P[:, 0]), np.interp(ss, sfrac, P[:, 1])
+    bf = np.interp(ss, sfrac, np.asarray(behind, float)) > 0.5 if behind is not None and occluder is not None \
+        else np.zeros(len(ss), bool)
+    u = np.clip((ss - (head - tail)) / max(1e-6, tail), 0, 1)
+    av = u * u * (3 - 2 * u)
+    if mb > 0:
+        av = av * np.clip((h - ss) / mb, 0, 1)
+    wv = 0.45 + 0.55 * u
+    bounds = R(x.min() - 90, y.min() - 90, x.max() - x.min() + 180, y.max() - y.min() + 180)
+
+    def strokes(wmul, amul, colr):
+        paint = skia.Paint(AntiAlias=True, Style=skia.Paint.kStroke_Style, StrokeCap=skia.Paint.kRound_Cap)
+        for back in (False, True):
+            if back and not bf.any():
+                continue
+            if back:
+                c.save()
+                c.clipPath(occluder, skia.ClipOp.kDifference, True)
+            for i in range(segs):
+                if bool(bf[i] and bf[i + 1]) != back:
+                    continue
+                ai = alpha * amul * (av[i] + av[i + 1]) / 2
+                if ai < 0.006:
+                    continue
+                paint.setColor4f(col(colr, clamp(ai)))
+                paint.setStrokeWidth(width * wmul * (wv[i] + wv[i + 1]) / 2)
+                c.drawLine(x[i], y[i], x[i + 1], y[i + 1], paint)
+            if back:
+                c.restore()
+
+    def layer(sigma, wmul, amul, colr, blend):
+        lp = skia.Paint()
+        lp.setImageFilter(skia.ImageFilters.Blur(sigma, sigma, skia.TileMode.kDecal))
+        lp.setBlendMode(blend)
+        c.saveLayer(bounds, lp)
+        strokes(wmul, amul, colr)
+        c.restore()
+
+    layer(22, 11.0, 0.55, bloom, skia.BlendMode.kScreen)        # soft bloom
+    layer(6, 4.0, 0.85, color, skia.BlendMode.kScreen)          # blue glow
+    layer(1.5, 2.0, 0.9, "#BFE0FF", skia.BlendMode.kScreen)     # pale rim
+    strokes(1.0, 1.0, core)                                      # white core
+    if head <= 1.0 and not bf[-1]:
+        hx, hy = x[-1], y[-1]
+        c.drawCircle(hx, hy, 26, paint_fill(color, 0.45 * alpha, blur=14, blend=skia.BlendMode.kScreen))
+        c.drawCircle(hx, hy, 6, paint_fill(core, 0.9 * alpha, blur=2.5, blend=skia.BlendMode.kScreen))
+
+
 def path_len(pts):
     return spline(pts)[2]
 

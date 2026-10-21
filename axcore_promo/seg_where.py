@@ -3,11 +3,12 @@
 Motion graphic (references: floating industry panels around a facade; a facade grid with a locked target):
   A 0.00-1.15  the robot shot that ends the previous cut keeps playing, then pulls back and becomes one glass
                panel in a dark space while other industry panels fly in from depth
-  B 1.15-2.05  constellation of panels around a facade panel, blue connectors draw in, brackets hop
-               ("어디를 바꾸고")
-  C 2.05-3.05  the panels slide into the windows of a dark glass facade (the centre panel grows into the wall)
-  D 3.05-4.55  a blue crosshair scans the windows and locks onto one ("어디에 AI를 적용할 것인가")
-  E 4.55-6.08  push into the locked window until its footage fills the picture
+  B 1.15-2.05  constellation of panels around a central "performance" panel (a rising KPI chart), blue
+               connectors draw in, brackets hop ("성과를 위해 어디를 바꾸고")
+  C 2.05-3.05  the performance panel recedes while the panels slide into the windows of a dark glass facade
+  D 3.05-6.08  a blue crosshair scans the windows and locks onto one ("어디에 AI를 적용할 것인가"); the shot
+               holds on the locked grid with a slow push (no zoom into the window - the bridge to the next
+               scene is designed with that scene)
 All footage is the project's own generated clips. 23.976 fps, 21:9 letterbox to match the edit.
 Usage: python3 seg_where.py <out.mp4> [height=480] [frames=146]
 """
@@ -224,14 +225,61 @@ def brackets(c, quad, alpha, grow=0.0, ln=26, width=2.6, glow=True):
     E.corner_brackets(c, r, ln, "#E8F6FF", alpha, width)
 
 
+def performance_panel(c, quad, t, alpha):
+    """Centre panel: '성과' - a dark glass KPI board whose line chart climbs as the scene opens."""
+    if alpha <= 0.003:
+        return
+    pw, ph = 900.0, 500.0
+    m = skia.Matrix()
+    m.setPolyToPoly([skia.Point(0, 0), skia.Point(pw, 0), skia.Point(pw, ph), skia.Point(0, ph)],
+                    [skia.Point(*p) for p in quad])
+    c.save()
+    lp = skia.Paint()
+    lp.setAlphaf(clamp(alpha))
+    c.saveLayer(None, lp)
+    c.concat(m)
+    sh = skia.GradientShader.MakeLinear([skia.Point(0, 0), skia.Point(0, ph)],
+                                        [col("#0E2440"), col("#081526")], [0.0, 1.0])
+    c.drawRect(R(0, 0, pw, ph), skia.Paint(Shader=sh))
+    E.radial(c, pw * 0.7, ph * 0.35, 420, "#1E6BD6", 0.35)
+    E.text(c, "PERFORMANCE", 44, 70, 26, "SemiBold", "#9CC9FF", 0.9)
+    k = e_io_cubic(prog(t, 0.75, 1.5))
+    val = 18.4 * k
+    E.text(c, "+%.1f%%" % val, 44, 138, 56, "Bold", "#FFFFFF", 1.0)
+    # chart area
+    x0, x1, y0, y1 = 60, pw - 50, 190, ph - 50
+    for j in range(5):
+        yy = lerp(y0, y1, j / 4)
+        c.drawLine(x0, yy, x1, yy, paint_stroke("#2C4C72", 0.6, 1.0))
+    # bars
+    rng = np.random.default_rng(11)
+    nb = 12
+    for j in range(nb):
+        hb = (0.25 + 0.55 * j / nb + rng.uniform(-0.08, 0.08)) * (y1 - y0) * e_out_cubic(prog(t, 0.6 + j * 0.05, 0.5))
+        bx = lerp(x0 + 10, x1 - 40, j / (nb - 1))
+        c.drawRect(R(bx, y1 - hb, 26, hb), paint_fill("#1D4E8C", 0.75))
+    # rising line, drawn on
+    xs = np.linspace(x0, x1, 60)
+    base = np.linspace(0.18, 0.92, 60) + 0.05 * np.sin(np.linspace(0, 7, 60))
+    ys = y1 - base * (y1 - y0)
+    nv = max(2, int(60 * k))
+    path = E.poly(list(zip(xs[:nv], ys[:nv])))
+    c.drawPath(path, paint_stroke(CYAN_L, 0.45, 9, blur=8, blend=skia.BlendMode.kScreen))
+    c.drawPath(path, paint_stroke("#DDF2FF", 1.0, 2.6))
+    c.drawCircle(xs[nv - 1], ys[nv - 1], 14, paint_fill(CYAN_L, 0.6, blur=8, blend=skia.BlendMode.kScreen))
+    c.drawCircle(xs[nv - 1], ys[nv - 1], 5, paint_fill("#FFFFFF", 1.0))
+    c.restore()
+    c.restore()
+
+
 def render(c, t):
     # --- timeline values
     a_pull = e_io_cubic(prog(t, 0.25, 0.95))                # robot -> slot
     wall = e_io_cubic(prog(t, 2.05, 0.9))                   # constellation -> facade
     lock = e_out_cubic(prog(t, 3.72, 0.35))
-    push = e_io_cubic(prog(t, 4.55, 1.35))
+    push = 0.0                                              # no zoom into the window (next scene TBD)
     drift = math.sin(t * 0.6) * 18
-    cam = (drift * (1 - wall), 0.0, -60 * prog(t, 0.0, 2.2) * (1 - wall) + 90 * e_io_sine(prog(t, 2.6, 2.0)))
+    cam = (drift * (1 - wall), 0.0, -60 * prog(t, 0.0, 2.2) * (1 - wall) + 150 * e_io_sine(prog(t, 2.6, 3.5)))
 
     background(c, t, wall)
     # zoom into the target window for the push-in (2D, about the target centre)
@@ -244,13 +292,13 @@ def render(c, t):
     c.translate(-tcx, -tcy)
 
     # centre facade panel grows into the wall
-    cen = mix(CENTER, (0, 0, Z_WALL, 11 * GX, 9 * GY, 0.0), wall)
+    facade_wall(c, wall, cam)
+    cen = mix(CENTER, (0, -30, 2600, 900, 500, 0.0), wall)      # the performance panel recedes into the wall
     cq = project(cen, cam)
     if wall < 0.999:
         a_in = e_out_cubic(prog(t, 0.55, 0.6))
-        draw_quad(c, frame_img("03_facade", t + 0.5), cq, a_in * (1 - wall) ** 0.7)
+        performance_panel(c, cq, t, a_in * (1 - wall))
         glow_frame(c, cq, a_in * (1 - wall))
-    facade_wall(c, wall, cam)
 
     centre_pts = {"l": ((cq[0][0] + cq[3][0]) / 2, (cq[0][1] + cq[3][1]) / 2),
                   "r": ((cq[1][0] + cq[2][0]) / 2, (cq[1][1] + cq[2][1]) / 2),

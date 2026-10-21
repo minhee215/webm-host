@@ -1,0 +1,363 @@
+"""Segment 00:00:08:02-00:00:14:03 - "성과를 위해 어디를 바꾸고 / 어디에 AI를 적용할 것인가입니다".
+
+Motion graphic (references: floating industry panels around a facade; a facade grid with a locked target):
+  A 0.00-1.15  the robot shot that ends the previous cut keeps playing, then pulls back and becomes one glass
+               panel in a dark space while other industry panels fly in from depth
+  B 1.15-2.05  constellation of panels around a facade panel, blue connectors draw in, brackets hop
+               ("어디를 바꾸고")
+  C 2.05-3.05  the panels slide into the windows of a dark glass facade (the centre panel grows into the wall)
+  D 3.05-4.55  a blue crosshair scans the windows and locks onto one ("어디에 AI를 적용할 것인가")
+  E 4.55-6.08  push into the locked window until its footage fills the picture
+All footage is the project's own generated clips. 23.976 fps, 21:9 letterbox to match the edit.
+Usage: python3 seg_where.py <out.mp4> [height=480] [frames=146]
+"""
+import math
+import subprocess
+import sys
+
+import numpy as np
+import skia
+
+import engine as E
+import media
+from engine import W, H, R, clamp, lerp, prog, e_io_cubic, e_out_cubic, e_io_sine, paint_fill, paint_stroke, col
+
+out = sys.argv[1]
+height = int(sys.argv[2]) if len(sys.argv) > 2 else 480
+NF = int(sys.argv[3]) if len(sys.argv) > 3 else 146
+width = int(round(height * 16 / 9 / 2)) * 2
+FPS_NUM, FPS_DEN = 24000, 1001
+DT = FPS_DEN / FPS_NUM
+BAR = 138                      # 21:9 letterbox in 1080 logical px (276 at 4K)
+F = 1100.0                     # focal length (px); a panel at Z=F is drawn 1:1
+ROBOT_T0 = 47 / 24             # r5_robot time of the previous cut's last frame
+CYAN_L = "#46B4FF"
+GRADE = E.grade_filter(bright=0.92, contrast=1.04, sat=0.88, tint=(-0.01, 0.0, 0.02))
+
+# constellation slots: (X, Y, Z, w, h, yaw)
+CENTER = (0, -30, 1700, 900, 500, 0.0)
+SLOTS = {
+    "r5_robot": (-1250, -560, 2000, 700, 394, -0.42),
+    "q1_refinery": (-1350, -30, 2050, 700, 394, -0.45),
+    "14_monitors": (-1250, 480, 2000, 660, 372, -0.42),
+    "05_warehouse": (1350, -480, 2050, 700, 394, 0.45),
+    "p2_carline": (1300, 0, 2000, 700, 394, 0.42),
+    "q5_city": (1350, 500, 2050, 700, 394, 0.45),
+    "r3_wind": (-430, -620, 2100, 620, 350, -0.12),
+    "20_team": (430, -620, 2100, 620, 350, 0.12),
+    "10_datacenter": (-430, 560, 2100, 620, 350, -0.12),
+    "17_robot": (430, 560, 2100, 620, 350, 0.12),
+    "19_aerial": (-2000, -150, 2700, 700, 394, -0.5),
+    "q3_silos": (2000, 200, 2700, 700, 394, 0.5),
+}
+# facade windows (wall at Z=F, so world == screen offsets): 3x3 cells of 560x240
+CW, CH, GX, GY = 560, 240, 600, 270
+CELLS = {
+    "r3_wind": (0, 0), "20_team": (0, 1), "05_warehouse": (0, 2),
+    "q1_refinery": (1, 0), "17_robot": (1, 1), "p2_carline": (1, 2),
+    "14_monitors": (2, 0), "10_datacenter": (2, 1), "q5_city": (2, 2),
+}
+TARGET = "17_robot"
+ORDER = list(SLOTS)            # fly-in order
+
+
+def cell_params(name):
+    r, cidx = CELLS[name]
+    return ((cidx - 1) * GX, (r - 1) * GY, F, CW, CH, 0.0)
+
+
+def project(p, cam):
+    X, Y, Z, w, h, yaw = p
+    ox, oy, oz = cam
+    cs, sn = math.cos(yaw), math.sin(yaw)
+    q = []
+    for dx, dy in ((-w / 2, -h / 2), (w / 2, -h / 2), (w / 2, h / 2), (-w / 2, h / 2)):
+        x, y, z = X + dx * cs - ox, Y + dy - oy, Z + dx * sn - oz
+        z = max(z, 60.0)
+        q.append((W / 2 + F * x / z, H / 2 + F * y / z))
+    return q
+
+
+def mix(a, b, k):
+    return tuple(lerp(x, y, k) for x, y in zip(a, b))
+
+
+def frame_img(name, t, full=False):
+    if full:
+        return media.frame(name, t)[0]
+    img = media.proxy_frame(name, t)
+    return img if img is not None else media.frame(name, t)[0]
+
+
+def draw_quad(c, img, quad, alpha=1.0, grade=None):
+    if alpha <= 0.003:
+        return
+    iw, ih = img.width(), img.height()
+    qw = math.hypot(quad[1][0] - quad[0][0], quad[1][1] - quad[0][1])
+    qh = math.hypot(quad[3][0] - quad[0][0], quad[3][1] - quad[0][1])
+    asp = qw / max(qh, 1)
+    sw = min(iw, ih * asp)
+    sh = sw / asp
+    sx, sy = (iw - sw) / 2, (ih - sh) / 2
+    m = skia.Matrix()
+    m.setPolyToPoly([skia.Point(sx, sy), skia.Point(sx + sw, sy), skia.Point(sx + sw, sy + sh), skia.Point(sx, sy + sh)],
+                    [skia.Point(*p) for p in quad])
+    p = skia.Paint(AntiAlias=True)
+    p.setAlphaf(clamp(alpha))
+    if grade is not None:
+        p.setColorFilter(grade)
+    c.save()
+    c.clipPath(E.poly(quad, True), skia.ClipOp.kIntersect, True)
+    c.concat(m)
+    c.drawImage(img, 0, 0, E.SAMP, p)
+    c.restore()
+
+
+def glow_frame(c, quad, alpha, strength=1.0):
+    if alpha <= 0.003:
+        return
+    path = E.poly(quad, True)
+    c.drawPath(path, paint_stroke(CYAN_L, 0.55 * alpha * strength, 7, blur=10, blend=skia.BlendMode.kScreen))
+    c.drawPath(path, paint_stroke("#9AD8FF", 0.9 * alpha, 1.4))
+
+
+def background(c, t, wall):
+    c.drawRect(R(0, 0, W, H), paint_fill("#040A14"))
+    E.radial(c, W / 2, H / 2 - 20, 900, "#0E3A7A", 0.55 * (1 - wall))
+    E.radial(c, W / 2, H / 2, 420, "#1E66C8", 0.25 * (1 - wall))
+    # far, defocused tiles drifting slowly (depth)
+    if wall < 0.99:
+        lp = skia.Paint()
+        lp.setImageFilter(skia.ImageFilters.Blur(5, 5, skia.TileMode.kDecal))
+        lp.setAlphaf(0.32 * (1 - wall))
+        c.saveLayer(None, lp)
+        rng = np.random.default_rng(7)
+        names = list(SLOTS) + ["16_retail", "06_line", "18_factory", "22_city"]
+        for i in range(22):
+            n = names[i % len(names)]
+            x, y = rng.uniform(-1.0, 1.0) * 1.15 * W / 2, rng.uniform(-1, 1) * 0.9 * H / 2
+            z = rng.uniform(3200, 5200)
+            sz = rng.uniform(260, 520)
+            p = (x * z / F + 60 * t * z / F * 0.15, y * z / F, z, sz * 1.6, sz * 0.9, rng.uniform(-0.3, 0.3))
+            q = project(p, (0, 0, 0))
+            draw_quad(c, frame_img(n, t + i * 0.37), q, 0.8, GRADE)
+        c.restore()
+
+
+def facade_wall(c, a, cam):
+    """Dark glass facade around the 3x3 windows: spandrels, mullions, faint reflections."""
+    if a <= 0.003:
+        return
+    c.save()
+    lp = skia.Paint()
+    lp.setAlphaf(clamp(a))
+    c.saveLayer(None, lp)
+    sh = skia.GradientShader.MakeLinear([skia.Point(0, 0), skia.Point(W, H)],
+                                        [col("#0A1726"), col("#10243A"), col("#081320")], [0.0, 0.55, 1.0])
+    c.drawRect(R(-W, -H, 3 * W, 3 * H), skia.Paint(Shader=sh))
+    # secondary small windows beyond the 3x3 block (dim, a few lit)
+    rng = np.random.default_rng(3)
+    for r in range(-3, 4):
+        for k in range(-4, 5):
+            if abs(r) <= 1 and abs(k) <= 1:
+                continue
+            q = project((k * GX, r * GY, F, CW, CH, 0.0), cam)
+            lit = rng.uniform() < 0.22
+            c.drawPath(E.poly(q, True), paint_fill("#1B3550" if lit else "#0D1C2E", 0.9))
+            if lit:
+                c.drawPath(E.poly(q, True), paint_fill("#F2D7A8", 0.10))
+    # mullions: verticals every quarter cell, spandrel bands between rows
+    for k in range(-5, 6):
+        for j in range(4):
+            xw = k * GX - GX / 2 + j * GX / 4
+            q1 = project((xw, 0, F, 0.1, 9 * GY, 0.0), cam)
+            c.drawLine(q1[0][0], q1[0][1], q1[3][0], q1[3][1], paint_stroke("#3B5A78", 0.55 if j == 0 else 0.25,
+                                                                              3.0 if j == 0 else 1.2))
+    for r in range(-4, 5):
+        yw = r * GY - GY / 2
+        q1 = project((0, yw, F, 11 * GX, 0.1, 0.0), cam)
+        c.drawLine(q1[0][0], q1[0][1], q1[1][0], q1[1][1], paint_stroke("#3B5A78", 0.5, 3.0))
+    c.restore()
+    c.restore()
+
+
+def connector(c, a_pt, b_pt, k, alpha, t, seed):
+    """Elbow line from the centre panel to a panel, drawn on by k, with a travelling pulse."""
+    if k <= 0 or alpha <= 0.003:
+        return
+    mx = a_pt[0] + (b_pt[0] - a_pt[0]) * 0.55
+    pts = [a_pt, (mx, a_pt[1]), (mx, b_pt[1]), b_pt]
+    seg = [math.dist(pts[i], pts[i + 1]) for i in range(3)]
+    L = sum(seg)
+    path = skia.Path()
+    path.moveTo(*pts[0])
+    rem = L * k
+    for i in range(3):
+        if rem <= 0:
+            break
+        f_ = min(1.0, rem / max(seg[i], 1e-6))
+        path.lineTo(lerp(pts[i][0], pts[i + 1][0], f_), lerp(pts[i][1], pts[i + 1][1], f_))
+        rem -= seg[i]
+    c.drawPath(path, paint_stroke(CYAN_L, 0.35 * alpha, 5, blur=6, blend=skia.BlendMode.kScreen))
+    c.drawPath(path, paint_stroke("#8FD0FF", 0.85 * alpha, 1.3))
+    if k >= 1:
+        ph = (t * 0.9 + seed * 0.29) % 1.0
+        d = ph * L
+        for i in range(3):
+            if d <= seg[i]:
+                f_ = d / max(seg[i], 1e-6)
+                x, y = lerp(pts[i][0], pts[i + 1][0], f_), lerp(pts[i][1], pts[i + 1][1], f_)
+                c.drawCircle(x, y, 9, paint_fill(CYAN_L, 0.5 * alpha, blur=6, blend=skia.BlendMode.kScreen))
+                c.drawCircle(x, y, 2.6, paint_fill("#FFFFFF", 0.95 * alpha))
+                break
+            d -= seg[i]
+
+
+def brackets(c, quad, alpha, grow=0.0, ln=26, width=2.6, glow=True):
+    if alpha <= 0.003:
+        return
+    xs, ys = [p[0] for p in quad], [p[1] for p in quad]
+    r = R(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)).makeOutset(10 + grow, 10 + grow)
+    if glow:
+        E.corner_brackets(c, r, ln, CYAN_L, alpha * 0.6, width * 3.2)
+    E.corner_brackets(c, r, ln, "#E8F6FF", alpha, width)
+
+
+def render(c, t):
+    # --- timeline values
+    a_pull = e_io_cubic(prog(t, 0.25, 0.95))                # robot -> slot
+    wall = e_io_cubic(prog(t, 2.05, 0.9))                   # constellation -> facade
+    lock = e_out_cubic(prog(t, 3.72, 0.35))
+    push = e_io_cubic(prog(t, 4.55, 1.35))
+    drift = math.sin(t * 0.6) * 18
+    cam = (drift * (1 - wall), 0.0, -60 * prog(t, 0.0, 2.2) * (1 - wall))
+
+    background(c, t, wall)
+    # zoom into the target window for the push-in (2D, about the target centre)
+    zoom = lerp(1.0, (W + 8) / CW, push)
+    tq = project(cell_params(TARGET), cam)
+    tcx, tcy = sum(p[0] for p in tq) / 4, sum(p[1] for p in tq) / 4
+    c.save()
+    c.translate(lerp(tcx, W / 2, push), lerp(tcy, H / 2, push))
+    c.scale(zoom, zoom)
+    c.translate(-tcx, -tcy)
+
+    # centre facade panel grows into the wall
+    cen = mix(CENTER, (0, 0, F, 11 * GX, 9 * GY, 0.0), wall)
+    cq = project(cen, cam)
+    if wall < 0.999:
+        a_in = e_out_cubic(prog(t, 0.55, 0.6))
+        draw_quad(c, frame_img("03_facade", t + 0.5), cq, a_in * (1 - wall) ** 0.7)
+        glow_frame(c, cq, a_in * (1 - wall))
+    facade_wall(c, wall, cam)
+
+    centre_pts = {"l": ((cq[0][0] + cq[3][0]) / 2, (cq[0][1] + cq[3][1]) / 2),
+                  "r": ((cq[1][0] + cq[2][0]) / 2, (cq[1][1] + cq[2][1]) / 2),
+                  "t": ((cq[0][0] + cq[1][0]) / 2, cq[0][1]), "b": ((cq[3][0] + cq[2][0]) / 2, cq[3][1])}
+
+    # panels (far first)
+    items = []
+    for i, n in enumerate(ORDER):
+        slot = SLOTS[n]
+        if n == "r5_robot":
+            start = (0, 0, F, W, H, 0.0)
+            p = mix(start, slot, a_pull)
+            a = 1.0
+        else:
+            k_in = e_out_cubic(prog(t, 0.35 + 0.07 * i, 0.75))
+            p = mix((slot[0] * 1.3, slot[1] * 1.3, slot[2] * 2.6, slot[3], slot[4], slot[5]), slot, k_in)
+            a = k_in
+        if n in CELLS:
+            kk = e_io_cubic(prog(t, 2.05 + 0.05 * (i % 5), 0.85))
+            p = mix(p, cell_params(n), kk)
+        else:
+            kk = e_io_cubic(prog(t, 1.95, 0.8))
+            p = mix(p, (p[0] * 2.2, p[1] * 1.6, p[2] * 0.7, p[3], p[4], p[5]), kk)
+            a *= 1 - kk
+        items.append((p[2], n, p, a, i))
+    items.sort(key=lambda x: -x[0])
+
+    dim = 0.62 * lock * (1 - push)
+    for z, n, p, a, i in items:
+        q = project(p, cam)
+        full = n == TARGET or (n == "r5_robot" and a_pull < 0.5)
+        tt = ROBOT_T0 + t if n == "r5_robot" else t + 0.31 * i
+        g = None if (n == "r5_robot" and a_pull < 0.05) else GRADE
+        draw_quad(c, frame_img(n, tt, full), q, a, g)
+        if n != TARGET and dim > 0:
+            c.drawPath(E.poly(q, True), paint_fill("#030814", dim * a))
+        border = a * (1 - 0.6 * wall) * (a_pull if n == "r5_robot" else 1.0)
+        glow_frame(c, q, border * (1 - 0.5 * dim))
+        # connectors from the centre panel (constellation only)
+        if wall < 0.99 and n in SLOTS and n not in ("19_aerial", "q3_silos"):
+            kc = e_out_cubic(prog(t, 1.0 + 0.04 * i, 0.55))
+            side = "l" if p[0] < -600 else "r" if p[0] > 600 else ("t" if p[1] < 0 else "b")
+            if side in "lr":
+                end = ((q[1][0] + q[2][0]) / 2, (q[1][1] + q[2][1]) / 2) if side == "l" else \
+                    ((q[0][0] + q[3][0]) / 2, (q[0][1] + q[3][1]) / 2)
+                connector(c, centre_pts[side], end, kc, a * (1 - wall), t, i)
+            else:
+                end = ((q[3][0] + q[2][0]) / 2, q[3][1]) if side == "t" else ((q[0][0] + q[1][0]) / 2, q[0][1])
+                st = centre_pts[side]
+                st = (lerp(cq[0][0], cq[1][0], 0.3 if p[0] < 0 else 0.7), st[1])
+                connector(c, st, end, kc, a * (1 - wall), t, i)
+
+    # "어디를 바꾸고": brackets hop across panels
+    for j, (n, t0) in enumerate((("q1_refinery", 1.05), ("p2_carline", 1.38), ("20_team", 1.70), ("10_datacenter", 2.0))):
+        av = E.vis(t, t0, 0.12, t0 + 0.30, 0.15)
+        if av > 0:
+            p = [x for x in items if x[1] == n][0][2]
+            brackets(c, project(p, cam), av, grow=14 * (1 - clamp((t - t0) / 0.15)))
+
+    # "어디에 AI를 적용할 것인가": crosshair scans the windows, then locks onto the target
+    scan_a = e_out_cubic(prog(t, 2.95, 0.25)) * (1 - push)
+    if scan_a > 0:
+        path_cells = [(0, 2), (2, 0), (0, 0), (2, 2), (1, 1)]
+        s = clamp((t - 3.0) / 0.72) * (len(path_cells) - 1)
+        i0 = min(int(s), len(path_cells) - 2)
+        f_ = e_io_sine(s - i0)
+        (r0, c0), (r1, c1) = path_cells[i0], path_cells[i0 + 1]
+        rr, cc = lerp(r0, r1, f_), lerp(c0, c1, f_)
+        cx_w, cy_w = (cc - 1) * GX, (rr - 1) * GY
+        q = project((cx_w, cy_w, F, CW, CH, 0.0), cam)
+        x0, y0 = min(p[0] for p in q), min(p[1] for p in q)
+        x1, y1 = max(p[0] for p in q), max(p[1] for p in q)
+        mxc, myc = (x0 + x1) / 2, (y0 + y1) / 2
+        la = scan_a * (0.55 + 0.45 * lock)
+        for (xa, ya, xb, yb) in ((-W, myc, 2 * W, myc), (mxc, -H, mxc, 2 * H)):
+            c.drawLine(xa, ya, xb, yb, paint_stroke(CYAN_L, 0.35 * la, 6, blur=8, blend=skia.BlendMode.kScreen))
+            c.drawLine(xa, ya, xb, yb, paint_stroke("#BFE6FF", 0.75 * la, 1.2))
+        brackets(c, q, scan_a * (0.65 + 0.35 * lock), grow=8 * (1 - lock), ln=34, width=3.0)
+        if lock > 0:
+            # rays from the locked bracket corners out to the frame
+            for (px, py), (dx, dy) in (((x0, y0), (-1, -0.6)), ((x1, y0), (1, -0.6)), ((x0, y1), (-1, 0.6)),
+                                       ((x1, y1), (1, 0.6))):
+                L = 1400 * lock
+                c.drawLine(px, py, px + dx * L, py + dy * L, paint_stroke(CYAN_L, 0.3 * la, 4, blur=6,
+                                                                          blend=skia.BlendMode.kScreen))
+                c.drawLine(px, py, px + dx * L, py + dy * L, paint_stroke("#BFE6FF", 0.55 * la, 1.0))
+            c.drawPath(E.poly(q, True), paint_stroke(CYAN_L, 0.6 * lock * scan_a, 10, blur=14,
+                                                     blend=skia.BlendMode.kScreen))
+    c.restore()
+
+
+E.configure(E.SEED, E.CHAOS)
+surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(W, H, skia.ColorType.kRGBA_8888_ColorType,
+                                                   skia.AlphaType.kPremul_AlphaType))
+SC = max(1.0, height / H)
+enc = subprocess.Popen(["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
+                        "-s", "%dx%d" % (W, H), "-r", "%d/%d" % (FPS_NUM, FPS_DEN), "-i", "-",
+                        "-vf", "scale=%d:%d:flags=lanczos" % (width, height),
+                        "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+                        "-movflags", "+faststart", out], stdin=subprocess.PIPE)
+for f in range(NF):
+    t = f * DT
+    c = surf.getCanvas()
+    c.clear(skia.Color4f(0, 0, 0, 1))
+    render(c, t)
+    c.drawRect(R(0, 0, W, BAR), paint_fill("#000000"))
+    c.drawRect(R(0, H - BAR, W, BAR), paint_fill("#000000"))
+    enc.stdin.write(surf.makeImageSnapshot().toarray()[..., :3].tobytes())
+enc.stdin.close()
+enc.wait()
+print(out)

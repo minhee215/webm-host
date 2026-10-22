@@ -1,14 +1,16 @@
-"""Segment 00:00:44:22-00:00:53:02 - "AXCORE는 다양한 업무 환경을 하나로 연결합니다. / ERP, MES, CRM과 같은
+"""Segment 00:00:44:08-00:00:53:02 - "AXCORE는 다양한 업무 환경을 하나로 연결합니다. / ERP, MES, CRM과 같은
 사내 시스템부터". Replaces SC10 + SC11 with one continuous shot in the datacenter (no transition between them):
 
-  A 0.00-3.20  the AXCORE node lights up at the corridor's vanishing point; glass footage cards of eight work
-               environments fly out of it into a ring and connect back to it with light lines, pulses flowing
+  A 0.00-3.20  (after the transition from SC09) the AXCORE node lights up at the corridor's vanishing point; glass footage cards of eight work
+               environments ease into a ring around it (fade, focus pull, settle) and connect back to it with light lines, pulses flowing
                into the node ("다양한 업무 환경을 하나로 연결합니다"); the corridor sits slightly defocused
   B 3.20-4.40  the camera dollies down the corridor toward the node: the cards fly past the lens and fade,
                the corridor racks into focus (whole-frame motion blur while it moves)
   C 3.95-8.21  internal systems dock on the left and connect into the same node - ERP, MES, CRM on the
                narration, then AI Vision; further systems branch out on the right (SCM, PLM, QMS, 인사, 그룹웨어)
-Frame f of the segment is timeline frame 1078 + f (44:22), film time (1078 + f) / 24. 21:9 letterbox.
+Delivered from 00:00:44:08 (timeline frame 1064): SC09 hands over with the film's line-particle transition
+(44:08-45:06, as in the original cut), so SC09's cut ends at 44:07. Shot time s = 0 at 44:22; frame f is film
+time (1064 + f) / 24. Film finish as in render.py; 21:9 letterbox.
 Usage: python3 seg_connect.py <out.mp4> [height=480] [first last]
   height > 1080 renders natively at that size with full-resolution footage in every card (1440 = 2K).
 """
@@ -25,8 +27,9 @@ import scenes as S
 from engine import (W, H, R, clamp, lerp, prog, e_io_cubic, e_out_cubic, e_out_expo, enter, paint_fill,
                     paint_stroke, col, colint, CYAN, CYAN_SOFT, WHITE, NAVY_800, NAVY_950, STEEL_200)
 
-F_START = 44 * 24 + 22         # timeline frame of the segment's first frame (00:00:44:22)
-NF = 197                       # through 00:00:53:02
+F_START = 44 * 24 + 22         # the shot's clock zero: timeline 00:00:44:22 (s = 0)
+SEG0 = 44 * 24 + 8             # first frame delivered: 00:00:44:08, where SC09's transition out begins
+NF = 53 * 24 + 2 - SEG0 + 1    # through 00:00:53:02 (211 frames)
 BAR = 138                      # 21:9 letterbox in 1080 logical px
 FPS_NUM, FPS_DEN = 24000, 1001
 F = 1100.0                     # focal length (px)
@@ -44,20 +47,25 @@ def cue(k):
 
 
 L13, L13B, ERP, MES, CRM = cue("L13"), cue("L13b"), cue("ERP"), cue("MES"), cue("CRM")
+S_MIN = (SEG0 - F_START) / 24                                   # shot time of the first delivered frame
+# SC09 hands over with the film's own transition into the old SC10 (same type, timing and particles)
+SC09 = [sc for sc in S.SCENES if sc[0] == "sc09"][0]
+TR_TYPE, TR_D, TR_KW = S.TRANS["sc10"]
+TR0 = SC09[2] - TR_D / 2
 DOLLY0, DOLLY_D = 3.2, 1.2
 
 # work-environment cards (reference layout around the core): label, clip, screen offset from the node at the
 # start, screen width, depth Z
-ENV = [("Factory", "18_factory", (-640, -178), 283, 1800), ("Office", "14_monitors", (600, -190), 283, 1750),
-       ("Warehouse", "05_warehouse", (-680, 150), 262, 1650), ("Store", "16_retail", (650, 135), 255, 1700),
-       ("Production", "06_line", (-215, -224), 220, 2300), ("People", "20_team", (205, -226), 236, 2250),
-       ("Plant", "q1_refinery", (-255, 255), 262, 2100), ("Field", "19_aerial", (265, 268), 268, 2050)]
-ENV_T0, ENV_DT = 0.30, 0.11
+ENV = [("Factory", "18_factory", (-540, -142), 232, 1800), ("Office", "14_monitors", (505, -152), 232, 1750),
+       ("Warehouse", "05_warehouse", (-570, 140), 215, 1650), ("Store", "16_retail", (545, 128), 210, 1700),
+       ("Production", "06_line", (-182, -183), 180, 2300), ("People", "20_team", (172, -185), 194, 2250),
+       ("Plant", "q1_refinery", (-215, 231), 215, 2100), ("Field", "19_aerial", (222, 241), 220, 2050)]
+ENV_T0, ENV_DT = 0.36, 0.12
 
 SYS = [("ERP", "전사적 자원 관리", "db", ERP - 0.05), ("MES", "생산 실행 시스템", "factory", MES - 0.05),
-       ("CRM", "고객 관계 관리", "user", CRM - 0.05), ("AI Vision", "AI 비전 검사", "eye", CRM + 0.62)]
+       ("CRM", "고객 관계 관리", "user", CRM - 0.05), ("AI Vision", "AI 비전", "eye", CRM + 0.62)]
 SYS_X, SYS_Y0, SYS_DY, SYS_W, SYS_H = 130, 248, 132, 410, 104
-EXTRA = [("SCM", 400, -250), ("PLM", 540, -80), ("QMS", 460, 100), ("인사", 580, 260), ("그룹웨어", 320, 380)]
+EXTRA = [("SCM", 400, -250), ("PLM", 540, -85), ("QMS", 460, 90), ("인사", 580, 250), ("그룹웨어", 320, 370)]
 EXTRA_T0 = CRM + 0.85
 
 
@@ -86,7 +94,7 @@ def background(c, s):
     """The corridor, zoomed about the node by the dolly; defocused and dimmed while the cards are up front."""
     info = media.clip_info(BG) or {}
     span = info.get("dur", 10.0) / info.get("speed", 1.0) - 0.1
-    img, _ = media.frame(BG, s * min(1.0, span / (NF / 24)))      # never runs out (no frozen frame)
+    img, _ = media.frame(BG, (s - S_MIN) * min(1.0, span / (NF / 24)))      # never runs out (no frozen frame)
     iw, ih = img.width(), img.height()
     k = max(W / iw, H / ih)
     z = bg_zoom(s)
@@ -121,11 +129,13 @@ def env_card(i, s):
     """Projected quad, alpha and scale of environment card i at time s (None when not on screen)."""
     lab, name, (ox, oy), sw, Z = ENV[i]
     t0 = ENV_T0 + i * ENV_DT
-    k = enter(s, t0, 0.95)
-    if k <= 0:
+    if s <= t0:
         return None
-    a = clamp(k * 1.5) * (1 - clamp(prog(s, DOLLY0 + 0.35, 0.75)))
-    Zk = Z + 2600 * (1 - e_out_cubic(clamp(k)))                    # flies out of the node toward its slot
+    # eases forward into its slot from a little further back while it fades in and pulls into focus
+    k = e_out_cubic(prog(s, t0, 1.3))
+    a = E.e_io_sine(prog(s, t0, 0.8)) * (1 - clamp(prog(s, DOLLY0 + 0.35, 0.75)))
+    Zk = Z + 480 * (1 - k)
+    blur = 7.0 * (1 - E.e_io_sine(prog(s, t0, 0.9)))
     X, Y = ox * Z / F, (oy + 6 * math.sin(s * 0.9 + i * 1.7)) * Z / F
     w, h = sw * Z / F, sw * 0.62 * Z / F
     yaw = -clamp(ox / 700, -1, 1) * 0.5
@@ -139,7 +149,7 @@ def env_card(i, s):
     a *= clamp((zc - 150) / 350)                                     # gone before it reaches the lens
     if a <= 0.003:
         return None
-    return q, a, Z / max(Zk - camz(s), 40.0), t0
+    return q, a, Z / max(Zk - camz(s), 40.0), t0, blur
 
 
 def edge_mid(q, side):
@@ -158,8 +168,8 @@ def draw_env(c, s):
         if r is not None:
             cards.append((i,) + r)
     hs = hub_scale(s)
-    # connections first (behind the cards): light curves into the node, small square nodes, pulses
-    for (i, q, a, sc, t0) in cards:
+    # connections first (behind the cards): light curves into the node, pulses flowing along them
+    for (i, q, a, sc, t0, blur) in cards:
         ox, oy = ENV[i][2]
         if abs(ox) > 450:
             side, horiz = ("r" if ox < 0 else "l"), True
@@ -172,20 +182,16 @@ def draw_env(c, s):
         g = e_out_expo(prog(s, t0 + 0.45, 0.9))
         E.line(c, pth, CYAN_L, 0.6 * a, 1.2, (0, g), glow=1.0, glow_w=9)
         E.line(c, pth, WHITE, 0.95 * a, 1.5, (0, g))
-        for f in (0.33, 0.68):
-            if g > f:
-                nx, ny, _ = E.path_at(pth, f)
-                c.drawRect(R(nx - 4.5, ny - 4.5, 9, 9), paint_fill("#EAF4FF", 0.95 * a))
-                c.drawRect(R(nx - 4.5, ny - 4.5, 9, 9), paint_stroke(CYAN_L, a, 1.0))
-                E.glow_dot(c, nx, ny, 14, "#9FD0FF", 0.55 * a)
         for j in range(2):
             ph = (s - t0 - 1.2) * 0.75 + j * 0.5
             if s > t0 + 1.2:
                 E.pulse(c, pth, ph % 1.0, WHITE, 0.95 * a, 12, 0.2, 2.0)
     # cards: shadow, footage, sheen, frame, label
-    for (i, q, a, sc, t0) in sorted(cards, key=lambda r: -r[3]):
+    for (i, q, a, sc, t0, blur) in sorted(cards, key=lambda r: -r[3]):
         lab, name = ENV[i][0], ENV[i][1]
         pth = E.poly(q, True)
+        if blur > 0.2:
+            c.saveLayer(None, skia.Paint(ImageFilter=skia.ImageFilters.Blur(blur, blur, skia.TileMode.kDecal)))
         c.drawPath(E.poly([(x, y + 16 * sc) for x, y in q], True), paint_fill(NAVY_950, 0.3 * a, blur=22 * sc))
         draw_quad(c, card_img(name, s + i * 0.4), q, a, S.GRADE_TILE)
         y0, y1 = min(p[1] for p in q), max(p[1] for p in q)
@@ -200,7 +206,9 @@ def draw_env(c, s):
         c.restore()
         c.drawPath(pth, paint_stroke(WHITE, 0.9 * a, 1.6 * min(sc, 3)))
         c.drawPath(pth, paint_stroke(CYAN_L, 0.25 * a, 6 * min(sc, 3), blur=8, blend=skia.BlendMode.kScreen))
-        E.text(c, lab, q[3][0] + 18 * sc, q[3][1] - 20 * sc, 22 * sc, "SemiBold", WHITE, a)
+        E.text(c, lab, q[3][0] + 16 * sc, q[3][1] - 18 * sc, 20 * sc, "SemiBold", WHITE, a)
+        if blur > 0.2:
+            c.restore()
 
 
 def draw_quad(c, img, quad, alpha=1.0, grade=None):
@@ -255,7 +263,6 @@ def draw_hub(c, s):
     c.drawRect(R(-11 * hs, -11 * hs, 22 * hs, 22 * hs), paint_fill(CYAN, a))
     c.restore()
     E.glow_dot(c, hx, hy, 26 * hs, CYAN, 0.7 * a)
-    E.text(c, "AXCORE", hx, hy + 128 * hs, 15 * min(hs, 1.15), "SemiBold", WHITE, a * 0.9, "center")
 
 
 def eye_icon(c, cx, cy, s, color, a):
@@ -300,8 +307,8 @@ def draw_systems(c, s):
             continue
         x, y = HUB[0] + dx + par * 1.6, HUB[1] + dy
         pth = E.curve((HUB[0] + 40 * hs, HUB[1]), (x - 10, y), 0.4)
-        E.line(c, pth, CYAN_SOFT, 0.45, 1.1, (0, e_out_expo(prog(s, t0 - 0.2, 0.6))))
-        S.label_chip(c, x, y, lab, clamp(k) * 0.85, True, 15)
+        E.line(c, pth, CYAN_SOFT, 0.6, 1.3, (0, e_out_expo(prog(s, t0 - 0.2, 0.6))))
+        S.label_chip(c, x, y, lab, clamp(k) * 0.95, True, 20, pad=15)
 
 
 def render(c, s):
@@ -311,46 +318,81 @@ def render(c, s):
     draw_hub(c, s)
 
 
+def make_surface(sw, sh):
+    return skia.Surface.MakeRaster(skia.ImageInfo.Make(sw, sh, skia.ColorType.kRGBA_8888_ColorType,
+                                                       skia.AlphaType.kPremul_AlphaType))
+
+
 if __name__ == "__main__":
     out = sys.argv[1]
     height = int(sys.argv[2]) if len(sys.argv) > 2 else 480
     F0, F1 = (int(sys.argv[3]), int(sys.argv[4])) if len(sys.argv) > 4 else (0, NF)
     HD = height > 1080
-    media.MAX_READERS = 12 if HD else 3
+    media.MAX_READERS = 14 if HD else 4
     width = int(round(height * 16 / 9 / 2)) * 2
     E.configure(E.SEED, E.CHAOS)
     SC = max(1.0, height / H)            # above 1080p the composite is drawn natively at the output size
     SW, SH = int(round(W * SC)), int(round(H * SC))
-    surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(SW, SH, skia.ColorType.kRGBA_8888_ColorType,
-                                                       skia.AlphaType.kPremul_AlphaType))
+    surf, sa, sb = make_surface(SW, SH), make_surface(SW, SH), make_surface(SW, SH)
+    finish = E.Finish(size=(SW, SH))
     enc = subprocess.Popen(["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
                             "-s", "%dx%d" % (SW, SH), "-r", "%d/%d" % (FPS_NUM, FPS_DEN), "-i", "-",
                             "-vf", "scale=%d:%d:flags=lanczos" % (width, height),
                             "-c:v", "libx264", "-preset", "medium", "-crf", "18" if not HD else "14",
                             "-pix_fmt", "yuv420p", "-movflags", "+faststart", out], stdin=subprocess.PIPE)
 
-    def shot(s):
-        c = surf.getCanvas()
+    def draw_new(sf, s):
+        c = sf.getCanvas()
         c.clear(skia.Color4f(0, 0, 0, 1))
         c.save()
         c.scale(SC, SC)
         render(c, s)
-        c.drawRect(R(0, 0, W, BAR), paint_fill("#000000"))
-        c.drawRect(R(0, H - BAR, W, BAR), paint_fill("#000000"))
         c.restore()
+
+    def draw_sc09(sf, T):
+        _, t0, t1, fn = SC09
+        c = sf.getCanvas()
+        c.save()
+        c.clear(skia.Color4f(0, 0, 0, 1))
+        c.scale(SC, SC)
+        fn(c, T, T - t0, t1 - t0)
+        c.restore()
+
+    def shot(T):
+        """Raw composite at film time T: SC09's line-particle transition into this shot, then the shot."""
+        s = T - F_START / 24
+        if T >= TR0 + TR_D:
+            draw_new(surf, s)
+        else:
+            draw_sc09(sa, T)
+            draw_new(sb, s)
+            A, B = sa.makeImageSnapshot(), sb.makeImageSnapshot()
+            c = surf.getCanvas()
+            c.save()
+            c.clear(skia.Color4f(0, 0, 0, 1))
+            c.scale(SC, SC)
+            E.TRANSITIONS[TR_TYPE](c, A, B, clamp((T - TR0) / TR_D), **TR_KW)
+            c.restore()
         return surf.makeImageSnapshot().toarray()[..., :3]
 
+    bar = int(round(BAR * SC))
     for f in range(F0, F1):
-        s = f / 24
+        T = (SEG0 + f) / 24
+        s = T - F_START / 24
         if DOLLY0 - 0.05 < s < DOLLY0 + DOLLY_D + 0.05:
             # 180-degree shutter while the camera travels: average sub-frames in float
             acc = np.zeros((SH, SW, 3), np.float32)
             n = 6
             for j in range(n):
-                acc += shot(s + (j / (n - 1) - 0.5) / 48)
+                acc += shot(T + (j / (n - 1) - 0.5) / 48)
             fr = np.clip(acc / n + 0.5, 0, 255).astype(np.uint8)
+            rgba = np.dstack([fr, np.full((SH, SW), 255, np.uint8)])
+            surf.getCanvas().drawImage(skia.Image.fromarray(rgba, colorType=skia.ColorType.kRGBA_8888_ColorType), 0, 0)
         else:
-            fr = shot(s)
+            shot(T)
+        fr = finish.apply(surf, SEG0 + f)          # same film finish as the rest of the film (and SC09)
+        fr[:bar] = 0
+        fr[-bar:] = 0
         enc.stdin.write(np.ascontiguousarray(fr).tobytes())
     enc.stdin.close()
     enc.wait()

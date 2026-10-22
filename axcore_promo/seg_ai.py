@@ -8,8 +8,10 @@ Replaces SC21 (aerial city). AI given a shape: a living network that grows solid
   3.60-5.80  the structure tightens: jitter dies, lattice edges sharpen, facets fill, precision rings lock and
              the core condenses to a bright point ("더 정확하게 판단합니다")
   5.30-7.05  light bursts from the core and the camera rushes into it; the frame floods white
-Hand-overs: SC20 -> this shot with the film's line-particle transition (99.43-100.38, as before); this shot ->
-FIN through the white flash (peak 106.95, FIN's warm white is revealed by 107.40).
+Hand-overs: SC20 -> this shot with the film's line-particle wipe (99.43-100.38, as before), but the line bundles
+keep flowing on and out of frame instead of vanishing; this shot -> FIN through the white flash (peak 106.95,
+FIN's warm white is revealed by 107.40). From the first frame the camera flies in through the field, data streams
+curve into the structure and links fire across the network.
 Shot clock u = film time - 99.90 (SC21's start). Frame f is film time (2386 + f) / 24. Film finish; 21:9 letterbox.
 Usage: python3 seg_ai.py <out.mp4> [height=480] [first last]
 """
@@ -32,7 +34,7 @@ BAR = 138
 FPS_NUM, FPS_DEN = 24000, 1001
 F = 1100.0
 CX, CY = W / 2, H / 2 + 10
-C3 = np.array([0.0, -60.0, 2400.0])     # the structure's centre (world)
+C3 = np.array([0.0, -60.0, 3600.0])     # the structure's centre (world)
 RAD = 560.0
 SC20 = [sc for sc in S.SCENES if sc[0] == "sc20"][0]
 FIN = [sc for sc in S.SCENES if sc[0] == "fin"][0]
@@ -41,7 +43,7 @@ TR0 = U0 - TR_D / 2
 FLASH_PEAK, FLASH_OUT = 106.95, 0.45
 HD = False
 
-LINE = "#3F7FFF"
+LINE = "#4A8DFF"
 LINE_HI = "#9CCBFF"
 GLOW = "#4FA3FF"
 
@@ -85,15 +87,15 @@ r = np.random.default_rng(2110)
 N_VOL, N_GND = 520, 330
 N = N_VOL + N_GND
 BASE = np.zeros((N, 3))
-BASE[:N_VOL] = np.c_[r.uniform(-2300, 2300, N_VOL), r.uniform(-900, 380, N_VOL), r.uniform(700, 5200, N_VOL)]
-BASE[N_VOL:] = np.c_[r.uniform(-3200, 3200, N_GND), r.uniform(410, 470, N_GND), r.uniform(500, 6000, N_GND)]
+BASE[:N_VOL] = np.c_[r.uniform(-2500, 2500, N_VOL), r.uniform(-950, 380, N_VOL), r.uniform(500, 6600, N_VOL)]
+BASE[N_VOL:] = np.c_[r.uniform(-3200, 3200, N_GND), r.uniform(410, 470, N_GND), r.uniform(400, 7000, N_GND)]
 FREQ = r.uniform(0.25, 0.75, (N, 3, 2))
 PHASE = r.uniform(0, 2 * np.pi, (N, 3, 2))
 AMP = np.where(np.arange(N)[:, None] < N_VOL, 170.0, 60.0) * np.array([1.0, 0.6, 1.0])
 # the first NC volume nodes become the structure; pick the ones nearest the centre so the gathering reads
 _order = np.argsort(np.linalg.norm((BASE[:N_VOL] - C3) * [1, 1.6, 0.7], axis=1))
 CL = _order[:NC]
-GATHER_D = r.uniform(1.8, 3.5, NC)           # when each node starts its trip into the structure
+GATHER_D = r.uniform(1.3, 3.0, NC)           # when each node starts its trip into the structure
 SIZE = r.uniform(0.7, 1.5, N)
 
 TAGS = []                                     # floating data tags: (kind, payload, base world pos, phase)
@@ -110,7 +112,8 @@ for i in range(22):
 
 
 def camz(u):
-    return 110 * u + 2700 * e_in_cubic(prog(u, 5.45, 1.6))
+    # flies in through the field from the first frame (decelerating), drifts, then rushes into the core
+    return 110 * u + 950 * e_out_cubic(prog(u, -0.6, 2.8)) + 2900 * e_in_cubic(prog(u, 5.45, 1.6))
 
 
 def camx(u):
@@ -298,6 +301,54 @@ def draw_pulses(c, u, S2, ok):
         E.glow_dot(c, x, y, 12, "#BFE2FF", 0.8 * lat)
 
 
+_sr = np.random.default_rng(31)
+STREAMS = []                                  # data streams flying through the field into the structure
+for k in range(16):
+    side = -1 if k % 2 == 0 else 1
+    S0 = np.array([side * _sr.uniform(2600, 3400), _sr.uniform(-900, 420), _sr.uniform(900, 3600)])
+    off = np.array([_sr.uniform(-500, 500), _sr.uniform(-600, 300), _sr.uniform(-800, 800)])
+    STREAMS.append((-0.1 + k * 0.27 + _sr.uniform(-0.08, 0.08), S0, off, k))
+
+
+def draw_streams(c, u):
+    """Bright data streams (bundles of light lines) curving through the field into the structure."""
+    for t0, S0, off, k in STREAMS:
+        hd = 1.45 * e_io_sine(prog(u, t0, 1.6))
+        if hd <= 0 or hd >= 1.45:
+            continue
+        M = (S0 + C3) / 2 + off
+        pts = []
+        for j in range(9):
+            q = j / 8
+            P = (1 - q) ** 2 * S0 + 2 * (1 - q) * q * M + q * q * C3
+            z = max(P[2] - camz(u), 60)
+            pts.append((CX + F * (P[0] - camx(u)) / z, CY + F * P[1] / z))
+        E.line_flow(c, pts, hd, 0.5, n=16, spread=24, twist=1.4, width=2.1, color="#46B4FF", alpha=1.0,
+                    key="st%d" % k, glow=1.0, sparks=16, tsec=u, blend="screen", core=E.WHITE)
+        if 0.95 < hd < 1.3:                                   # arrival: the structure flares where it lands
+            z = max(C3[2] - camz(u), 60)
+            x, y = CX + F * (C3[0] - camx(u)) / z, CY + F * C3[1] / z
+            k_ = math.sin(math.pi * (hd - 0.95) / 0.35)
+            E.radial(c, x, y, 260 * F / z * 3, "#7FB6FF", 0.35 * k_, skia.BlendMode.kScreen)
+
+
+def draw_sparks(c, u, S2, Z, ok):
+    """Connections firing: nodes flash as links form across the field."""
+    rp = np.random.default_rng(13)
+    ph = rp.random(N)
+    per = rp.uniform(1.6, 3.2, N)
+    act = clamp(u / 0.6) * (1 - e_io_sine(prog(u, 5.4, 0.5)))
+    for i in range(0, N_VOL):
+        if not ok[i] or Z[i] > 4800:
+            continue
+        f = ((u / per[i]) + ph[i]) % 1.0
+        if f < 0.08:
+            k = math.sin(math.pi * f / 0.08) * act * float(fog(np.array([Z[i]]))[0])
+            x, y = S2[i]
+            E.glow_dot(c, x, y, 16 * k + 4, "#DDEEFF", 0.95 * k)
+            c.drawCircle(x, y, 4 + 20 * f / 0.08, paint_stroke("#9CCBFF", 0.5 * k, 1.0))
+
+
 def draw_tags(c, u):
     for kind, pay, pos, ph in TAGS:
         p = pos + np.array([math.sin(u * 0.4 + ph) * 60, math.sin(u * 0.33 + ph * 1.3) * 30, 0])
@@ -379,13 +430,74 @@ def draw_core(c, u, S2, Z, ok):
             c.drawLine(x, y, x1, y1, p)
 
 
-def render(c, T):
+SWEEP_ANG = 16.0
+
+
+def sweep_front(T):
+    """Front of the wipe in from SC20 (px along the sweep direction); keeps moving after the wipe completes."""
+    p = (T - TR0) / TR_D
+    ang = math.radians(SWEEP_ANG)
+    span = abs(math.cos(ang)) * W + abs(math.sin(ang)) * H
+    q = 2 * p * p if p < 0.25 else p - 0.125               # eases in, then constant speed (never stops)
+    return -span / 2 - 260 + (span + 520) * q / 0.875, span, p
+
+
+def draw_sweep(c, T):
+    """The line-particle bundles that carry the cut in from SC20; they keep flowing on and out of frame."""
+    front, span, p = sweep_front(T)
+    if p <= 0 or p > 2.2:
+        return
+    ang = math.radians(SWEEP_ANG)
+    dx, dy = math.cos(ang), math.sin(ang)
+    nx, ny = -dy, dx
+    perp = abs(nx) * W + abs(ny) * H
+    rr = E.rng("t21")
+    L = span * 0.95
+    fade = 1 - clamp((p - 1.3) / 0.9)
+    for b in range(5):
+        o = lerp(-0.5, 0.5, (b + 0.5) / 5) * perp + rr.uniform(-0.06, 0.06) * perp
+        phs = rr.uniform(0, 2 * math.pi)
+        amp = 0.10 * perp * rr.uniform(0.6, 1.2)
+        pts = []
+        for i in range(7):
+            uu = lerp(-1, 1, i / 6)
+            w = o + amp * math.sin(math.pi * uu + phs)
+            pts.append((W / 2 + dx * uu * L + nx * w, H / 2 + dy * uu * L + ny * w))
+        hd = (front + L) / (2 * L) + rr.uniform(-0.03, 0.02)
+        E.line_flow(c, pts, hd, 0.42, n=12, spread=rr.uniform(16, 46), twist=1.2, width=1.9, color=E.CYAN,
+                    alpha=fade, key="t21%d" % b, glow=0.9, sparks=14, tsec=p * 3, blend="screen", core=E.WHITE)
+
+
+def wipe_in(c, A, B, T):
+    """SC20 -> this shot: B is carried in behind the bundle heads (as the film's line transition)."""
+    front, span, p = sweep_front(T)
+    ang = math.radians(SWEEP_ANG)
+    dx, dy = math.cos(ang), math.sin(ang)
+    E.blit(c, A)
+    fx, fy = W / 2 + dx * front, H / 2 + dy * front
+    c.saveLayer(None, None)
+    E.draw_scaled(c, B, lerp(1.05, 1.0, e_out_cubic(clamp(p))))
+    sh = skia.GradientShader.MakeLinear([skia.Point(fx - dx * 220, fy - dy * 220), skia.Point(fx + dx * 30, fy + dy * 30)],
+                                        [colint("#FFFFFF", 1.0), colint("#FFFFFF", 0.0)])
+    c.drawPaint(skia.Paint(Shader=sh, BlendMode=skia.BlendMode.kDstIn))
+    c.restore()
+    a = math.sin(math.pi * clamp(p))
+    band = skia.GradientShader.MakeLinear([skia.Point(fx - dx * 260, fy - dy * 260), skia.Point(fx + dx * 120, fy + dy * 120)],
+                                          [colint(E.CYAN, 0), colint(E.CYAN, 0.22 * a), colint(E.CYAN, 0)], [0.0, 0.68, 1.0])
+    c.drawPaint(skia.Paint(Shader=band, BlendMode=skia.BlendMode.kScreen))
+
+
+def render(c, T, sweep=True):
     u = T - U0
     background(c, u)
     P, S2, Z, ok, g = draw_network(c, u)
     draw_tags(c, u)
+    draw_streams(c, u)
+    draw_sparks(c, u, S2, Z, ok)
     draw_pulses(c, u, S2, ok)
     draw_core(c, u, S2, Z, ok)
+    if sweep:
+        draw_sweep(c, T)
     # flood to white into FIN
     wf = e_in_cubic(prog(T, FLASH_PEAK - 0.6, 0.6))
     if wf > 0:
@@ -415,12 +527,12 @@ if __name__ == "__main__":
                             "-c:v", "libx264", "-preset", "medium", "-crf", "18" if not HD else "14",
                             "-pix_fmt", "yuv420p", "-movflags", "+faststart", out], stdin=subprocess.PIPE)
 
-    def draw_new(sf, T):
+    def draw_new(sf, T, sweep=True):
         c = sf.getCanvas()
         c.clear(skia.Color4f(0, 0, 0, 1))
         c.save()
         c.scale(SC, SC)
-        render(c, T)
+        render(c, T, sweep)
         c.restore()
 
     def draw_scene(sf, sc, T):
@@ -435,13 +547,14 @@ if __name__ == "__main__":
     def shot(T):
         if T < TR0 + TR_D:
             draw_scene(sa, SC20, T)
-            draw_new(sb, T)
+            draw_new(sb, T, sweep=False)
             A, B = sa.makeImageSnapshot(), sb.makeImageSnapshot()
             c = surf.getCanvas()
             c.save()
             c.clear(skia.Color4f(0, 0, 0, 1))
             c.scale(SC, SC)
-            E.TRANSITIONS[TR_TYPE](c, A, B, clamp((T - TR0) / TR_D), **TR_KW)
+            wipe_in(c, A, B, T)
+            draw_sweep(c, T)
             c.restore()
         elif T < FLASH_PEAK:
             draw_new(surf, T)

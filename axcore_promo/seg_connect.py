@@ -7,7 +7,8 @@
   B 3.20-4.40  the camera dollies down the corridor toward the node: the cards fly past the lens and fade,
                the corridor racks into focus (whole-frame motion blur while it moves)
   C 3.95-8.21  internal systems dock on the left and connect into the same node - ERP, MES, CRM on the
-               narration, then AI Vision; further systems branch out on the right (SCM, PLM, QMS, 인사, 그룹웨어)
+               narration, then AI Vision; as ERP arrives a wider set of company programs fans out on the right
+               (SCM, PLM, QMS, WMS, APS, EAM, SRM, BI, SCADA, 인사, 그룹웨어, 문서관리)
 Delivered from 00:00:44:08 (timeline frame 1064): SC09 hands over with the film's line-particle transition
 (44:08-45:06, as in the original cut), so SC09's cut ends at 44:07. Shot time s = 0 at 44:22; frame f is film
 time (1064 + f) / 24. Film finish as in render.py; 21:9 letterbox.
@@ -72,8 +73,12 @@ ENV_T0, ENV_DT = 0.36, 0.12
 SYS = [("ERP", "전사적 자원 관리", "db", ERP - 0.05), ("MES", "생산 실행 시스템", "factory", MES - 0.05),
        ("CRM", "고객 관계 관리", "user", CRM - 0.05), ("AI Vision", "AI 비전", "eye", CRM + 0.62)]
 SYS_X, SYS_Y0, SYS_DY, SYS_W, SYS_H = 130, 248, 132, 410, 104
-EXTRA = [("SCM", 400, -250), ("PLM", 540, -85), ("QMS", 460, 90), ("인사", 580, 250), ("그룹웨어", 320, 370)]
-EXTRA_T0 = CRM + 0.85
+# the wider landscape of company programs, fanned out on the right as ERP arrives: two interleaved columns
+# (offset from the node), listed top to bottom
+EXTRA = [("SCM", 290, -318), ("PLM", 600, -258), ("QMS", 345, -192), ("WMS", 680, -130), ("APS", 368, -66),
+         ("EAM", 712, -2), ("SRM", 362, 62), ("BI", 696, 126), ("SCADA", 330, 190), ("인사", 640, 252),
+         ("그룹웨어", 272, 316), ("문서관리", 548, 376)]
+EXTRA_T0, EXTRA_DT = ERP + 0.1, 0.07
 
 
 def dolly(s):
@@ -308,14 +313,22 @@ def draw_systems(c, s):
             if s > t0 + 0.9:
                 E.pulse(c, pth, ((s - t0 - 0.9) * 0.7 + j * 0.5) % 1.0, CYAN, 0.8, 12, 0.15)
     for i, (lab, dx, dy) in enumerate(EXTRA):
-        t0 = EXTRA_T0 + i * 0.14
-        k = enter(s, t0, 0.5)
-        if k <= 0:
+        t0 = EXTRA_T0 + i * EXTRA_DT
+        g = e_out_expo(prog(s, t0, 0.7))
+        if g <= 0:
             continue
-        x, y = HUB[0] + dx + par * 1.6, HUB[1] + dy
-        pth = E.curve((HUB[0] + 40 * hs, HUB[1]), (x - 10, y), 0.4)
-        E.line(c, pth, CYAN_SOFT, 0.6, 1.3, (0, e_out_expo(prog(s, t0 - 0.2, 0.6))))
-        S.label_chip(c, x, y, lab, clamp(k) * 0.95, True, 20, pad=15)
+        x, y = HUB[0] + dx + par * 1.6, HUB[1] + dy * 0.93
+        # leaves the node level, reaches the chip's height early, so it runs between the inner chips
+        ang = 0.6 * math.atan2(y - HUB[1], x - HUB[0])
+        x0, y0 = HUB[0] + 44 * hs * math.cos(ang), HUB[1] + 44 * hs * math.sin(ang)
+        L = x - x0
+        pth = skia.Path()
+        pth.moveTo(x0, y0)
+        pth.cubicTo(x0 + 0.22 * L * math.cos(ang), y0 + 0.22 * L * math.sin(ang), x0 + 0.3 * L, y, x0 + 0.55 * L, y)
+        pth.lineTo(x - 10, y)
+        E.line(c, pth, CYAN_SOFT, 0.55, 1.2, (0, g))
+        a = E.e_io_sine(prog(s, t0 + 0.3, 0.45))
+        S.label_chip(c, x + 10 * (1 - a), y, lab, a * 0.95, True, 20, pad=15)
 
 
 def render(c, s):

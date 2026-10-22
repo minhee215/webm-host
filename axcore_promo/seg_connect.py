@@ -48,9 +48,9 @@ DOLLY0, DOLLY_D = 3.2, 1.2
 
 # work-environment cards (reference layout around the core): label, clip, screen offset from the node at the
 # start, screen width, depth Z
-ENV = [("Factory", "18_factory", (-640, -190), 283, 1800), ("Office", "14_monitors", (600, -205), 283, 1750),
+ENV = [("Factory", "18_factory", (-640, -178), 283, 1800), ("Office", "14_monitors", (600, -190), 283, 1750),
        ("Warehouse", "05_warehouse", (-680, 150), 262, 1650), ("Store", "16_retail", (650, 135), 255, 1700),
-       ("Production", "06_line", (-215, -238), 220, 2300), ("People", "20_team", (205, -240), 236, 2250),
+       ("Production", "06_line", (-215, -224), 220, 2300), ("People", "20_team", (205, -226), 236, 2250),
        ("Plant", "q1_refinery", (-255, 255), 262, 2100), ("Field", "19_aerial", (265, 268), 268, 2050)]
 ENV_T0, ENV_DT = 0.30, 0.11
 

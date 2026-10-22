@@ -96,11 +96,17 @@ AMP = np.where(np.arange(N)[:, None] < N_VOL, 170.0, 60.0) * np.array([1.0, 0.6,
 # the first NC volume nodes become the structure; pick the ones nearest the centre so the gathering reads
 _order = np.argsort(np.linalg.norm((BASE[:N_VOL] - C3) * [1, 1.6, 0.7], axis=1))
 CL = _order[:NC]
+# the structure's nodes start as a loose cloud around it (part of the field), so gathering reads as the cloud
+# condensing - a short, slow inward swirl - rather than nodes darting in from across the frame
+_dirs = r.normal(size=(NC, 3))
+_dirs /= np.linalg.norm(_dirs, axis=1)[:, None]
+BASE[CL] = C3 + _dirs * r.uniform(820, 1500, NC)[:, None] * np.array([1.25, 0.75, 1.0])
+AMP[CL] = np.array([90.0, 60.0, 90.0])
 # nodes leave for the structure almost together (a short ripple from the nearest outward), not one by one
 _dist = np.linalg.norm(BASE[CL] - C3, axis=1)
 GATHER_D = 1.45 + 0.55 * (_dist - _dist.min()) / (np.ptp(_dist) + 1e-9) + r.uniform(0, 0.12, NC)
 GATHER_LEN = 1.9
-SWIRL = 1.5                                   # radians of orbit the nodes sweep through on the way in
+SWIRL = 1.1                                   # radians of orbit the nodes sweep through on the way in
 SIZE = r.uniform(0.7, 1.5, N)
 
 TAGS = []                                     # floating data tags: (kind, payload, base world pos, phase)
@@ -240,7 +246,7 @@ def draw_network(c, u):
             i, j = CL[a_], CL[b_]
             if not (ok[i] and ok[j]):
                 continue
-            a = lat * (g[a_] * g[b_]) ** 3 * min(fg[i], fg[j]) * min(k_near[i], k_near[j])
+            a = lat * (g[a_] * g[b_]) ** 1.5 * min(fg[i], fg[j]) * min(k_near[i], k_near[j])
             if a > 0.02:
                 segs.append((S2[i, 0], S2[i, 1], S2[j, 0], S2[j, 1], min(a, 0.999)))
         for a, pth in bucket_paths(segs):
@@ -283,6 +289,20 @@ def draw_network(c, u):
             E.glow_dot(c, x, y, min(rad * 6, 40), GLOW, 0.45 * a)
         if Z[i] < 700 and not rush:                           # out-of-focus foreground bokeh
             c.drawCircle(x, y, 26 * 700 / Z[i], paint_fill("#7FB6FF", 0.10 * a, blur=10))
+    # nodes on their way in: bright heads with soft comet trails that trace the swirl
+    moving = [k for k in range(NC) if 0.01 < g[k] < 0.995]
+    if moving:
+        tr = [project(world(u - d)[0][CL], u - d)[0] for d in (0.04, 0.08, 0.12)]
+        for k in moving:
+            i = CL[k]
+            if not ok[i]:
+                continue
+            w = math.sin(math.pi * g[k]) * fg[i]
+            pts = [(S2[i, 0], S2[i, 1])] + [(q[k, 0], q[k, 1]) for q in tr]
+            for m in range(3):
+                c.drawLine(pts[m][0], pts[m][1], pts[m + 1][0], pts[m + 1][1],
+                           paint_stroke("#CFE6FF", 0.55 * w * (1 - m / 3), 1.6 - 0.4 * m))
+            E.glow_dot(c, S2[i, 0], S2[i, 1], 14, "#DDEEFF", 0.8 * w)
     return P, S2, Z, ok, g
 
 

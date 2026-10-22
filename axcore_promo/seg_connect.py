@@ -7,8 +7,9 @@
   B 3.20-4.40  the camera dollies down the corridor toward the node: the cards fly past the lens and fade,
                the corridor racks into focus (whole-frame motion blur while it moves)
   C 3.95-8.21  internal systems dock on the left and connect into the same node - ERP, MES, CRM on the
-               narration, then AI Vision; as ERP arrives the company programs it links fan out on the right
-               (SAP, Oracle, Siemens Teamcenter, Microsoft Dynamics, Workday, 더존, 영림원, 다우오피스, 그룹웨어 솔루션)
+               narration, then AI Vision; as ERP arrives two glass panels settle on the right - 업무 시스템 (SCM, PLM,
+               QMS, 인사, 그룹웨어) and 외부 프로그램 (SAP, Oracle, Siemens Teamcenter, Microsoft Dynamics, Workday,
+               더존, 영림원, 다우오피스, 그룹웨어 솔루션) - linked by waves from the node rather than lines
 Delivered from 00:00:44:08 (timeline frame 1064): SC09 hands over with the film's line-particle transition
 (44:08-45:06, as in the original cut), so SC09's cut ends at 44:07. Shot time s = 0 at 44:22; frame f is film
 time (1064 + f) / 24. Film finish as in render.py; 21:9 letterbox.
@@ -73,12 +74,15 @@ ENV_T0, ENV_DT = 0.36, 0.12
 SYS = [("ERP", "전사적 자원 관리", "db", ERP - 0.05), ("MES", "생산 실행 시스템", "factory", MES - 0.05),
        ("CRM", "고객 관계 관리", "user", CRM - 0.05), ("AI Vision", "AI 비전", "eye", CRM + 0.62)]
 SYS_X, SYS_Y0, SYS_DY, SYS_W, SYS_H = 130, 248, 132, 410, 104
-# the company programs AXCORE connects to (names only, no logos), fanned out on the right as ERP arrives:
-# two interleaved columns (offset from the node), listed top to bottom
-EXTRA = [("SAP", 300, -320), ("Oracle", 620, -245), ("Siemens Teamcenter", 345, -170),
-         ("Microsoft Dynamics", 600, -92), ("Workday", 370, -15), ("더존", 690, 62), ("영림원", 360, 138),
-         ("다우오피스", 640, 215), ("그룹웨어 솔루션", 320, 300)]
-EXTRA_T0, EXTRA_DT = ERP + 0.1, 0.07
+# the rest of the company's systems and the external programs it runs on: two glass panels on the right that
+# arrive with ERP; no connector lines - a wave from the node passes over them and lights each chip as connected
+PANELS = [("업무 시스템", ["SCM", "PLM", "QMS", "인사", "그룹웨어"]),
+          ("외부 프로그램", ["SAP", "Oracle", "Siemens Teamcenter", "Microsoft Dynamics", "Workday", "더존", "영림원",
+                         "다우오피스", "그룹웨어 솔루션"])]
+PAN_X, PAN_W, PAN_GAP = 1220, 620, 22
+CHIP_H, CHIP_SZ, CHIP_GX, CHIP_GY, PAN_PAD, PAN_HEAD = 42, 19, 10, 12, 24, 58
+PAN_T0 = ERP + 0.05
+WAVE_T0, WAVE_DT, WAVE_V = ERP + 0.45, 1.6, 950.0       # connection waves from the node (px/s)
 
 
 def dolly(s):
@@ -292,6 +296,7 @@ def eye_icon(c, cx, cy, s, color, a):
 def draw_systems(c, s):
     par = lerp(0, -14, clamp((s - 4.0) / 4.2))
     hs = hub_scale(s)
+    draw_waves(c, s)
     for i, (abbr, full, ic, t0) in enumerate(SYS):
         k = enter(s, t0, 0.6)
         if k <= 0:
@@ -312,24 +317,84 @@ def draw_systems(c, s):
         for j in range(2):
             if s > t0 + 0.9:
                 E.pulse(c, pth, ((s - t0 - 0.9) * 0.7 + j * 0.5) % 1.0, CYAN, 0.8, 12, 0.15)
-    for i, (lab, dx, dy) in enumerate(EXTRA):
-        t0 = EXTRA_T0 + i * EXTRA_DT
-        g = e_out_expo(prog(s, t0, 0.7))
-        if g <= 0:
-            continue
-        x, y = HUB[0] + dx + par * 1.6, HUB[1] + dy * 0.93
-        # leaves the node level, reaches the chip's height early, so it runs between the inner chips
-        ang = 0.6 * math.atan2(y - HUB[1], x - HUB[0])
-        x0, y0 = HUB[0] + 44 * hs * math.cos(ang), HUB[1] + 44 * hs * math.sin(ang)
-        L = x - x0
-        pth = skia.Path()
-        pth.moveTo(x0, y0)
-        pth.cubicTo(x0 + 0.22 * L * math.cos(ang), y0 + 0.22 * L * math.sin(ang), x0 + 0.3 * L, y, x0 + 0.55 * L, y)
-        pth.lineTo(x - 10, y)
-        E.line(c, pth, CYAN_SOFT, 0.55, 1.2, (0, g))
-        a = E.e_io_sine(prog(s, t0 + 0.3, 0.45))
-        S.label_chip(c, x + 10 * (1 - a), y, lab, a * 0.95, True, 20, pad=15)
+    draw_programs(c, s, par)
 
+
+_LAYOUT = []
+
+
+def panel_layout():
+    """Panel rects and chip rects (flow layout), centred on the node's height; computed once."""
+    if _LAYOUT:
+        return _LAYOUT
+    blocks, y = [], 0.0
+    for title, names in PANELS:
+        chips, cx, cy = [], PAN_PAD, PAN_HEAD
+        for n in names:
+            w = E.text_w(n, CHIP_SZ, "Medium") + 46
+            if cx + w > PAN_W - PAN_PAD:
+                cx, cy = PAN_PAD, cy + CHIP_H + CHIP_GY
+            chips.append((n, R(cx, cy, w, CHIP_H)))
+            cx += w + CHIP_GX
+        h = cy + CHIP_H + PAN_PAD
+        blocks.append((title, y, h, chips))
+        y += h + PAN_GAP
+    y0 = HUB[1] - (y - PAN_GAP) / 2
+    for title, py, h, chips in blocks:
+        P = R(PAN_X, y0 + py, PAN_W, h)
+        _LAYOUT.append((title, P, [(n, r.makeOffset(P.left(), P.top())) for n, r in chips]))
+    return _LAYOUT
+
+
+def wave_hit(x, y):
+    """Time the first connection wave reaches (x, y)."""
+    return WAVE_T0 + math.hypot(x - HUB[0], y - HUB[1]) / WAVE_V
+
+
+def draw_waves(c, s):
+    hs = hub_scale(s)
+    k = 0
+    while WAVE_T0 + k * WAVE_DT <= s:
+        r = 40 * hs + WAVE_V * (s - WAVE_T0 - k * WAVE_DT)
+        a = (1 - clamp(r / 1150)) * (0.55 if k == 0 else 0.25)
+        if a > 0.003:
+            c.drawCircle(HUB[0], HUB[1], r, paint_stroke(CYAN_L, a * 0.6, 14, blur=12, blend=skia.BlendMode.kScreen))
+            c.drawCircle(HUB[0], HUB[1], r, paint_stroke("#BFE6FF", a, 1.4))
+        k += 1
+
+
+def draw_programs(c, s, par):
+    if s < PAN_T0:
+        return
+    for pi, (title, P0, chips) in enumerate(panel_layout()):
+        t0 = PAN_T0 + pi * 0.18
+        a = E.e_io_sine(prog(s, t0, 0.55))
+        if a <= 0.003:
+            continue
+        dx = par * 1.6 + 24 * (1 - E.e_out_cubic(prog(s, t0, 0.8)))
+        P = P0.makeOffset(dx, 0)
+        hit = wave_hit(P.left(), P.centerY())
+        fl = math.sin(math.pi * clamp((s - hit) / 0.8))
+        E.glass(c, P, 18, a, tint=NAVY_800, tint_a=0.42, blur=22, border=0.55, shadow=0.3, glow=0.7 * fl)
+        E.text(c, title, P.left() + PAN_PAD, P.top() + 38, 20, "Bold", WHITE, a)
+        n_on = sum(1 for _, r in chips if s >= wave_hit(r.left() + dx, r.centerY()))
+        E.text(c, "%d / %d 연결" % (n_on, len(chips)), P.right() - PAN_PAD, P.top() + 37, 14, "SemiBold",
+               CYAN if n_on == len(chips) else STEEL_200, a * (0.4 + 0.6 * clamp((s - hit) / 0.3)), "right")
+        for j, (n, r0) in enumerate(chips):
+            ca = a * E.e_io_sine(prog(s, t0 + 0.15 + j * 0.04, 0.4))
+            if ca <= 0.003:
+                continue
+            r = r0.makeOffset(dx, 0)
+            on = clamp((s - wave_hit(r.left(), r.centerY())) / 0.25)
+            flash = math.sin(math.pi * clamp((s - wave_hit(r.left(), r.centerY())) / 0.7))
+            E.rrect(c, r, CHIP_H / 2, NAVY_950, 0.55 * ca)
+            E.rrect_stroke(c, r, CHIP_H / 2, CYAN if on > 0 else STEEL_200, ca * (0.35 + 0.5 * flash), 1.2)
+            dx_, dy_ = r.left() + 19, r.centerY()
+            c.drawCircle(dx_, dy_, 4, paint_fill(STEEL_200, ca * 0.5 * (1 - on)))
+            c.drawCircle(dx_, dy_, 4, paint_fill(CYAN, ca * on))
+            if on > 0:
+                E.glow_dot(c, dx_, dy_, 10 + 8 * flash, CYAN, ca * (0.5 + 0.5 * flash))
+            E.text(c, n, r.left() + 32, r.centerY() + CHIP_SZ * 0.36, CHIP_SZ, "Medium", WHITE, ca)
 
 def render(c, s):
     background(c, s)

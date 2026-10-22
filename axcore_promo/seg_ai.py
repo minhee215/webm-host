@@ -3,8 +3,9 @@ Replaces SC21 (aerial city). AI given a shape: a living network that grows solid
 
   0.00-2.40  deep-navy space of drifting network nodes; lines flicker on and off as nodes pass each other,
              data tags (values, icons, code) float through ("업무와 데이터가 연결될수록")
-  1.80-4.80  the nodes stream together into one structure - a geodesic sphere - and signals race along its
-             edges faster and faster ("AI는 더 빠르게 이해하고")
+  1.15-3.95  the structure builds itself out of the core - the inner shell blooms first, then the outer
+             geodesic shell is traced in one smooth spiral sweep, node by node, link by link - and signals race
+             along its edges faster and faster ("AI는 더 빠르게 이해하고")
   3.60-5.80  the structure tightens: jitter dies, lattice edges sharpen, facets fill, precision rings lock and
              the core condenses to a bright point ("더 정확하게 판단합니다")
   5.30-7.05  light bursts from the core and the camera rushes into it; the frame floods white
@@ -85,18 +86,32 @@ CL_E = SPH_E + [(NO + a, NO + b) for a, b in IN_E] + SPOKES
 IN_R = 0.55
 r = np.random.default_rng(2110)
 N_VOL, N_GND = 520, 330
-N = N_VOL + N_GND
-BASE = np.zeros((N, 3))
+N = N_VOL + N_GND                            # field nodes; the structure's own nodes follow them (N .. N+NC-1)
+NT = N + NC
+BASE = np.zeros((NT, 3))
 BASE[:N_VOL] = np.c_[r.uniform(-2500, 2500, N_VOL), r.uniform(-950, 380, N_VOL), r.uniform(500, 6600, N_VOL)]
-BASE[N_VOL:] = np.c_[r.uniform(-3200, 3200, N_GND), r.uniform(410, 470, N_GND), r.uniform(400, 7000, N_GND)]
-FREQ = r.uniform(0.25, 0.75, (N, 3, 2))
-PHASE = r.uniform(0, 2 * np.pi, (N, 3, 2))
-AMP = np.where(np.arange(N)[:, None] < N_VOL, 170.0, 60.0) * np.array([1.0, 0.6, 1.0])
-# the first NC volume nodes become the structure; pick the ones nearest the centre so the gathering reads
-_order = np.argsort(np.linalg.norm((BASE[:N_VOL] - C3) * [1, 1.6, 0.7], axis=1))
-CL = _order[:NC]
-GATHER_D = r.uniform(1.3, 3.0, NC)           # when each node starts its trip into the structure
-SIZE = r.uniform(0.7, 1.5, N)
+BASE[N_VOL:N] = np.c_[r.uniform(-3200, 3200, N_GND), r.uniform(410, 470, N_GND), r.uniform(400, 7000, N_GND)]
+FREQ = r.uniform(0.25, 0.75, (NT, 3, 2))
+PHASE = r.uniform(0, 2 * np.pi, (NT, 3, 2))
+AMP = np.where(np.arange(NT)[:, None] < N_VOL, 170.0, 60.0) * np.array([1.0, 0.6, 1.0])
+CL = np.arange(N, NT)
+SIZE = r.uniform(0.7, 1.5, NT)
+
+
+def _appear_times():
+    """The structure builds itself rather than being sprayed together: the inner shell blooms out of the core
+    first, then the outer shell is traced in one smooth spiral sweep from top to bottom."""
+    t = np.zeros(NC)
+    th_o = np.arccos(np.clip(-SPH_V[:, 1], -1, 1)) / np.pi           # 0 top .. 1 bottom (y down is +)
+    ph_o = (np.arctan2(SPH_V[:, 2], SPH_V[:, 0]) / (2 * np.pi)) % 1.0
+    key = th_o + 0.08 * ph_o
+    t[:NO] = 1.75 + 1.65 * (np.argsort(np.argsort(key)) / (NO - 1))
+    th_i = np.arccos(np.clip(-IN_V[:, 1], -1, 1)) / np.pi
+    t[NO:] = 1.15 + 0.7 * (np.argsort(np.argsort(th_i)) / (len(IN_V) - 1))
+    return t
+
+
+APPEAR = _appear_times()
 
 TAGS = []                                     # floating data tags: (kind, payload, base world pos, phase)
 _tr = np.random.default_rng(77)
@@ -143,11 +158,11 @@ def world(u):
         return np.c_[x, y, V[:, 1] * st + z * ct]
     V = np.r_[rot(SPH_V, a), rot(IN_V, -1.6 * a) * IN_R]
     x, y, z = V[:, 0], V[:, 1], V[:, 2]
-    jit = (1 - tight(u)) * 0.09
-    nz = np.sin(FREQ[CL, 0, 0] * u * 3 + PHASE[CL, 0, 0]) * jit
-    T3 = C3 + np.c_[x, y, z] * RAD * (1 + nz)[:, None]
-    g = np.array([e_io_cubic(prog(u, d, 1.5)) for d in GATHER_D])
-    P[CL] = P[CL] * (1 - g)[:, None] + T3 * g[:, None]
+    jit = (1 - tight(u)) * 0.035                              # a gentle breathing that settles
+    nz = np.sin(FREQ[CL, 0, 0] * u * 2 + PHASE[CL, 0, 0]) * jit
+    g = np.array([e_io_sine(prog(u, d, 0.55)) for d in APPEAR])
+    grow = 0.86 + 0.14 * g                                     # each node eases out to the shell as it lights
+    P[CL] = C3 + np.c_[x, y, z] * RAD * ((1 + nz) * grow)[:, None]
     return P, g
 
 
@@ -193,26 +208,26 @@ def draw_network(c, u):
     fg = fog(Z)
     tg = tight(u)
     k_near = np.clip((Z - 60) / 300, 0, 1)
-    # proximity links (all nodes): flicker on and off as nodes pass each other
-    D = np.linalg.norm(P[:, None, :] - P[None, :, :], axis=2)
+    form = e_io_sine(prog(u, 1.4, 2.0))
+    fg = fg * np.r_[np.full(N, 1 - 0.4 * form), np.ones(NC)]  # the field steps back as the structure forms
+    # proximity links among the field nodes: flicker on and off as nodes pass each other
+    D = np.linalg.norm(P[:N, None, :] - P[None, :N, :], axis=2)
     thr = 470.0
     ii, jj = np.where(np.triu(D < thr, 1))
     segs = []
-    clmask = np.zeros(N, bool)
+    clmask = np.zeros(NT, bool)
     clmask[CL] = True
     for i, j in zip(ii, jj):
         if not (ok[i] and ok[j]):
             continue
         a = (1 - D[i, j] / thr) ** 1.6 * min(fg[i], fg[j]) * min(k_near[i], k_near[j])
-        if clmask[i] and clmask[j]:
-            a *= 1 - 0.85 * tg                                  # the lattice takes over inside the structure
         if a > 0.02:
             segs.append((S2[i, 0], S2[i, 1], S2[j, 0], S2[j, 1], min(a, 0.999)))
     for a, pth in bucket_paths(segs):
         c.drawPath(pth, paint_stroke(LINE, a, 1.1, blend=skia.BlendMode.kScreen))
     # the structure's lattice edges
-    lat = e_io_cubic(prog(u, 2.6, 1.8))
-    if lat > 0:
+    lat = 1.0
+    if u > 1.1:
         segs = []
         for a_, b_ in CL_E:
             i, j = CL[a_], CL[b_]
@@ -223,7 +238,7 @@ def draw_network(c, u):
                 segs.append((S2[i, 0], S2[i, 1], S2[j, 0], S2[j, 1], min(a, 0.999)))
         for a, pth in bucket_paths(segs):
             c.drawPath(pth, paint_stroke(GLOW, 0.35 * a, 4.0, blur=4, blend=skia.BlendMode.kScreen))
-            c.drawPath(pth, paint_stroke(LINE_HI, (0.45 + 0.45 * tg) * a, 1.0 + 0.5 * tg))
+            c.drawPath(pth, paint_stroke(LINE_HI, (0.55 + 0.4 * tg) * a, 1.0 + 0.5 * tg))
     # facets fill in as it tightens: a faceted crystal
     fac = e_io_sine(prog(u, 4.3, 1.4)) * (1 - e_io_sine(prog(u, 6.2, 0.6)))
     if fac > 0:
@@ -244,13 +259,16 @@ def draw_network(c, u):
     # nodes (and motion streaks while the camera rushes)
     rush = u > 5.4
     zprev = project(world(u - 1 / 48)[0], u - 1 / 48)[0] if rush else None
-    for i in range(N):
+    for i in range(NT):
         if not ok[i]:
             continue
-        a = fg[i] * k_near[i]
+        a = fg[i] * k_near[i] * (g[i - N] if i >= N else 1.0)
         if a < 0.03:
             continue
         rad = max(0.8, SIZE[i] * 2.0 * F / Z[i] * (1 + 0.4 * tg if clmask[i] else 1))
+        if clmask[i] and g[i - N] < 1:                         # a soft flare as each structure node lights up
+            E.glow_dot(c, S2[i, 0], S2[i, 1], 22 * math.sin(math.pi * g[i - N]) + 4, "#DDEEFF",
+                       0.7 * math.sin(math.pi * g[i - N]) * fg[i])
         x, y = S2[i]
         if rush and math.hypot(x - zprev[i, 0], y - zprev[i, 1]) > 4:
             px, py = zprev[i]
@@ -280,7 +298,7 @@ def _pulse_schedule():
 PULSE_T, PULSE_E, PULSE_REV = _pulse_schedule()
 
 
-def draw_pulses(c, u, S2, ok):
+def draw_pulses(c, u, S2, ok, g):
     """Signals racing along the lattice, faster and more of them as it learns."""
     if u < 2.2:
         return
@@ -292,6 +310,8 @@ def draw_pulses(c, u, S2, ok):
         if not 0 < q < 1:
             continue
         a_, b_ = CL_E[PULSE_E[k]]
+        if g[a_] * g[b_] < 0.95:                                # only along links that are already built
+            continue
         i, j = (CL[b_], CL[a_]) if PULSE_REV[k] else (CL[a_], CL[b_])
         if not (ok[i] and ok[j]):
             continue
@@ -494,7 +514,7 @@ def render(c, T, sweep=True):
     draw_tags(c, u)
     draw_streams(c, u)
     draw_sparks(c, u, S2, Z, ok)
-    draw_pulses(c, u, S2, ok)
+    draw_pulses(c, u, S2, ok, g)
     draw_core(c, u, S2, Z, ok)
     if sweep:
         draw_sweep(c, T)

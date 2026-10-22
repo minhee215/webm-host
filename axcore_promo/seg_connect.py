@@ -7,8 +7,8 @@
   B 3.20-4.40  the camera dollies down the corridor toward the node: the cards fly past the lens and fade,
                the corridor racks into focus (whole-frame motion blur while it moves)
   C 3.95-8.21  internal systems dock on the left and connect into the same node - ERP, MES, CRM on the
-               narration, then AI Vision; as ERP arrives a wider set of company programs fans out on the right
-               (SCM, PLM, QMS, WMS, APS, EAM, SRM, BI, SCADA, 인사, 그룹웨어, 문서관리)
+               narration, then AI Vision; as ERP arrives the company programs it links fan out on the right
+               (SAP, Oracle, Siemens Teamcenter, Microsoft Dynamics, Workday, 더존, 영림원, 다우오피스, 그룹웨어 솔루션)
 Delivered from 00:00:44:08 (timeline frame 1064): SC09 hands over with the film's line-particle transition
 (44:08-45:06, as in the original cut), so SC09's cut ends at 44:07. Shot time s = 0 at 44:22; frame f is film
 time (1064 + f) / 24. Film finish as in render.py; 21:9 letterbox.
@@ -73,11 +73,11 @@ ENV_T0, ENV_DT = 0.36, 0.12
 SYS = [("ERP", "전사적 자원 관리", "db", ERP - 0.05), ("MES", "생산 실행 시스템", "factory", MES - 0.05),
        ("CRM", "고객 관계 관리", "user", CRM - 0.05), ("AI Vision", "AI 비전", "eye", CRM + 0.62)]
 SYS_X, SYS_Y0, SYS_DY, SYS_W, SYS_H = 130, 248, 132, 410, 104
-# the wider landscape of company programs, fanned out on the right as ERP arrives: two interleaved columns
-# (offset from the node), listed top to bottom
-EXTRA = [("SCM", 290, -318), ("PLM", 600, -258), ("QMS", 345, -192), ("WMS", 680, -130), ("APS", 368, -66),
-         ("EAM", 712, -2), ("SRM", 362, 62), ("BI", 696, 126), ("SCADA", 330, 190), ("인사", 640, 252),
-         ("그룹웨어", 272, 316), ("문서관리", 548, 376)]
+# the company programs AXCORE connects to (names only, no logos), fanned out on the right as ERP arrives:
+# two interleaved columns (offset from the node), listed top to bottom
+EXTRA = [("SAP", 300, -320), ("Oracle", 620, -245), ("Siemens Teamcenter", 345, -170),
+         ("Microsoft Dynamics", 600, -92), ("Workday", 370, -15), ("더존", 690, 62), ("영림원", 360, 138),
+         ("다우오피스", 640, 215), ("그룹웨어 솔루션", 320, 300)]
 EXTRA_T0, EXTRA_DT = ERP + 0.1, 0.07
 
 

@@ -31,7 +31,7 @@ BAR = 138                      # 21:9 letterbox in 1080 logical px
 FPS_NUM, FPS_DEN = 24000, 1001
 F = 1100.0                     # focal length (px)
 Z_BG = 10000.0                 # depth of the corridor for the dolly's parallax
-HUB = (1040, 500)              # AXCORE node, on the corridor's vanishing point
+HUB = (960, 495)               # AXCORE node, on the corridor's vanishing point
 BG = "10_datacenter"
 CYAN_L = "#46B4FF"
 GRADE = E.grade_filter(bright=0.98, contrast=1.05, sat=0.9, tint=(-0.01, 0.0, 0.02))

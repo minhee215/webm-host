@@ -9,7 +9,7 @@
   C 3.95-8.21  internal systems dock on the left and connect into the same node - ERP, MES, CRM on the
                narration, then AI Vision; as ERP arrives two glass panels settle on the right - 업무 시스템 (SCM, PLM,
                QMS, 인사, 그룹웨어) and 외부 프로그램 (SAP, Oracle, Siemens Teamcenter, Microsoft Dynamics, Workday,
-               더존, 영림원, 다우오피스, 그룹웨어 솔루션) - linked by waves from the node rather than lines
+               더존, 영림원, 다우오피스, 그룹웨어 솔루션) - each joined to the node by a blue line; a wave from the node lights every chip as connected
 Delivered from 00:00:44:08 (timeline frame 1064): SC09 hands over with the film's line-particle transition
 (44:08-45:06, as in the original cut), so SC09's cut ends at 44:07. Shot time s = 0 at 44:22; frame f is film
 time (1064 + f) / 24. Film finish as in render.py; 21:9 letterbox.
@@ -75,7 +75,7 @@ SYS = [("ERP", "전사적 자원 관리", "db", ERP - 0.05), ("MES", "생산 실
        ("CRM", "고객 관계 관리", "user", CRM - 0.05), ("AI Vision", "AI 비전", "eye", CRM + 0.62)]
 SYS_X, SYS_Y0, SYS_DY, SYS_W, SYS_H = 130, 248, 132, 410, 104
 # the rest of the company's systems and the external programs it runs on: two glass panels on the right that
-# arrive with ERP; no connector lines - a wave from the node passes over them and lights each chip as connected
+# arrive with ERP, each joined to the node by a blue line; a wave from the node lights each chip as connected
 PANELS = [("업무 시스템", ["SCM", "PLM", "QMS", "인사", "그룹웨어"]),
           ("외부 프로그램", ["SAP", "Oracle", "Siemens Teamcenter", "Microsoft Dynamics", "Workday", "더존", "영림원",
                          "다우오피스", "그룹웨어 솔루션"])]
@@ -373,6 +373,14 @@ def draw_programs(c, s, par):
             continue
         dx = par * 1.6 + 24 * (1 - E.e_out_cubic(prog(s, t0, 0.8)))
         P = P0.makeOffset(dx, 0)
+        # a blue line from the node into the panel, like the systems on the left (pulses flow out to it)
+        hs = hub_scale(s)
+        pth = E.curve((HUB[0] + 40 * hs, HUB[1]), (P.left(), P.centerY()), 0.4)
+        g = e_out_expo(prog(s, t0 + 0.1, 0.8))
+        E.line(c, pth, CYAN, 0.9 * a, 1.8, (0, g), glow=0.8)
+        for j in range(2):
+            if s > t0 + 0.9:
+                E.pulse(c, pth, ((s - t0 - 0.9) * 0.7 + j * 0.5) % 1.0, CYAN, 0.8 * a, 12, 0.15)
         hit = wave_hit(P.left(), P.centerY())
         fl = math.sin(math.pi * clamp((s - hit) / 0.8))
         E.glass(c, P, 18, a, tint=NAVY_800, tint_a=0.42, blur=22, border=0.55, shadow=0.3, glow=0.7 * fl)

@@ -2,7 +2,7 @@
 
 For each clip: 1920x1080 (or its 'res', e.g. native 4K) / 24 fps CFR H.264 (frame-accurate seeking), a 480x270
 proxy frame stack (.npy) for tiles and mosaics, and <name>.json with the duration.
-Usage: python3 prep_clips.py [clip_dir]
+Usage: python3 prep_clips.py [clip_dir]   (AXP_ONLY=a,b,c limits it to those clips)
 """
 import json
 import os
@@ -44,5 +44,7 @@ if __name__ == "__main__":
     MANIFEST = json.load(open(os.path.join(HERE, "assets", "clips.json")))
     os.makedirs(OUT, exist_ok=True)
     with ThreadPoolExecutor(4) as ex:
-        for name, status in ex.map(prep, MANIFEST["clips"].items()):
+        only = [n for n in os.environ.get("AXP_ONLY", "").split(",") if n]      # optional subset
+        items = [(n, i) for n, i in MANIFEST["clips"].items() if not only or n in only]
+        for name, status in ex.map(prep, items):
             print(name, status, flush=True)

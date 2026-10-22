@@ -11,6 +11,8 @@
 Delivered from 00:00:44:08 (timeline frame 1064): SC09 hands over with the film's line-particle transition
 (44:08-45:06, as in the original cut), so SC09's cut ends at 44:07. Shot time s = 0 at 44:22; frame f is film
 time (1064 + f) / 24. Film finish as in render.py; 21:9 letterbox.
+Ends 00:00:53:02 (211 frames); frames 211-220 continue to 00:00:53:12 through the line-particle hand-over into
+SC12 (52:12-53:09, as the old SC11 did), so a tail piece can run to the cut into SC12 at 53:13.
 Usage: python3 seg_connect.py <out.mp4> [height=480] [first last]
   height > 1080 renders natively at that size with full-resolution footage in every card (1440 = 2K).
 """
@@ -30,6 +32,7 @@ from engine import (W, H, R, clamp, lerp, prog, e_io_cubic, e_out_cubic, e_out_e
 F_START = 44 * 24 + 22         # the shot's clock zero: timeline 00:00:44:22 (s = 0)
 SEG0 = 44 * 24 + 8             # first frame delivered: 00:00:44:08, where SC09's transition out begins
 NF = 53 * 24 + 2 - SEG0 + 1    # through 00:00:53:02 (211 frames)
+NF_TAIL = 53 * 24 + 12 - SEG0 + 1   # with the hand-over into SC12: through 00:00:53:12 (221 frames)
 BAR = 138                      # 21:9 letterbox in 1080 logical px
 FPS_NUM, FPS_DEN = 24000, 1001
 F = 1100.0                     # focal length (px)
@@ -52,6 +55,10 @@ S_MIN = (SEG0 - F_START) / 24                                   # shot time of t
 SC09 = [sc for sc in S.SCENES if sc[0] == "sc09"][0]
 TR_TYPE, TR_D, TR_KW = S.TRANS["sc10"]
 TR0 = SC09[2] - TR_D / 2
+# ...and hands over to SC12 the same way the old SC11 did (52.50-53.40)
+SC12 = [sc for sc in S.SCENES if sc[0] == "sc12"][0]
+TR12_TYPE, TR12_D, TR12_KW = S.TRANS["sc12"]
+TR12_0 = SC12[1] - TR12_D / 2
 DOLLY0, DOLLY_D = 3.2, 1.2
 
 # work-environment cards (reference layout around the core): label, clip, screen offset from the node at the
@@ -349,8 +356,8 @@ if __name__ == "__main__":
         render(c, s)
         c.restore()
 
-    def draw_sc09(sf, T):
-        _, t0, t1, fn = SC09
+    def draw_scene(sf, sc, T):
+        _, t0, t1, fn = sc
         c = sf.getCanvas()
         c.save()
         c.clear(skia.Color4f(0, 0, 0, 1))
@@ -358,21 +365,31 @@ if __name__ == "__main__":
         fn(c, T, T - t0, t1 - t0)
         c.restore()
 
+    def blend(typ, kw, p):
+        A, B = sa.makeImageSnapshot(), sb.makeImageSnapshot()
+        c = surf.getCanvas()
+        c.save()
+        c.clear(skia.Color4f(0, 0, 0, 1))
+        c.scale(SC, SC)
+        E.TRANSITIONS[typ](c, A, B, p, **kw)
+        c.restore()
+
     def shot(T):
-        """Raw composite at film time T: SC09's line-particle transition into this shot, then the shot."""
+        """Raw composite at film time T: SC09's line-particle transition into this shot, the shot, then the
+        same kind of transition on into SC12."""
         s = T - F_START / 24
-        if T >= TR0 + TR_D:
-            draw_new(surf, s)
-        else:
-            draw_sc09(sa, T)
+        if T < TR0 + TR_D:
+            draw_scene(sa, SC09, T)
             draw_new(sb, s)
-            A, B = sa.makeImageSnapshot(), sb.makeImageSnapshot()
-            c = surf.getCanvas()
-            c.save()
-            c.clear(skia.Color4f(0, 0, 0, 1))
-            c.scale(SC, SC)
-            E.TRANSITIONS[TR_TYPE](c, A, B, clamp((T - TR0) / TR_D), **TR_KW)
-            c.restore()
+            blend(TR_TYPE, TR_KW, clamp((T - TR0) / TR_D))
+        elif T >= TR12_0 + TR12_D:
+            draw_scene(surf, SC12, T)
+        elif T >= TR12_0:
+            draw_new(sa, s)
+            draw_scene(sb, SC12, T)
+            blend(TR12_TYPE, TR12_KW, clamp((T - TR12_0) / TR12_D))
+        else:
+            draw_new(surf, s)
         return surf.makeImageSnapshot().toarray()[..., :3]
 
     bar = int(round(BAR * SC))

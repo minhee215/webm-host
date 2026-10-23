@@ -213,6 +213,9 @@ def draw_network(c, u):
     P, g = world(u)
     S2, Z, ok = project(P, u)
     fg = fog(Z)
+    fieldm = np.ones(N, bool)
+    fieldm[CL] = False
+    fg = np.where(fieldm, fg * (1 - 0.88 * clean(u)), fg)       # the field clears away before the push-in
     tg = tight(u)
     k_near = np.clip((Z - 60) / 300, 0, 1)
     # proximity links (all nodes): flicker on and off as nodes pass each other
@@ -399,20 +402,32 @@ def _ramp(u, t0, k=1.6):
     return clamp(u - t0, 0, 4) ** k
 
 
+def absorb(u):
+    """The vortex being drawn into the structure (4.50-5.45), leaving the frame clean before the push-in."""
+    return e_io_cubic(prog(u, 4.5, 0.95))
+
+
+def clean(u):
+    return e_io_sine(prog(u, 4.7, 0.65))
+
+
 def vortex_pts(u):
     """World positions of the vortex particles at shot time u."""
     flow = 0.085 * u + 0.035 * _ramp(u, 2.2)                  # inflow speeds up as it learns
     q = (V_Q0 - flow) % 1.0
     shrink = lerp(1.0, 0.78, tight(u))
-    burst = e_in_cubic(prog(u, 5.3, 1.75))
+    ab = absorb(u)
     r0 = RAD * (1.12 + 3.4 * q ** 1.5)
-    r = r0 * shrink * (1 + 2.6 * burst ** 1.4)
+    # before the push-in the whole vortex is drawn into the structure (spiralling faster as it goes)
+    r = r0 * shrink * (1 - ab) ** 1.6
     # the arm angle follows the unscaled radius, so tightening/bursting never turns the pattern backwards:
     # the vortex only ever turns one way (clockwise on screen), and only speeds up
-    th = V_ARM * (2 * math.pi / 3) + 2.3 * np.log(r0 / RAD) + V_J + 0.45 * u + 0.22 * _ramp(u, 2.2)
+    th = V_ARM * (2 * math.pi / 3) + 2.3 * np.log(r0 / RAD) + V_J + 0.45 * u + 0.22 * _ramp(u, 2.2) + 2.4 * ab ** 1.3
     h = V_H * 26 * (r / RAD) ** 0.8
     P = C3 + (np.cos(th)[:, None] * E1 + np.sin(th)[:, None] * E2) * r[:, None] + NRM * h[:, None]
     edge = np.clip(q / 0.06, 0, 1) * np.clip((1 - q) / 0.12, 0, 1)
+    if ab > 0:                                    # particles vanish as they pass inside the structure
+        edge = edge * np.clip((r / RAD - 0.3) / 0.6, 0, 1)
     return P, edge, q
 
 
@@ -421,12 +436,12 @@ def draw_vortex(c, u):
     if vis <= 0:
         return
     P, edge, q = vortex_pts(u)
-    Pp, _, _ = vortex_pts(u - 0.03)
+    dt = 0.03 * (1 - 0.75 * math.sin(math.pi * absorb(u)))       # keep the trails short while it collapses
+    Pp, _, _ = vortex_pts(u - dt)
     S2, Z, ok = project(P, u)
-    Sp, _, okp = project(Pp, u - 0.03)
+    Sp, _, okp = project(Pp, u - dt)
     ok &= okp
-    burst = e_in_cubic(prog(u, 5.3, 1.75))
-    bright = vis * (0.55 + 0.25 * e_io_sine(prog(u, 0.6, 2.4)) + 0.2 * tight(u) + 0.4 * burst)
+    bright = vis * (0.55 + 0.25 * e_io_sine(prog(u, 0.6, 2.4)) + 0.2 * tight(u) + 0.1 * absorb(u))
     a = edge * fog(Z) * np.clip((Z - 80) / 300, 0, 1) * (0.45 + 0.55 * (1 - q)) * bright
     # soft haze of the disk
     zc = max(C3[2] - camz(u), 60)
@@ -482,7 +497,7 @@ def draw_sparks(c, u, S2, Z, ok):
     rp = np.random.default_rng(13)
     ph = rp.random(N)
     per = rp.uniform(1.6, 3.2, N)
-    act = clamp(u / 0.6) * (1 - e_io_sine(prog(u, 5.4, 0.5)))
+    act = clamp(u / 0.6) * (1 - clean(u))
     for i in range(0, N_VOL):
         if not ok[i] or Z[i] > 4800:
             continue
@@ -503,7 +518,7 @@ def draw_tags(c, u):
         x, y = CX + F * (p[0] - camx(u)) / z, CY + F * p[1] / z
         s = clamp(F / z, 0.35, 1.6)
         a = float(fog(np.array([z]))[0]) * E.e_io_sine(prog(u, 0.2 + ph * 0.3, 0.8)) * \
-            (1 - e_io_sine(prog(u, 5.4, 0.6))) * clamp((z - 200) / 400)
+            (1 - clean(u)) * clamp((z - 200) / 400)
         if a <= 0.02:
             continue
         if kind == "num":

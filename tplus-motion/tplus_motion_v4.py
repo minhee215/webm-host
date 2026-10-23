@@ -249,11 +249,13 @@ XN, YN = XX / W, YY / H
 
 
 def sliver(dst, p, q, width, inten):
-    """Lens-shaped line of light from p to q (thick in the middle, tapering to points)."""
+    """Lens-shaped line of light from p to q (thick in the middle, tapering to points).
+    Short lines collapse to a round dot; the halo is isotropic so nothing reads as a cross."""
     p, q = np.asarray(p, np.float32), np.asarray(q, np.float32)
     dv = q - p
     L = float(np.linalg.norm(dv))
-    pad = 60 * SC + width * 6
+    hs = 10 * SC + width * 4  # halo sigma
+    pad = hs * 4 + width * 4
     xa, xb = int(max(min(p[0], q[0]) - pad, 0)), int(min(max(p[0], q[0]) + pad, W))
     ya, yb = int(max(min(p[1], q[1]) - pad, 0)), int(min(max(p[1], q[1]) + pad, H))
     if xa >= xb or ya >= yb:
@@ -261,7 +263,7 @@ def sliver(dst, p, q, width, inten):
     gx, gy = XX[ya:yb, xa:xb] - p[0], YY[ya:yb, xa:xb] - p[1]
     if L < 1e-3:
         d2 = gx * gx + gy * gy
-        s_mid = np.ones_like(d2)
+        prof = np.ones_like(d2)
     else:
         u = dv / L
         s = (gx * u[0] + gy * u[1]) / L
@@ -269,10 +271,11 @@ def sliver(dst, p, q, width, inten):
         sc = np.clip(s, 0, 1)
         along = (s - sc) * L
         d2 = perp * perp + along * along
-        s_mid = np.sqrt(np.clip(1 - (2 * sc - 1) ** 2, 0, 1)) * 0.85 + 0.15
-    wd = width * s_mid
+        prof = np.sqrt(np.clip(1 - (2 * sc - 1) ** 2, 0, 1))
+    k = min(L / (12 * width + 1e-6), 1.0)  # 0 -> round dot, 1 -> tapered sliver
+    wd = width * ((1 - k) + k * (0.2 + 0.8 * prof))
     core = np.exp(-d2 / (2 * wd * wd + 1e-6)) * 3.0
-    halo = np.exp(-d2 / (2 * (wd * 7 + 4 * SC) ** 2)) * 0.35
+    halo = np.exp(-d2 / (2 * hs * hs)) * 0.3
     dst[ya:yb, xa:xb] += ((core + halo) * inten)[..., None] * WHITE
 
 
@@ -380,8 +383,8 @@ def finish(img, t):
 def nsub(t):
     if 4.95 < t < 5.85:
         return 6
-    if 2.75 < t < 3.2:
-        return 4
+    if 1.95 < t < 3.2:
+        return 6
     return 2
 
 

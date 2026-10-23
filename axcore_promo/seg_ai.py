@@ -412,27 +412,37 @@ def clean(u):
     return e_io_sine(prog(u, 4.3, 1.1))
 
 
+ARR_T0, ARR_LAG, ARR_D, ARR_FAR = 0.15, 1.0, 1.5, 3.2
+
+
 def vortex_pts(u):
     """World positions of the vortex particles at shot time u."""
     flow = 0.085 * u + 0.035 * _ramp(u, 2.2) + 0.12 * _ramp(u, 3.8, 2.0)   # inflow speeds up as it learns
     q = (V_Q0 - flow) % 1.0
     shrink = lerp(1.0, 0.78, tight(u))
     ab = absorb(u)
-    r0 = RAD * (1.12 + 3.4 * q ** 1.5)
+    # arrival: the three arms are not there at first - each swoops in from beyond the frame along its own
+    # spiral (head first, the rest of the arm following), wrapping around the structure as it comes in
+    arr = np.clip((u - (ARR_T0 + ARR_LAG * q)) / ARR_D, 0, 1)
+    arr = 1 - (1 - arr) ** 3
+    reach = 1 + ARR_FAR * (1 - arr) ** 2
+    r0 = RAD * (1.12 + 3.4 * q ** 1.5) * reach
     r = r0 * shrink
     # the arm angle follows the unscaled radius, so tightening/bursting never turns the pattern backwards:
     # the vortex only ever turns one way (clockwise on screen), and only speeds up
     th = V_ARM * (2 * math.pi / 3) + 2.3 * np.log(r0 / RAD) + V_J + 0.45 * u + 0.22 * _ramp(u, 2.2)
     h = V_H * 26 * (r / RAD) ** 0.8
     P = C3 + (np.cos(th)[:, None] * E1 + np.sin(th)[:, None] * E2) * r[:, None] + NRM * h[:, None]
-    edge = np.clip(q / 0.06, 0, 1) * np.clip((1 - q) / 0.12, 0, 1)
+    edge = np.clip(q / 0.06, 0, 1) * np.clip((1 - q) / 0.12, 0, 1) * (arr > 0)
     if ab > 0:                                    # the rim empties first, the rest flows on into the core
         edge = edge * np.clip(((1 - ab) - q) / 0.15, 0, 1)
     return P, edge, q
 
 
 def draw_vortex(c, u):
-    vis = e_io_sine(prog(u, -0.45, 1.1)) * (1 - e_io_sine(prog(u, 6.35, 0.5)))
+    vis = 1 - e_io_sine(prog(u, 6.35, 0.5))
+    if u < ARR_T0:
+        return
     if vis <= 0:
         return
     P, edge, q = vortex_pts(u)
@@ -446,7 +456,8 @@ def draw_vortex(c, u):
     # soft haze of the disk
     zc = max(C3[2] - camz(u), 60)
     xc, yc = CX + F * (C3[0] - camx(u)) / zc, CY + F * C3[1] / zc
-    E.radial(c, xc, yc, F * RAD * 3.0 / zc, "#1F5EFF", 0.22 * vis, skia.BlendMode.kScreen)
+    E.radial(c, xc, yc, F * RAD * 3.0 / zc, "#1F5EFF", 0.22 * vis * e_io_sine(prog(u, ARR_T0 + 0.6, 1.6)),
+             skia.BlendMode.kScreen)
     groups = {}
     for i in np.where(ok & (a > 0.02))[0]:
         k = (int(V_COL[i]), min(4, int(a[i] * 5)))

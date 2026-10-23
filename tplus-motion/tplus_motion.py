@@ -76,7 +76,6 @@ def load(name, size=None):
 ENV = cv2.GaussianBlur(load("env.png", (2048, 869)), (0, 0), 1.5)
 ENV = ENV * 1.6 + 0.012
 BG = load("bg.png", (2304, 1296))
-DUST = load("dust.png", (2304, 1296))
 MACRO = load("macro.png", (2752, 1536))
 ANGLE = load("angle.png", (2752, 1536))
 FLARE = load("flare.png", (1920, 1072))
@@ -223,7 +222,8 @@ def shade(o, n, R, T, z, yaw):
     my = np.clip(vv, 0, 1) * (ENV.shape[0] - 1)
     col = cv2.remap(ENV, mx.astype(np.float32), my.astype(np.float32), cv2.INTER_LINEAR)
     fres = 0.75 + 0.25 * (1 - np.abs(d)) ** 2
-    return col * fres * np.array([0.92, 0.97, 1.06], np.float32)
+    fill = np.clip(0.45 - 0.9 * r[..., 1:2], 0, 1) * 0.16  # soft overhead fill
+    return (col + fill) * fres * np.array([0.92, 0.97, 1.06], np.float32)
 
 
 def draw_obj(layer, o, R, T, depth_k, yaw, white, ai_w, alpha=1.0):
@@ -280,6 +280,17 @@ YY, XX = np.mgrid[0:H, 0:W].astype(np.float32)
 XN, YN = XX / W, YY / H
 
 
+def hblur(img, length):
+    """Horizontal motion blur (camera whip)."""
+    n = int(abs(length))
+    if n < 3:
+        return img
+    out = img
+    for _ in range(3):  # 3 box passes ~ smooth gaussian-ish streak
+        out = cv2.blur(out, (max(3, n // 2 | 1), 1))
+    return out
+
+
 def sweep(img, p, ang=-0.55, width=0.07, gain=2.2):
     """Moving specular band, only where the still already has metal highlights."""
     lum = img.mean(-1)
@@ -305,8 +316,9 @@ def drift(img, t, zoom0, zoom1, vx, vy):
 
 # ---------------------------------------------------------------- shots
 def shot_3d(t, frame):
-    p = out_cubic(seg(t, 2.56, 4.35))
-    R = rot(lerp(-20, 0, p), lerp(70, 0, p), lerp(-14, 0, p))
+    pr = out_cubic(seg(t, 2.56, 4.35))
+    p = smooth(seg(t, 2.6, 4.3))
+    R = rot(lerp(-20, 0, pr), lerp(70, 0, pr), lerp(-14, 0, pr))
     fx, fy = final_screen(SYM)
     Z = math.exp(lerp(math.log(1000), math.log(FINAL_Z), p))
     sx, sy = lerp(820, fx, p), lerp(640, fy, p)
@@ -356,14 +368,16 @@ def render(t):
     if 0.40 < t < 1.62:
         q = seg(t, 0.42, 1.55)
         dxw = -2600 * in_cubic(seg(t, 1.45, 1.58))
+        vel = 2600 * 3 * seg(t, 1.45, 1.58) ** 2 / 0.13 / FPS
         img, _ = card(MACRO, lerp(1.5, 1.16, out_cubic(q)), yaw=lerp(-5, 3, q), roll=lerp(7, 0, out_cubic(q)),
                       dx=lerp(90, -60, q) + dxw, dy=lerp(-40, 20, q))
-        img = sweep(img, lerp(-0.25, 1.35, smooth(seg(t, 0.55, 1.45))))
+        img = hblur(sweep(img, lerp(-0.25, 1.35, smooth(seg(t, 0.55, 1.45)))), vel * 0.8)
         f += img * smooth(seg(t, 0.40, 0.56))
     # 3/4 chrome symbol
     if 1.48 < t < 2.62:
         q = seg(t, 1.5, 2.6)
         dxw = 2600 * (1 - out_cubic(seg(t, 1.48, 1.68)))
+        vel = 2600 * 3 * (1 - seg(t, 1.48, 1.68)) ** 2 / 0.2 / FPS if t < 1.68 else 0
         img, Hm = card(ANGLE, lerp(1.05, 1.24, q), yaw=lerp(6, -5, q), pitch=lerp(2, -1, q),
                        dx=dxw + lerp(-40, 40, q))
         img = sweep(img, lerp(-0.2, 1.3, smooth(seg(t, 1.75, 2.4))), ang=-0.9)
@@ -371,7 +385,7 @@ def render(t):
         g = pulse(t, 2.18, 0.07)
         if g > 0.01:
             add_sprite(img, GLINT, tip[0] / tip[2], tip[1] / tip[2], 0.6 + 0.4 * g, 1.8 * g, angle=20 * g)
-        f += img * smooth(seg(t, 1.48, 1.56))
+        f += hblur(img, vel * 0.8) * smooth(seg(t, 1.48, 1.56))
     if t >= 2.56:
         shot_3d(t, f)
     # anamorphic line ignite
@@ -379,13 +393,10 @@ def render(t):
     if li > 0:
         add_sprite(f, FLARE, W / 2, H / 2, 1.0, 1.6 * li, sx=lerp(0.25, 1.6, out_cubic(seg(t, 0, 0.55))), sy=0.7)
     # flashes: into macro, and into the 3D shot
-    fl = 0.9 * pulse(t, 0.47, 0.05) + 1.6 * pulse(t, 2.56, 0.06)
+    fl = 0.8 * pulse(t, 0.47, 0.045) + 1.1 * pulse(t, 2.56, 0.045)
     if fl > 0.005:
         add_sprite(f, FLARE, W / 2, H / 2, 1.0, 1.4 * fl, sx=2.2, sy=1.4)
         f += fl * 0.55 * np.array([0.8, 0.9, 1.0], np.float32)
-    # floating dust
-    dk = 0.22 + 0.18 * smooth(seg(t, 2.6, 3.4))
-    f += drift(DUST, t, 1.18, 1.06, -14, -8) * dk
     return f
 
 
@@ -416,8 +427,8 @@ VEC_FINAL = cv2.warpAffine(_v, _M, (W, H), flags=cv2.INTER_AREA)
 
 
 def nsub(t):
-    if 1.40 < t < 1.70 or 2.45 < t < 2.70:
-        return 7
+    if 2.45 < t < 2.70:
+        return 5
     if t < 4.4:
         return 3
     return 1

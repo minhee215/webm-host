@@ -10,7 +10,12 @@ The picture is unchanged (v4, 120.0 s). This builds the audio track only:
 - Mix: sidechain ducking under the voice (music swells back up in the pauses) and a soft whoosh on
   each scene change only (match cuts quieter than line-particle cuts). No other effects.
 
-Usage: python3 audio_bgm.py /path/to/AXCORE_BGM.mp3 [out.mp3]
+v7 (--narration, --no-fx): the narration is a supplied read already timed to the film (no splicing), no scene-
+change whooshes at all, and the music sits lower (--music LUFS before ducking, --duck depth) so the voice is
+never buried.
+
+Usage: python3 audio_bgm.py /path/to/AXCORE_BGM.mp3 [out.mp3] [--narration timed.mp3] [--no-fx]
+                                                              [--music -23] [--duck 0.72]
 """
 import os
 import subprocess
@@ -141,21 +146,33 @@ def lufs(x):
     return None
 
 
-def build(bgm_path, out_mp3):
+def load_timed(path, total):
+    """A narration file that is already laid out on the film's timeline: decode, pad / trim to the film."""
+    raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", path, "-f", "f32le", "-ac", "1", "-ar", str(SR), "-"],
+                         check=True, capture_output=True).stdout
+    x = np.frombuffer(raw, np.float32)
+    out = np.zeros(total, np.float32)
+    n = min(len(x), total)
+    out[:n] = x[:n]
+    return out
+
+
+def build(bgm_path, out_mp3, narration=None, fx=True, music_lufs=-20.0, duck_depth=0.65):
     total = int(S.DURATION * SR)
-    narr = A.load_narration(total)
+    narr = load_timed(narration, total) if narration else A.load_narration(total)
     narr = np.stack([narr, narr], 1)
     music = load_bgm(bgm_path, total)
-    tr = transitions(total)
+    tr = transitions(total) if fx else np.zeros_like(music)
     # level targets: voice -16 LUFS, music -20 LUFS before ducking (~14 dB under the voice while it speaks), effects sit just under the voice
     narr *= A.db(-16.0 - lufs(narr))
-    music *= A.db(-20.0 - lufs(music))
+    music *= A.db(music_lufs - lufs(music))
     # sidechain: fast attack, slow release -> the music dips ~9 dB under the voice and swells in the pauses
     e = A.rms_env(narr[:, 0])
     e /= e.max() + 1e-9
-    duck = (1 - 0.65 * np.clip(e * 3.0, 0, 1))[:, None]
+    duck = (1 - duck_depth * np.clip(e * 3.0, 0, 1))[:, None]
     tr_duck = (1 - 0.4 * np.clip(e * 3.0, 0, 1))[:, None]
-    tr *= np.abs(narr).max() * A.db(-15.0) / (np.abs(tr).max() + 1e-9)     # quiet: well under the voice
+    if fx:
+        tr *= np.abs(narr).max() * A.db(-15.0) / (np.abs(tr).max() + 1e-9)     # quiet: well under the voice
     mix = narr + music * duck + tr * tr_duck
     # loudness normalise for web (-14 LUFS) with a -1 dBFS ceiling (soft limiter)
     mix *= A.db(-14.0 - lufs(mix))
@@ -175,7 +192,14 @@ def build(bgm_path, out_mp3):
 
 
 if __name__ == "__main__":
-    bgm = sys.argv[1]
-    out = sys.argv[2] if len(sys.argv) > 2 else os.path.join(A.HERE, "out", "axcore_audio_v6.mp3")
-    os.makedirs(os.path.dirname(out), exist_ok=True)
-    print(build(bgm, out))
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("bgm")
+    ap.add_argument("out", nargs="?", default=os.path.join(A.HERE, "out", "axcore_audio_v6.mp3"))
+    ap.add_argument("--narration", default=None, help="narration already timed to the film")
+    ap.add_argument("--no-fx", action="store_true", help="no scene-change whooshes")
+    ap.add_argument("--music", type=float, default=-20.0, help="music loudness (LUFS) before ducking")
+    ap.add_argument("--duck", type=float, default=0.65, help="ducking depth under the voice (0..1)")
+    a = ap.parse_args()
+    os.makedirs(os.path.dirname(a.out), exist_ok=True)
+    print(build(a.bgm, a.out, a.narration, not a.no_fx, a.music, a.duck))

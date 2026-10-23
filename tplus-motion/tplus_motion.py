@@ -213,7 +213,8 @@ def project(R, T, pts):
 def shade(o, n, R, T, z, yaw):
     nc = n @ R.T.astype(np.float32)
     P = np.stack([o.X, o.Y, np.full_like(o.X, z)], -1) @ R.T.astype(np.float32) + T.astype(np.float32)
-    v = P / np.linalg.norm(P, axis=-1, keepdims=True)
+    v = P * np.array([3.2, 3.2, 1.0], np.float32)  # exaggerate view spread -> richer reflections
+    v /= np.linalg.norm(v, axis=-1, keepdims=True)
     d = np.sum(v * nc, -1, keepdims=True)
     r = v - 2 * d * nc
     u = 0.5 + (np.arctan2(r[..., 0], -r[..., 2]) + yaw) / (2 * np.pi) * 1.6
@@ -222,7 +223,7 @@ def shade(o, n, R, T, z, yaw):
     my = np.clip(vv, 0, 1) * (ENV.shape[0] - 1)
     col = cv2.remap(ENV, mx.astype(np.float32), my.astype(np.float32), cv2.INTER_LINEAR)
     fres = 0.75 + 0.25 * (1 - np.abs(d)) ** 2
-    fill = np.clip(0.45 - 0.9 * r[..., 1:2], 0, 1) * 0.16  # soft overhead fill
+    fill = np.clip(0.35 - 1.2 * r[..., 1:2], 0, 1) * 0.07  # soft overhead fill
     return (col + fill) * fres * np.array([0.92, 0.97, 1.06], np.float32)
 
 
@@ -243,7 +244,7 @@ def draw_obj(layer, o, R, T, depth_k, yaw, white, ai_w, alpha=1.0):
     seq = []  # (z, premultiplied rgba texture, brightness)
     if depth > 0.5:
         plen = np.abs(project(R, T, c3 + [0, 0, depth]) - project(R, T, c3)).max()
-        ns = int(np.clip(plen * 1.1 + 2, 2, 110))
+        ns = int(np.clip(plen * 2.0 + 2, 2, 170))
         wall = shade(o, o.nwall, R, T, depth * 0.5, yaw)
         wall = wall * (1 - white) + white * 0.55
         src = np.concatenate([wall * m4, m4], -1).astype(np.float32)

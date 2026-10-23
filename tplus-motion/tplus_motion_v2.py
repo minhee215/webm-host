@@ -144,8 +144,9 @@ def geodesic(mask, seed, ds=4):
 class Obj:
     """Extruded, bevelled slab built from a subset of the SVG paths."""
 
-    def __init__(self, idx, depth, bevel, seed_svg=None):
-        full = raster(idx)
+    def __init__(self, idx, depth, bevel, seed_svg=None, ts=TS):
+        self.ts = TS = ts
+        full = raster(idx, scale=ts)
         ys, xs = np.nonzero(full > 0.01)
         pad = int(bevel * TS) + 6
         x0, x1 = xs.min() - pad, xs.max() + pad + 1
@@ -164,7 +165,7 @@ class Obj:
         k = bevel * TS * 0.8
         n = np.stack([-gx * k, -gy * k, -np.ones_like(gx)], -1)
         self.nface = (n / np.linalg.norm(n, axis=-1, keepdims=True)).astype(np.float32)
-        gy2, gx2 = np.gradient(cv2.GaussianBlur(sd, (0, 0), 2.5))
+        gy2, gx2 = np.gradient(cv2.GaussianBlur(sd, (0, 0), 1.3 * ts))
         wn = np.stack([-gx2, -gy2, np.zeros_like(gx2)], -1)
         self.nwall = (wn / (np.linalg.norm(wn, axis=-1, keepdims=True) + 1e-6)).astype(np.float32)
         u = (np.arange(self.w) / TS + self.ox - self.cx).astype(np.float32)
@@ -202,9 +203,9 @@ class Obj:
 TIP_TL = (276.0, 49.0)    # symbol top-left blade tip (svg units)
 TIP_TR = (872.0, 48.5)    # top-right tip
 TIP_BOT = (562.0, 562.0)  # bottom of the stem
-SYM = Obj([0], depth=80, bevel=7, seed_svg=TIP_TL)
+SYM = Obj([0], depth=80, bevel=7, seed_svg=TIP_TL, ts=3.5)
 # wordmark letters left->right: T P L U S ( + )
-LETTERS = [Obj(i, depth=18, bevel=2.2) for i in ([4], [2], [3], [8, 9, 10], [1], [6], [5], [7])]
+LETTERS = [Obj(i, depth=18, bevel=2.2, ts=2.5) for i in ([4], [2], [3], [8, 9, 10], [1], [6], [5], [7])]
 LOGO_C = np.array([(82.7 + 1103.8) / 2 - SYM.cx, (47.1 + 835.6) / 2 - SYM.cy, 0.0])  # world
 FINAL_S = FINAL_H / (835.6 - 47.1)
 
@@ -246,7 +247,7 @@ class Cam:
 
 
 def homog(cam, o, R, T, z):
-    A = np.array([[1 / TS, 0, o.ox - o.cx], [0, 1 / TS, o.oy - o.cy], [0, 0, 1]])
+    A = np.array([[1 / o.ts, 0, o.ox - o.cx], [0, 1 / o.ts, o.oy - o.cy], [0, 0, 1]])
     M = np.column_stack([R[:, 0], R[:, 1], R @ np.array([0, 0, z]) + T])
     return cam.K @ M @ A
 
@@ -271,6 +272,8 @@ def shade(o, n, R, T, z, yaw, env_k, lights):
     my = np.clip(vv, 0, 1) * (ENV.shape[0] - 1)
     col = cv2.remap(ENV, mx.astype(np.float32), my.astype(np.float32), cv2.INTER_LINEAR)
     fres = 0.7 + 0.3 * (1 - np.abs(d)) ** 2
+    ry = r[..., 1:2]
+    col = col + (np.exp(-((ry + 0.04) / 0.05) ** 2) * 0.9 + np.clip(-ry, 0, 1) * 0.22) * WHITE  # horizon + sky
     col = col * fres * env_k
     for lp, lc, rad, pw in lights:  # point lights glancing over the metal
         dd = ((Po - np.asarray(lp, np.float32)) ** 2).sum(-1, keepdims=True)
@@ -305,7 +308,7 @@ def draw_obj(layer, cam, o, R, T, depth_k=1.0, yaw=0.0, env_k=1.0, white=0.0, li
     seq = []
     if depth > 0.5:
         plen = np.abs(p1 - p0).max()
-        ns = int(np.clip(plen * 1.6 + 2, 2, 240))
+        ns = int(np.clip(plen * 1.6 + 2, 2, 420))
         wall = shade(o, o.nwall, R, T, depth * 0.5, yaw, env_k * 0.85, lights)
         wall = wall * (1 - white) + white * 0.55 + emis * 0.6
         src = np.concatenate([wall * m4, m4], -1).astype(np.float32)
@@ -538,7 +541,7 @@ def finish(img, t):
     bloom = cv2.GaussianBlur(small, (0, 0), 3) * 0.5 + cv2.GaussianBlur(small, (0, 0), 14) * 0.7
     streak = cv2.GaussianBlur(small, (0, 0), sigmaX=70, sigmaY=0.7) * np.array([0.55, 0.78, 1.0], np.float32)
     end = 1 - 0.65 * smooth(seg(t, 6.0, 6.6))
-    img = img + cv2.resize(bloom, (W, H)) * 0.6 * end + cv2.resize(streak, (W, H)) * 0.55 * end
+    img = img + cv2.resize(bloom, (W, H)) * 0.6 * end + cv2.resize(streak, (W, H)) * 0.55 * end ** 3
     img = img * VIG
     img = np.where(img < 0.8, img, 0.8 + 0.2 * np.tanh((img - 0.8) / 0.2))
     img = np.clip(img, 0, 1) ** (1 / 2.2)

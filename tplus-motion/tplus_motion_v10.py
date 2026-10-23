@@ -3,7 +3,7 @@
 
 Pure black, white light, satin graphite. The symbol's orientation follows ONE eased
 arc from lying in perspective to facing front, so the motion never stops and restarts.
-TPLUS_SCALE=0.5 renders a 960x540 sample.
+TPLUS_SCALE=0.5 renders a 960x540 sample; TPLUS_SCALE=1.3333333333 renders 2K (2560x1440).
   0.00-1.45  a round point of light stretches into a line and turns onto the T's top edge
   1.40-2.75  from that edge, light pours down the plate as a soft gradient
   2.75-4.00  the light dims evenly (perceptually linear) into satin graphite, one soft reflection
@@ -23,7 +23,7 @@ import cv2
 import numpy as np
 
 SC = float(os.environ.get("TPLUS_SCALE", "1"))
-W, H, FPS, DUR = int(1920 * SC), int(1080 * SC), 30, 6.0
+W, H, FPS, DUR = int(round(1920 * SC)), int(round(1080 * SC)), 30, 6.0
 NF = int(round(DUR * FPS))
 ROOT = os.path.dirname(os.path.abspath(__file__))
 AS = os.path.join(ROOT, "assets")

@@ -403,31 +403,31 @@ def _ramp(u, t0, k=1.6):
 
 
 def absorb(u):
-    """The vortex being drawn into the structure (4.50-5.45), leaving the frame clean before the push-in."""
-    return e_io_cubic(prog(u, 4.5, 0.95))
+    """The vortex drains into the structure (3.80-5.40): no new particles enter at the rim, the inflow speeds up
+    gently and the arms empty from the outside in, so the frame is clean before the push-in."""
+    return e_io_sine(prog(u, 3.8, 1.6))
 
 
 def clean(u):
-    return e_io_sine(prog(u, 4.7, 0.65))
+    return e_io_sine(prog(u, 4.3, 1.1))
 
 
 def vortex_pts(u):
     """World positions of the vortex particles at shot time u."""
-    flow = 0.085 * u + 0.035 * _ramp(u, 2.2)                  # inflow speeds up as it learns
+    flow = 0.085 * u + 0.035 * _ramp(u, 2.2) + 0.12 * _ramp(u, 3.8, 2.0)   # inflow speeds up as it learns
     q = (V_Q0 - flow) % 1.0
     shrink = lerp(1.0, 0.78, tight(u))
     ab = absorb(u)
     r0 = RAD * (1.12 + 3.4 * q ** 1.5)
-    # before the push-in the whole vortex is drawn into the structure (spiralling faster as it goes)
-    r = r0 * shrink * (1 - ab) ** 1.6
+    r = r0 * shrink
     # the arm angle follows the unscaled radius, so tightening/bursting never turns the pattern backwards:
     # the vortex only ever turns one way (clockwise on screen), and only speeds up
-    th = V_ARM * (2 * math.pi / 3) + 2.3 * np.log(r0 / RAD) + V_J + 0.45 * u + 0.22 * _ramp(u, 2.2) + 2.4 * ab ** 1.3
+    th = V_ARM * (2 * math.pi / 3) + 2.3 * np.log(r0 / RAD) + V_J + 0.45 * u + 0.22 * _ramp(u, 2.2)
     h = V_H * 26 * (r / RAD) ** 0.8
     P = C3 + (np.cos(th)[:, None] * E1 + np.sin(th)[:, None] * E2) * r[:, None] + NRM * h[:, None]
     edge = np.clip(q / 0.06, 0, 1) * np.clip((1 - q) / 0.12, 0, 1)
-    if ab > 0:                                    # particles vanish as they pass inside the structure
-        edge = edge * np.clip((r / RAD - 0.3) / 0.6, 0, 1)
+    if ab > 0:                                    # the rim empties first, the rest flows on into the core
+        edge = edge * np.clip(((1 - ab) - q) / 0.15, 0, 1)
     return P, edge, q
 
 
@@ -436,7 +436,7 @@ def draw_vortex(c, u):
     if vis <= 0:
         return
     P, edge, q = vortex_pts(u)
-    dt = 0.03 * (1 - 0.75 * math.sin(math.pi * absorb(u)))       # keep the trails short while it collapses
+    dt = 0.03
     Pp, _, _ = vortex_pts(u - dt)
     S2, Z, ok = project(P, u)
     Sp, _, okp = project(Pp, u - dt)

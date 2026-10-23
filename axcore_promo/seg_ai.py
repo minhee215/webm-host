@@ -152,7 +152,7 @@ def world(u):
         x, z = V[:, 0] * ca + V[:, 2] * sa, -V[:, 0] * sa + V[:, 2] * ca
         y = V[:, 1] * ct - z * st
         return np.c_[x, y, V[:, 1] * st + z * ct]
-    V = np.r_[rot(SPH_V, a), rot(IN_V, -1.6 * a) * IN_R]
+    V = np.r_[rot(SPH_V, a), rot(IN_V, 1.5 * a) * IN_R]
     x, y, z = V[:, 0], V[:, 1], V[:, 2]
     jit = (1 - tight(u)) * 0.06
     nz = np.sin(FREQ[CL, 0, 0] * u * 2 + PHASE[CL, 0, 0]) * jit
@@ -405,8 +405,11 @@ def vortex_pts(u):
     q = (V_Q0 - flow) % 1.0
     shrink = lerp(1.0, 0.78, tight(u))
     burst = e_in_cubic(prog(u, 5.3, 1.75))
-    r = RAD * (1.12 + 3.4 * q ** 1.5) * shrink * (1 + 2.6 * burst ** 1.4)
-    th = V_ARM * (2 * math.pi / 3) + 2.3 * np.log(r / RAD) + V_J + 0.45 * u + 0.22 * _ramp(u, 2.2)
+    r0 = RAD * (1.12 + 3.4 * q ** 1.5)
+    r = r0 * shrink * (1 + 2.6 * burst ** 1.4)
+    # the arm angle follows the unscaled radius, so tightening/bursting never turns the pattern backwards:
+    # the vortex only ever turns one way (clockwise on screen), and only speeds up
+    th = V_ARM * (2 * math.pi / 3) + 2.3 * np.log(r0 / RAD) + V_J + 0.45 * u + 0.22 * _ramp(u, 2.2)
     h = V_H * 26 * (r / RAD) ** 0.8
     P = C3 + (np.cos(th)[:, None] * E1 + np.sin(th)[:, None] * E2) * r[:, None] + NRM * h[:, None]
     edge = np.clip(q / 0.06, 0, 1) * np.clip((1 - q) / 0.12, 0, 1)
@@ -456,7 +459,7 @@ def draw_arcs(c, u):
         b1 = np.cross(n, [0, 0, 1.0])
         b1 /= np.linalg.norm(b1)
         b2 = np.cross(n, b1)
-        ph = rr.uniform(0, 2 * math.pi) + (1.4 + 0.5 * k) * u * (1 if k % 2 else -1)
+        ph = rr.uniform(0, 2 * math.pi) + (1.4 + 0.5 * k) * u                # all arcs turn the same way
         span = rr.uniform(2.2, 3.2)
         rad = RAD * rr.uniform(1.06, 1.2) * lerp(1, 0.92, tight(u))
         t = np.linspace(ph, ph + span, 70)
@@ -519,6 +522,15 @@ def draw_tags(c, u):
                 E.rrect(c, R(x, y + li * 9 * s, w_, 2.4 * s), 1.2 * s, "#6FA8FF", 0.35 * a)
 
 
+def _coast(u, t0, d, n=40):
+    """Integral of (1 - lock) dt: an angle that turns at unit speed and eases to a stop over [t0, t0 + d]."""
+    if u <= t0:
+        return u
+    x = np.linspace(t0, min(u, t0 + d), n)
+    v = 1 - np.array([e_io_cubic(prog(t, t0, d)) for t in x])
+    return t0 + float(np.sum((v[1:] + v[:-1]) * np.diff(x)) / 2)
+
+
 def draw_core(c, u, S2, Z, ok):
     """The structure's core condenses to a bright point, precision rings lock, then light bursts out."""
     z = C3[2] - camz(u)
@@ -538,7 +550,8 @@ def draw_core(c, u, S2, Z, ok):
         lock = e_io_cubic(prog(u, 4.4, 1.0))
         for j, (rr, tilt0) in enumerate(((1.28, 0.9), (1.45, -0.7))):
             tilt = lerp(tilt0, 0.0, lock)
-            rot = lerp(u * (1.6 if j else -1.2), 0.0, lock)
+            # spins the same way as the vortex and coasts to a stop as it locks (never unwinds backwards)
+            rot = (1.6 if j else 1.2) * _coast(u, 4.4, 1.0)
             c.save()
             c.translate(x, y)
             c.rotate(math.degrees(tilt) * 0.3)

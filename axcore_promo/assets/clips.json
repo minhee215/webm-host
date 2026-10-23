@@ -1,0 +1,368 @@
+{
+ "_note": "Kling 3.0 Pro image-to-video clips; each starts from the Nano Banana Pro plate of the same name. Prompts: PLAN.md",
+ "base": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/",
+ "clips": {
+  "22_city": {
+   "file": "hf_20261012_013900_90abc482-5ba7-4bc0-b72b-43f7616cf180.mp4",
+   "pre": 0.2
+  },
+  "02_tower": {
+   "file": "hf_20261012_013859_70e08c50-659f-4969-9f67-ec812380434a.mp4",
+   "track": {
+    "regions": {
+     "tower": [
+      0.15,
+      0.15,
+      0.85,
+      1.0
+     ]
+    }
+   }
+  },
+  "03_facade": {
+   "file": "hf_20261012_013915_68a49bed-0659-4700-b507-4bd14743a5cc.mp4",
+   "track": {},
+   "speed": 0.8,
+   "pre": 0.3
+  },
+  "04_table": {
+   "file": "hf_20261012_013900_14427db8-5af0-4985-97f7-61ab4e09765c.mp4",
+   "track": {},
+   "speed": 0.88
+  },
+  "07_docs": {
+   "file": "hf_20261012_013915_8da00e14-343c-4335-9b69-31ecac48250f.mp4",
+   "track": {
+    "regions": {
+     "paper": [
+      0.4,
+      0.35,
+      0.9,
+      0.85
+     ]
+    }
+   },
+   "loop": "pingpong"
+  },
+  "08_navycards": {
+   "file": "hf_20261012_013915_b5b0c292-bec2-4139-825c-30ae28aa50e7.mp4"
+  },
+  "09_handraise": {
+   "file": "hf_20261012_013915_31ae921e-58ad-412c-ad38-2a5e3cdef8b1.mp4",
+   "pre": 0.0,
+   "track": {
+    "hand": true
+   },
+   "speed": 1.35
+  },
+  "10_datacenter": {
+   "file": "hf_20261012_013859_bbdb2d85-788a-4725-93a3-56743c171660.mp4",
+   "speed": 0.9
+  },
+  "12_handwritten": {
+   "file": "hf_20261012_013900_d48ac24e-6899-469e-b518-11e5a757f7ab.mp4",
+   "track": {
+    "regions": {
+     "paper": [
+      0.1,
+      0.2,
+      0.75,
+      0.75
+     ]
+    }
+   }
+  },
+  "13_navystage": {
+   "file": "hf_20261012_013859_e85b19f0-3832-428e-b6e4-2fcb9ca0fb2f.mp4",
+   "pre": 0.0
+  },
+  "14_monitors": {
+   "file": "hf_20261012_013900_14de046e-a753-4bcb-af6f-b390aa16fb13.mp4",
+   "speed": 0.82
+  },
+  "16_retail": {
+   "file": "hf_20261012_014007_1318380f-0b70-492e-a5ff-2ecf1481f259.mp4",
+   "speed": 0.9
+  },
+  "24_personal": {
+   "file": "hf_20261012_014008_80236417-19cc-4274-8e76-7ddabdfe524b.mp4",
+   "pre": 0.0,
+   "track": {
+    "hand": true,
+    "regions": {
+     "laptop": [
+      0.22,
+      0.52,
+      0.4,
+      0.8
+     ]
+    }
+   }
+  },
+  "23_typing": {
+   "file": "hf_20261012_014007_ed664f93-9f0d-4337-a25f-4cef74966a91.mp4",
+   "pre": 0.0,
+   "speed": 0.5
+  },
+  "06_line": {
+   "file": "hf_20261012_014007_2d7d532b-81c4-47ac-aa16-18c18ceb8326.mp4",
+   "track": {}
+  },
+  "17_robot": {
+   "file": "hf_20261012_014008_b039bab3-1451-4c39-84f8-3bacfb1de6d1.mp4",
+   "track": {
+    "points": {
+     "grip": [
+      0.61,
+      0.52
+     ]
+    }
+   },
+   "pre": 0.4
+  },
+  "18_factory": {
+   "file": "hf_20261012_014007_a80d9ee8-8429-4a87-8a14-9db29ce03d0b.mp4",
+   "track": {}
+  },
+  "19_aerial": {
+   "file": "hf_20261012_014007_afc129fd-046f-4939-8606-f3f19ff296be.mp4",
+   "track": {},
+   "speed": 0.85
+  },
+  "21_tablet_hold": {
+   "file": "hf_20261012_014007_9939f03e-7e36-4385-9b01-2afe7fdf8f3e.mp4",
+   "loop": "pingpong",
+   "track": {
+    "screens": {
+     "screen": [
+      0.2,
+      0.3,
+      0.8,
+      0.92
+     ]
+    }
+   }
+  },
+  "05_warehouse": {
+   "file": "hf_20261012_014008_d2f519ac-e135-4645-806f-8b0bcb22ba4f.mp4",
+   "loop": "pingpong"
+  },
+  "20_team": {
+   "file": "hf_20261012_014007_9e9fae57-9187-40d0-ad68-0ad1ab597c2c.mp4",
+   "loop": "pingpong"
+  },
+  "25_city8": {
+   "file": "hf_20261012_061556_f39e0e43-8fad-43f1-a32d-7a9296e2b290.mp4",
+   "pre": 0.0,
+   "track": {
+    "regions": {
+     "tower": [
+      0.64,
+      0.04,
+      0.8,
+      0.86
+     ]
+    }
+   }
+  },
+  "30_tab_personal": {
+   "file": "hf_20261012_062236_19373e88-2847-4a06-b6d0-43589f036e45.mp4",
+   "pre": 0.0,
+   "track": {
+    "hand": true,
+    "hand_near": [
+     0.62,
+     0.6
+    ]
+   }
+  },
+  "31_tab_ent": {
+   "file": "hf_20261012_062236_5b3ed50b-60be-42eb-a941-8aea56bf9aa6.mp4",
+   "pre": 0.0,
+   "track": {
+    "hand": true,
+    "hand_near": [
+     0.52,
+     0.62
+    ]
+   }
+  },
+  "33_ocr": {
+   "file": "hf_20261012_063004_809e065b-eb10-4387-8a52-f13fa99f20af.mp4",
+   "pre": 0.0,
+   "speed": 0.93,
+   "track": {
+    "regions": {
+     "paper": [
+      0.3,
+      0.15,
+      0.72,
+      0.7
+     ]
+    }
+   }
+  },
+  "34_ocr_lab": {
+   "file": "https://raw.githubusercontent.com/minhee215/webm-host/claude/axcore-promo-video-g3ar0z/axcore_promo/assets/media/ocr_lab.mp4",
+   "pre": 0.0,
+   "speed": 0.95,
+   "track": {
+    "regions": {
+     "paper": [
+      0.0,
+      0.62,
+      0.72,
+      0.92
+     ]
+    }
+   }
+  },
+  "o1_refinery": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_075113_a726d5ea-cdab-44d8-b022-199cf3e0beda.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "o2_carline": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_080403_65f207ba-c867-4267-a1cd-53444f5d1d9a.mp4",
+   "track": {},
+   "pre": 0.3,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "o3_wind": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_075112_3cd75e37-ee4f-4099-a7c2-cba9ec256edd.mp4",
+   "track": {},
+   "pre": 0.3,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "o4_city": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_075113_0d829ea7-201f-412b-9ce3-75ed6c15170f.mp4",
+   "track": {},
+   "pre": 0.3,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "o5_robot": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_075113_541e4ac1-ac6a-4433-b5e9-b3b341bb1195.mp4",
+   "track": {},
+   "pre": 0.3,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "p1_refinery": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_082758_4de6b610-cbc7-44be-b8e8-16fec659b0c6.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "p2_carline": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_082759_3b434a15-6787-4302-8a6c-8549cf924b6b.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "p3_wind": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_082757_561a2d2b-3017-414b-a43a-2dfe2e9825f9.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "p4_city": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_083048_0ddeadf6-1bb6-4780-bd64-d7fd2aad3e75.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "p5_robot": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_082757_6b6e9095-6b70-4264-837e-1bba65770005.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "q1_refinery": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_090629_793956a4-a91c-445f-86d5-081a21b60cae.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "q3_silos": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_090246_8f16b76c-8a2a-4fd0-a6a4-5a109b6f5a50.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2560
+   ]
+  },
+  "q5_city": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261019_090253_19798f24-6293-49c6-857d-9beb2f40eb33.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    3840,
+    2160
+   ]
+  },
+  "r5_robot": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261020_084105_a672b202-ff59-4728-a37b-e219d3391983.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    854,
+    480
+   ],
+   "_note": "Seedance 2.5 480p draft (job a672b202-ff59-4728-a37b-e219d3391983), can be finalized to 1080p"
+  },
+  "r3_wind": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261021_020820_4d5cad02-e889-4237-82e7-ad605a5fd3d7.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    854,
+    480
+   ],
+   "_note": "Seedance 2.5 480p draft (job 4d5cad02-e889-4237-82e7-ad605a5fd3d7), can be finalized to 1080p"
+  },
+  "r3_wind_hd": {
+   "file": "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/hf_20261021_022227_060d0c18-97b2-4dff-a878-1f6fe2c02ffa.mp4",
+   "track": {},
+   "pre": 0.0,
+   "res": [
+    1920,
+    1080
+   ],
+   "_note": "Seedance 2.5 1080p final of draft 4d5cad02 (same motion as r3_wind)"
+  }
+ }
+}

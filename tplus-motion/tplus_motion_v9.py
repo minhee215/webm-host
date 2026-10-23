@@ -433,7 +433,8 @@ def render(t):
         dv = ends[1] - ends[0]
         he = np.linalg.norm(dv) / 2
         ang_e = math.atan2(dv[1], dv[0])
-        ang = lerp(math.pi / 2 if ang_e >= 0 else -math.pi / 2, ang_e, ease(seg(t, 0.80, 1.50)))
+        ang_e = (ang_e + math.pi / 2) % math.pi - math.pi / 2  # a line's angle is mod 180 deg
+        ang = lerp(math.pi / 2, ang_e, ease(seg(t, 0.80, 1.50)))  # always turn the same way
         half = he * ease(seg(t, 0.30, 0.95))
         d = np.array([math.cos(ang), math.sin(ang)]) * half
         sliver(f, c - d, c + d, width=lerp(1.6, 1.25, ease(seg(t, 0.3, 0.95))) * SC * 2, inten=lk)

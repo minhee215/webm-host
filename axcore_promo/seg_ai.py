@@ -104,9 +104,9 @@ BASE[CL] = C3 + _dirs * r.uniform(820, 1500, NC)[:, None] * np.array([1.25, 0.75
 AMP[CL] = np.array([90.0, 60.0, 90.0])
 # nodes leave for the structure almost together (a short ripple from the nearest outward), not one by one
 _dist = np.linalg.norm(BASE[CL] - C3, axis=1)
-GATHER_D = 1.45 + 0.55 * (_dist - _dist.min()) / (np.ptp(_dist) + 1e-9) + r.uniform(0, 0.12, NC)
-GATHER_LEN = 1.9
-SWIRL = 1.1                                   # radians of orbit the nodes sweep through on the way in
+GATHER_D = 0.9 + 0.5 * (_dist - _dist.min()) / (np.ptp(_dist) + 1e-9) + r.uniform(0, 0.1, NC)
+GATHER_LEN = 1.6
+SWIRL = 1.4                                   # radians of orbit the nodes sweep through on the way in
 SIZE = r.uniform(0.7, 1.5, N)
 
 TAGS = []                                     # floating data tags: (kind, payload, base world pos, phase)
@@ -139,37 +139,46 @@ def tight(u):
     return e_io_cubic(prog(u, 3.6, 1.7))
 
 
+def pat(u):
+    """Angle the whole AI turns through by time u - vortex, cloud and structure share it, so they move as one
+    (clockwise on screen, gathering pace as it learns)."""
+    return 0.45 * u + 0.22 * _ramp(u, 2.2)
+
+
+def rot_n(V, a):
+    """Rotate vectors V (n, 3) about the vortex axis NRM by angle a (scalar or per-row); positive = clockwise."""
+    a = np.asarray(a, float)
+    ca, sa = (np.cos(a)[:, None], np.sin(a)[:, None]) if a.ndim else (math.cos(a), math.sin(a))
+    return V * ca + np.cross(NRM, V) * sa + np.outer(V @ NRM, NRM) * (1 - ca)
+
+
+def _tilted(V, tilt=0.32):
+    ct, st = math.cos(tilt), math.sin(tilt)
+    return np.c_[V[:, 0], V[:, 1] * ct - V[:, 2] * st, V[:, 1] * st + V[:, 2] * ct]
+
+
 def world(u):
     """Node positions at shot time u."""
     w = np.sin(FREQ[..., 0] * u + PHASE[..., 0]) * 0.6 + np.sin(FREQ[..., 1] * u * 1.7 + PHASE[..., 1]) * 0.4
     P = BASE + w * AMP
-    # structure: rotated sphere vertices, a little breathing jitter that dies away as it tightens
-    a = spin(u)
-    tilt = 0.32
-    ct, st = math.cos(tilt), math.sin(tilt)
-    def rot(V, a):
-        ca, sa = math.cos(a), math.sin(a)
-        x, z = V[:, 0] * ca + V[:, 2] * sa, -V[:, 0] * sa + V[:, 2] * ca
-        y = V[:, 1] * ct - z * st
-        return np.c_[x, y, V[:, 1] * st + z * ct]
-    V = np.r_[rot(SPH_V, a), rot(IN_V, 1.5 * a) * IN_R]
-    x, y, z = V[:, 0], V[:, 1], V[:, 2]
+    pa = pat(u)
+    # structure: the shell turns with the vortex (same axis, same pace); a breathing jitter dies away as it tightens
+    V = rot_n(np.r_[_tilted(SPH_V), _tilted(IN_V) * IN_R], pa)
     jit = (1 - tight(u)) * 0.06
     nz = np.sin(FREQ[CL, 0, 0] * u * 2 + PHASE[CL, 0, 0]) * jit
-    d1 = np.c_[x, y, z] * RAD * (1 + nz)[:, None]
-    g = np.array([e_io_cubic(prog(u, d, GATHER_LEN)) for d in GATHER_D])
-    # the way in: a smooth vortex around the structure's axis - direction and distance ease from where each
-    # node was to its place on the shell while the whole cloud orbits the same way (no straight-line darts)
-    d0 = P[CL] - C3
+    d1 = V * RAD * (1 + nz)[:, None]
+    gx = np.clip((u - GATHER_D) / GATHER_LEN, 0, 1)
+    g = 1 - (1 - gx) ** 3                                     # the same ease as the arms arriving
+    # the cloud around it already turns with the vortex; on the way in each node sweeps on clockwise along
+    # the vortex (no straight-line darts) and settles into its place on the shell
+    d0 = rot_n(P[CL] - C3, pa)
     r0, r1 = np.linalg.norm(d0, axis=1), np.linalg.norm(d1, axis=1)
     n0, n1 = d0 / r0[:, None], d1 / r1[:, None]
     dirv = n0 * (1 - g)[:, None] + n1 * g[:, None]
     dirv /= np.linalg.norm(dirv, axis=1)[:, None] + 1e-9
-    ang = SWIRL * (1 - g)
-    ca_, sa_ = np.cos(ang), np.sin(ang)
-    dx, dz = dirv[:, 0] * ca_ + dirv[:, 2] * sa_, -dirv[:, 0] * sa_ + dirv[:, 2] * ca_
+    dirv = rot_n(dirv, -SWIRL * (1 - g))
     rr = r0 * (1 - g) + r1 * g
-    P[CL] = C3 + np.c_[dx, dirv[:, 1], dz] * rr[:, None]
+    P[CL] = C3 + dirv * rr[:, None]
     return P, g
 
 
@@ -242,7 +251,7 @@ def draw_network(c, u):
     for a, pth in bucket_paths(segs):
         c.drawPath(pth, paint_stroke(LINE, a, 1.1, blend=skia.BlendMode.kScreen))
     # the structure's lattice edges
-    lat = e_io_cubic(prog(u, 2.4, 1.6))
+    lat = e_io_cubic(prog(u, 1.6, 1.5))
     if lat > 0:
         segs = []
         for a_, b_ in CL_E:
@@ -430,10 +439,12 @@ def vortex_pts(u):
     r = r0 * shrink
     # the arm angle follows the unscaled radius, so tightening/bursting never turns the pattern backwards:
     # the vortex only ever turns one way (clockwise on screen), and only speeds up
-    th = V_ARM * (2 * math.pi / 3) + 2.3 * np.log(r0 / RAD) + V_J + 0.45 * u + 0.22 * _ramp(u, 2.2)
+    # trailing arms: moving inward along an arm turns a particle clockwise too, so arriving, flowing in and the
+    # pattern's own turn all go the same way
+    th = V_ARM * (2 * math.pi / 3) - 2.3 * np.log(r0 / RAD) + V_J + pat(u)
     h = V_H * 26 * (r / RAD) ** 0.8
     P = C3 + (np.cos(th)[:, None] * E1 + np.sin(th)[:, None] * E2) * r[:, None] + NRM * h[:, None]
-    edge = np.clip(q / 0.06, 0, 1) * np.clip((1 - q) / 0.12, 0, 1) * (arr > 0)
+    edge = np.clip(q / 0.06, 0, 1) * np.clip((1 - q) / 0.12, 0, 1) * (arr > 0) * (0.65 + 0.35 * arr)
     if ab > 0:                                    # the rim empties first, the rest flows on into the core
         edge = edge * np.clip(((1 - ab) - q) / 0.15, 0, 1)
     return P, edge, q

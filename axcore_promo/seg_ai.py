@@ -376,6 +376,104 @@ def draw_streams(c, u):
             E.radial(c, x, y, 260 * F / z * 3, "#7FB6FF", 0.35 * k_, skia.BlendMode.kScreen)
 
 
+# ------------------------------------------------------------------ the vortex (data flowing into the AI)
+# Instead of light bundles darting in from the sides: a galaxy-like vortex of glowing particles around the
+# structure. Three soft spiral arms turn and drift inward all the time, faster as it learns, tighter as it
+# becomes precise, and fling outward toward the lens in the burst.
+_vr = np.random.default_rng(404)
+VM = 4200
+V_ARM = _vr.integers(0, 3, VM)
+V_Q0 = _vr.random(VM)                         # position along the inflow (1 = outer rim, 0 = at the core)
+V_J = _vr.normal(0, 0.2, VM)                 # spread around the arm
+V_H = _vr.normal(0, 1, VM)                    # thickness of the disk
+V_COL = np.where(_vr.random(VM) < 0.06, 2, np.where(_vr.random(VM) < 0.3, 1, 0))
+V_SZ = _vr.uniform(0.6, 1.6, VM)
+_tilt, _roll = 0.62, 0.25                     # disk turned toward the lens (a galaxy seen at an angle), rolled
+E1 = np.array([math.cos(_roll), math.sin(_roll), 0.0])
+E2 = np.array([-math.sin(_roll) * math.cos(_tilt), math.cos(_roll) * math.cos(_tilt), math.sin(_tilt)])
+NRM = np.cross(E1, E2)
+V_COLS = ["#3D86FF", "#9FD0FF", "#FFFFFF"]
+
+
+def _ramp(u, t0, k=1.6):
+    return clamp(u - t0, 0, 4) ** k
+
+
+def vortex_pts(u):
+    """World positions of the vortex particles at shot time u."""
+    flow = 0.085 * u + 0.035 * _ramp(u, 2.2)                  # inflow speeds up as it learns
+    q = (V_Q0 - flow) % 1.0
+    shrink = lerp(1.0, 0.78, tight(u))
+    burst = e_in_cubic(prog(u, 5.3, 1.75))
+    r = RAD * (1.12 + 3.4 * q ** 1.5) * shrink * (1 + 2.6 * burst ** 1.4)
+    th = V_ARM * (2 * math.pi / 3) + 2.3 * np.log(r / RAD) + V_J + 0.45 * u + 0.22 * _ramp(u, 2.2)
+    h = V_H * 26 * (r / RAD) ** 0.8
+    P = C3 + (np.cos(th)[:, None] * E1 + np.sin(th)[:, None] * E2) * r[:, None] + NRM * h[:, None]
+    edge = np.clip(q / 0.06, 0, 1) * np.clip((1 - q) / 0.12, 0, 1)
+    return P, edge, q
+
+
+def draw_vortex(c, u):
+    vis = e_io_sine(prog(u, -0.45, 1.1)) * (1 - e_io_sine(prog(u, 6.35, 0.5)))
+    if vis <= 0:
+        return
+    P, edge, q = vortex_pts(u)
+    Pp, _, _ = vortex_pts(u - 0.03)
+    S2, Z, ok = project(P, u)
+    Sp, _, okp = project(Pp, u - 0.03)
+    ok &= okp
+    burst = e_in_cubic(prog(u, 5.3, 1.75))
+    bright = vis * (0.55 + 0.25 * e_io_sine(prog(u, 0.6, 2.4)) + 0.2 * tight(u) + 0.4 * burst)
+    a = edge * fog(Z) * np.clip((Z - 80) / 300, 0, 1) * (0.45 + 0.55 * (1 - q)) * bright
+    # soft haze of the disk
+    zc = max(C3[2] - camz(u), 60)
+    xc, yc = CX + F * (C3[0] - camx(u)) / zc, CY + F * C3[1] / zc
+    E.radial(c, xc, yc, F * RAD * 3.0 / zc, "#1F5EFF", 0.22 * vis, skia.BlendMode.kScreen)
+    groups = {}
+    for i in np.where(ok & (a > 0.02))[0]:
+        k = (int(V_COL[i]), min(4, int(a[i] * 5)))
+        groups.setdefault(k, []).extend([skia.Point(Sp[i, 0], Sp[i, 1]), skia.Point(S2[i, 0], S2[i, 1])])
+    # glow pass (blurred), then crisp streaks
+    c.saveLayer(None, skia.Paint(ImageFilter=skia.ImageFilters.Blur(5, 5, skia.TileMode.kDecal)))
+    for (ci, ak), pts in groups.items():
+        p = paint_stroke(V_COLS[ci], min(1, (ak + 0.5) / 5 * 0.9), 6.0, blend=skia.BlendMode.kScreen)
+        c.drawPoints(skia.Canvas.kLines_PointMode, pts, p)
+    c.restore()
+    for (ci, ak), pts in groups.items():
+        p = paint_stroke(V_COLS[ci], (ak + 0.5) / 5, 1.6 if ci else 1.2, blend=skia.BlendMode.kScreen)
+        c.drawPoints(skia.Canvas.kLines_PointMode, pts, p)
+
+
+def draw_arcs(c, u):
+    """Energy arcs wrapping the structure once it is solid (reference: a glowing orb with light ribbons)."""
+    a = e_io_sine(prog(u, 3.9, 0.8)) * (1 - e_io_sine(prog(u, 6.1, 0.5)))
+    if a <= 0:
+        return
+    rr = np.random.default_rng(88)
+    for k in range(4):
+        n = rr.normal(size=3)
+        n /= np.linalg.norm(n)
+        b1 = np.cross(n, [0, 0, 1.0])
+        b1 /= np.linalg.norm(b1)
+        b2 = np.cross(n, b1)
+        ph = rr.uniform(0, 2 * math.pi) + (1.4 + 0.5 * k) * u * (1 if k % 2 else -1)
+        span = rr.uniform(2.2, 3.2)
+        rad = RAD * rr.uniform(1.06, 1.2) * lerp(1, 0.92, tight(u))
+        t = np.linspace(ph, ph + span, 70)
+        P = C3 + (np.cos(t)[:, None] * b1 + np.sin(t)[:, None] * b2) * rad
+        S2, Z, ok = project(P, u)
+        w = np.sin(np.linspace(0, math.pi, 70)) ** 1.5
+        front = (P[:, 2] < C3[2]).astype(float) * 0.6 + 0.4          # the near side glows brighter
+        for i in range(69):
+            if not (ok[i] and ok[i + 1]):
+                continue
+            al = a * w[i] * front[i]
+            c.drawLine(S2[i, 0], S2[i, 1], S2[i + 1, 0], S2[i + 1, 1],
+                       paint_stroke("#4FA3FF", 0.35 * al, 10, blur=8, blend=skia.BlendMode.kScreen))
+            c.drawLine(S2[i, 0], S2[i, 1], S2[i + 1, 0], S2[i + 1, 1],
+                       paint_stroke("#DDEEFF", 0.9 * al, 2.2, blend=skia.BlendMode.kScreen))
+
+
 def draw_sparks(c, u, S2, Z, ok):
     """Connections firing: nodes flash as links form across the field."""
     rp = np.random.default_rng(13)
@@ -536,10 +634,11 @@ def render(c, T, sweep=True):
     background(c, u)
     P, S2, Z, ok, g = draw_network(c, u)
     draw_tags(c, u)
-    draw_streams(c, u)
+    draw_vortex(c, u)
     draw_sparks(c, u, S2, Z, ok)
     draw_pulses(c, u, S2, ok, g)
     draw_core(c, u, S2, Z, ok)
+    draw_arcs(c, u)
     if sweep:
         draw_sweep(c, T)
     # flood to white into FIN

@@ -6,7 +6,7 @@ Motion graphic (references: floating industry panels around a facade; a facade g
   B 1.15-2.05  constellation of panels around a central "performance" panel (a rising KPI chart), blue
                connectors draw in, brackets hop ("성과를 위해 어디를 바꾸고")
   C 2.05-3.05  the performance panel recedes while the panels slide into the windows of a dark glass facade
-  D 3.05-6.08  a blue crosshair scans the windows and locks onto one ("어디에 AI를 적용할 것인가"); the shot
+  D 3.05-6.08  a blue crosshair settles on one window, then glides once to the target and locks ("어디에 AI를 적용할 것인가"); the shot
                holds on the locked grid with a slow push (no zoom into the window - the bridge to the next
                scene is designed with that scene)
 All footage is the project's own generated clips. 23.976 fps, 21:9 letterbox to match the edit.
@@ -79,6 +79,9 @@ CELLS = {
     "14_monitors": (2, 0), "10_datacenter": (2, 1), "q5_city": (2, 2),
 }
 TARGET = "17_robot"
+SCAN_FROM = (2, 0)             # the crosshair first settles on the office window...
+SCAN_MOVE, SCAN_MOVE_D = 3.6, 0.8   # ...then glides once to the target
+SCAN_LOCK = SCAN_MOVE + SCAN_MOVE_D
 ORDER = list(SLOTS)            # fly-in order
 
 
@@ -298,7 +301,7 @@ def render(c, t):
     # --- timeline values
     a_pull = e_io_cubic(prog(t, 0.25, 0.95))                # robot -> slot
     wall = e_io_cubic(prog(t, 2.05, 0.9))                   # constellation -> facade
-    lock = e_out_cubic(prog(t, 3.72, 0.35))
+    lock = e_out_cubic(prog(t, SCAN_LOCK, 0.4))
     push = 0.0                                              # no zoom into the window (next scene TBD)
     drift = math.sin(t * 0.6) * 18
     cam = (drift * (1 - wall), 0.0, -60 * prog(t, 0.0, 2.2) * (1 - wall) + 150 * e_io_sine(prog(t, 2.6, 3.5)))
@@ -380,14 +383,12 @@ def render(c, t):
             p = [x for x in items if x[1] == n][0][2]
             brackets(c, project(p, cam), av, grow=14 * (1 - clamp((t - t0) / 0.15)))
 
-    # "어디에 AI를 적용할 것인가": crosshair scans the windows, then locks onto the target
-    scan_a = e_out_cubic(prog(t, 2.95, 0.25)) * (1 - push)
+    # "어디에 AI를 적용할 것인가": the crosshair settles on one window, looks, then glides once to the target and
+    # locks (two windows only - unhurried, easy to follow)
+    scan_a = e_out_cubic(prog(t, 2.95, 0.3)) * (1 - push)
     if scan_a > 0:
-        path_cells = [(0, 2), (2, 0), (0, 0), (2, 2), (1, 1)]
-        s = clamp((t - 3.0) / 0.72) * (len(path_cells) - 1)
-        i0 = min(int(s), len(path_cells) - 2)
-        f_ = e_io_sine(s - i0)
-        (r0, c0), (r1, c1) = path_cells[i0], path_cells[i0 + 1]
+        (r0, c0), (r1, c1) = SCAN_FROM, CELLS[TARGET]
+        f_ = e_io_cubic(prog(t, SCAN_MOVE, SCAN_MOVE_D))
         rr, cc = lerp(r0, r1, f_), lerp(c0, c1, f_)
         cx_w, cy_w = (cc - 1) * GX, (rr - 1) * GY
         q = project((cx_w, cy_w, Z_WALL, CW, CH, 0.0), cam)
@@ -398,7 +399,9 @@ def render(c, t):
         for (xa, ya, xb, yb) in ((-W, myc, 2 * W, myc), (mxc, -H, mxc, 2 * H)):
             c.drawLine(xa, ya, xb, yb, paint_stroke(CYAN_L, 0.35 * la, 6, blur=8, blend=skia.BlendMode.kScreen))
             c.drawLine(xa, ya, xb, yb, paint_stroke("#BFE6FF", 0.75 * la, 1.2))
-        brackets(c, q, scan_a * (0.65 + 0.35 * lock), grow=8 * (1 - lock), ln=34, width=3.0)
+        # brackets tighten while it looks at the first window, open as it moves, close on the target
+        look = e_io_sine(prog(t, 3.0, 0.45)) * (1 - math.sin(math.pi * f_))
+        brackets(c, q, scan_a * (0.65 + 0.35 * lock), grow=lerp(10, 3, look) * (1 - lock), ln=34, width=3.0)
         if lock > 0:
             # rays from the locked bracket corners out to the frame
             for (px, py), (dx, dy) in (((x0, y0), (-1, -0.6)), ((x1, y0), (1, -0.6)), ((x0, y1), (-1, 0.6)),

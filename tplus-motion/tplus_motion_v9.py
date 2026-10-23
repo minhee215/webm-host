@@ -5,7 +5,7 @@ Pure black, white light, satin graphite; sine-eased, overlapping moves.
 TPLUS_SCALE=0.5 renders a 960x540 sample.
   0.00-0.90  a round point of light stretches into a vertical line
   0.80-1.50  the line turns until it lies exactly on the T's straight top edge
-  1.50-2.40  it becomes that edge and sweeps down like a scanner, the glowing T fills in behind it
+  1.45-2.55  from that edge, light pours down the plate as a soft gradient until the T glows
   2.95-3.75  simple dissolve into satin graphite, one soft reflection passes once
   4.20-5.20  stands up to face front along one smooth arc (slerp) and rises; wordmark fades in
   5.00-5.45  settles to flat white 2D, hold
@@ -169,6 +169,7 @@ _row = _xs[_ys <= _ys.min() + 1]
 TOP_L = np.array([_row.min() / SYM.ts + SYM.ox - SYM.cx, TOP_Y, -0.5])
 TOP_R = np.array([_row.max() / SYM.ts + SYM.ox - SYM.cx, TOP_Y, -0.5])
 BOT_Y = _ys.max() / SYM.ts + SYM.oy - SYM.cy
+SCAN_G = 220.0  # length of the soft light gradient (svg units)
 LOGO_C = np.array([(82.7 + 1103.8) / 2 - SYM.cx, (47.1 + 835.6) / 2 - SYM.cy, 0.0])
 FINAL_S = FINAL_H / (835.6 - 47.1)
 
@@ -249,9 +250,10 @@ def draw_obj(layer, cam, o, R, T, depth_k=1.0, yaw=0.0, env_k=1.0, white=0.0, em
     if fill is not None:  # light pours in from the outline towards the centre
         m = m * np.clip((fill - o.sdn) / 0.08 + 0.5, 0, 1)
     wfront = 0.0
-    if scan is not None:  # scanner line sweeping down the plate, light filling in behind it
-        m = m * np.clip((scan - o.Y) / 5.0 + 0.5, 0, 1)
-        wfront = (np.exp(-((o.Y - scan) / 3.5) ** 2) * o.mask * 2.2)[..., None]
+    if scan is not None:  # light pours down the plate as a soft gradient (no hard edge)
+        r = np.clip((scan - o.Y) / SCAN_G, 0, 1)
+        m = m * (r * r * (3 - 2 * r))
+        wfront = (np.exp(-((o.Y - (scan - SCAN_G * 0.3)) / (SCAN_G * 0.28)) ** 2) * o.mask * 0.55)[..., None]
     m4 = m[..., None]
     front_visible = float(np.dot(R @ np.array([0, 0, -1.0]), T + R @ np.array([0, 0, 0.0]))) < 0
     seq = []
@@ -275,8 +277,6 @@ def draw_obj(layer, cam, o, R, T, depth_k=1.0, yaw=0.0, env_k=1.0, white=0.0, em
         face = shade(o, o.nback, R, T, depth, yaw, env_k, soft=0.8, spread=1.5)
         zf = depth
     face = face * (1 - white) + white * emit + wfront
-    if scan is not None:  # the scan line itself sits on top of the plate
-        m4 = np.maximum(m4, np.clip(wfront, 0, 1))
     seq.append((zf, np.concatenate([face * m4, m4], -1).astype(np.float32), 1.0))
     lr, la = rgb[y0:y1, x0:x1], a[y0:y1, x0:x1]
     for z, src, k in seq:
@@ -402,7 +402,7 @@ def render(t):
     R = sym_pose(t)
     _, T = cam.pose(R, [0, 0, 0])
 
-    scan = lerp(TOP_Y - 2, BOT_Y + 12, ease(seg(t, 1.50, 2.40)))
+    scan = lerp(TOP_Y + 4, BOT_Y + SCAN_G + 10, ease(seg(t, 1.45, 2.55)))
     glow = 1 - ease(seg(t, 2.95, 3.75))              # simple, even dissolve to graphite
     flat = ease(seg(t, 5.00, 5.45))
     white = max(glow, flat)
@@ -411,7 +411,7 @@ def render(t):
     env_k = lerp(1.0, 0.72, ease(seg(t, 3.9, 4.6)))   # calm while it stands up
     if t >= 1.45:
         draw_obj(layer, cam, SYM, R, T, depth_k=depth_k, yaw=yaw, env_k=env_k, white=white, emit=1.25,
-                 scan=scan if t < 2.45 else None)
+                 scan=scan if t < 2.6 else None)
     wa = ease(seg(t, 4.55, 5.20))
     if wa > 0:
         _, Tw = cam.pose(np.eye(3), world_off(WORD))
@@ -426,7 +426,7 @@ def render(t):
     f = f * (1 - a[..., None]) + rgb
 
     # point -> vertical line -> turns onto the top edge, then hands over to the scan line
-    lk = ease(seg(t, 0.0, 0.40)) * (1 - ease(seg(t, 1.48, 1.62)))
+    lk = ease(seg(t, 0.0, 0.40)) * (1 - ease(seg(t, 1.45, 1.85)))
     if lk > 0:
         ends, _ = project(cam, R, T, np.stack([TOP_L, TOP_R]))
         c = ends.mean(0)

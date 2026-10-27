@@ -561,18 +561,26 @@ def sc05(c, T, t, d):
         if S5_FRONT:
             x *= S5_FRONT_SPREAD
         t0 = 17.35 + i * (S5_FRONT_STAGGER if S5_FRONT else 0.11)
-        kk = enter(T, t0, 0.6)
+        kk = e_out_cubic(prog(T, t0, 0.95)) if S5_FRONT else enter(T, t0, 0.6)
         if kk <= 0:
             continue
         a = clamp(kk) * (1 - fold)
         if a <= 0.003:
             continue
-        y = 0.25 + 0.6 * (1 - clamp(kk)) + 0.06 * math.sin(T * 1.1 + i)
+        y = 0.25 + (1.4 if S5_FRONT else 0.6) * (1 - clamp(kk)) + 0.06 * math.sin(T * 1.1 + i)
+        soft = S5_FRONT and kk < 0.999          # frontally: the tile arrives out of a soft blur
+        if soft:
+            lp = skia.Paint()
+            sg = 14.0 * (1 - kk) ** 1.5 * k / 70.0
+            lp.setImageFilter(skia.ImageFilters.Blur(sg, sg, skia.TileMode.kDecal))
+            c.saveLayer(None, lp)
         sel = (dx_on if tag == "DX" else ax_on if tag == "AX" else 0.0) * find
         dim = find * (0.0 if tag else 0.55)
         tq = s5_slab(c, P, x, z, 2.5, 1.6, y, a, top=0.06, edge=CYAN if tag == "AX" and sel > 0.5 else
                      ("#7FA6FF" if tag else "#5D7BC4"), glow=sel * (1.0 if tag == "AX" else 0.6))
         s5_video(c, s5_clip(lab, name), tq, T + i * 0.7, a, (0.5, 0.5) if S5_FRONT else foc, dim)
+        if soft:
+            c.restore()
         # link to the core
         g = e_out_expo(prog(T, t0 + 0.3, 0.9))
         p0, p1 = P(x * 0.62, 0.02, z * 0.62), P(x * 0.3, 0.02, z * 0.3)
@@ -672,7 +680,7 @@ def s5_front_flow(c, P, k, T):
     ts = k / (90 * S5_FRONT_K)                      # text scale follows the camera zoom
     ZC, CW_, CH_ = -0.9, 4.3, 2.7                   # card centre depth, image size (world)
     xs = [s5_fx(i) for i in range(4)]
-    xa, xb = xs[0] - 3.4, xs[-1] + 3.4
+    xa, xb = xs[0], xs[-1]                          # the line runs between the outer cards, never past them
     out = e_io_cubic(prog(T, 26.2, 0.75))
     fill = e_io_sine(prog(T, 22.75, 3.0))           # pipeline progress (reaches each step as it lights)
     # faint dot field
@@ -700,7 +708,7 @@ def s5_front_flow(c, P, k, T):
             ox = j * 16 * ts
             c.drawPath(poly([(ax + ox - 7 * ts, ay - 11 * ts), (ax + ox + 5 * ts, ay), (ax + ox - 7 * ts, ay + 11 * ts)]),
                        paint_stroke(CYAN if on else "#4E6FB8", (0.9 if on else 0.5) * (1 - out), 3 * ts))
-    pts = [P(x, 0, ZC + dz) for x, dz in ((xa, 0.25), (xs[1], -0.2), (xs[2], 0.2), (xb, -0.15))]
+    pts = [P(x, 0, ZC + dz) for x, dz in ((xa, 0.0), (xs[1], -0.2), (xs[2], 0.2), (xb, 0.0))]
     line_flow(c, pts, e_io_sine(prog(T, 22.7, 3.0)) * 1.4, 0.4, n=10, spread=18 * ts, twist=1.3, width=1.3,
               color=CYAN, key="s5ff", tsec=T)
     quads = []
@@ -749,7 +757,7 @@ def s5_front_flow(c, P, k, T):
         if 0 < q_ < 1:
             c.drawCircle(nx_, ny_, (20 + 120 * e_out_cubic(q_)) * ts, paint_stroke(CYAN, (1 - q_) * 0.8 * aa, 1.6))
     for (i, tq, aa, lit, name) in quads:
-        s5_video(c, name, tq, T + i, aa, (0.5, 0.5), dim=0.45 * (1 - lit))
+        s5_step_art(c, i, tq, T, aa, lit, ts)
         c.drawPath(poly(tq, True), paint_stroke(CYAN if lit > 0.5 else "#7FA6FF", 0.8 * aa, 1.2))
         if i == 0 and out > 0:
             c.drawPath(poly(tq, True), paint_fill(WHITE, out * 0.85))
@@ -761,6 +769,55 @@ def s5_front_flow(c, P, k, T):
             c.drawPath(poly(q0, True), paint_fill(WHITE, out))
             c.drawPath(poly(q0, True), paint_stroke(STEEL_200, out, 1.2))
         c.restore()
+
+
+def s5_step_art(c, i, tq, T, a, lit, ts):
+    """Graphic in place of footage on a flow card: 진단 level gauge, 분석 improvement-task dots, 설계 roadmap,
+    실행 rollout progress (cf. the client's roadmap reference)."""
+    r = R(tq[0][0], tq[0][1], tq[1][0] - tq[0][0], tq[2][1] - tq[0][1])
+    vgrad(c, r, "#0E2A66", "#081A42", a, a)
+    radial(c, r.centerX(), r.centerY(), r.width() * 0.6, BLUE, 0.25 * a * (0.5 + 0.5 * lit))
+    cx, cy, u = r.centerX(), r.centerY(), r.width() / 300.0
+    on = lambda d: e_out_expo(prog(T, 22.75 + i * 0.55 + 0.25 + d, 0.5))
+    hot, cold = CYAN, "#33508F"
+    if i == 0:      # digital level: five rising bars, three reached
+        for j in range(5):
+            h_ = (28 + j * 18) * u
+            x_ = cx - 122 * u + j * 34 * u
+            reach = j < 3
+            g = on(j * 0.06) if reach else 0.0
+            rrect(c, R(x_, cy + 52 * u - h_, 22 * u, h_), 4 * u, cold, 0.9 * a)
+            if g > 0:
+                rrect(c, R(x_, cy + 52 * u - h_ * g, 22 * u, h_ * g), 4 * u, hot, a)
+        text(c, "L3", cx + 92 * u, cy - 14 * u, 34 * u, "Bold", WHITE, a, "center")
+        text(c, "디지털 수준", cx + 92 * u, cy + 14 * u, 13 * u, "Medium", "#B9CCF2", a, "center")
+    elif i == 1:    # 70 improvement tasks as dots; the ones that fit light up
+        rr = rng("s5dots")
+        for j in range(70):
+            gx, gy = j % 14, j // 14
+            x_, y_ = cx - 117 * u + gx * 18 * u, cy - 36 * u + gy * 18 * u
+            pick = rr.uniform() < 0.16
+            c.drawCircle(x_, y_, 5.2 * u, paint_fill(cold, 0.9 * a))
+            if pick:
+                c.drawCircle(x_, y_, 5.2 * u, paint_fill(hot, a * on(0.04 * gx)))
+    elif i == 2:    # five-step roadmap
+        x0, x1 = cx - 110 * u, cx + 110 * u
+        c.drawLine(x0, cy + 8 * u, x1, cy + 8 * u, paint_stroke(cold, a, 3 * u))
+        g = on(0.0)
+        c.drawLine(x0, cy + 8 * u, lerp(x0, x1, g), cy + 8 * u, paint_stroke(hot, a, 3 * u))
+        for j in range(5):
+            x_ = lerp(x0, x1, j / 4)
+            done = g >= j / 4 - 1e-3
+            c.drawCircle(x_, cy + 8 * u, 9 * u, paint_fill(hot if done else cold, a))
+            text(c, "%d" % (j + 1), x_, cy - 14 * u, 13 * u, "Bold", WHITE if done else "#8EA6D6", a, "center")
+    else:           # rollout: progress ring filling to 100 %
+        g = on(0.0)
+        rad = 46 * u
+        c.drawCircle(cx, cy, rad, paint_stroke(cold, a, 8 * u))
+        arc = skia.Path()
+        arc.addArc(R(cx - rad, cy - rad, 2 * rad, 2 * rad), -90, 359.9 * g)
+        c.drawPath(arc, paint_stroke(hot, a, 8 * u))
+        text(c, "%d%%" % int(round(100 * g)), cx, cy + 9 * u, 24 * u, "Bold", WHITE, a, "center")
 
 
 def sc05_expand_rect(T):

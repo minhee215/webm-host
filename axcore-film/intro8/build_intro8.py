@@ -25,14 +25,47 @@ FPS = 30
 W, H = 854, 480
 OUT = HERE / "renders" / "AXCORE_intro_8sec_preview_v01.mp4"
 
-# Edit decision list: (file, source in, source out, scale, (dx, dy) in output px, note)
-# scale/offset are applied around the frame centre (1.0 / (0, 0) = untouched).
+# Edit decision list. Each shot: source segments (in, out, speed) and transform
+# keyframes over the shot's own 0..1 progress: (p, scale, (dx, dy) in output px),
+# applied around the frame centre. Cuts are hard cuts on real action.
 EDL = [
-    ("S1_engineer_walk.mp4", 0.0, 2.1, 1.0, (0, 0), "walk right; ends on the glass control room"),
-    ("S2_control_room.mp4", 0.0, 1.9, 1.0, (0, 0), "spatial continuity; cut while the hand is moving down"),
-    ("S3_robot_cell.mp4", 0.0, 2.0, 1.0, (0, 0), "match on action: hand down -> tool head down"),
-    ("S4_quality_engineer.mp4", 0.0, 2.0, 1.0, (0, 0), "shape match: ring on the fixture -> ring in hand"),
+    dict(file="S1_engineer_walk.mp4", segs=[(2.45, 4.55, 1.0)], tf=[(0, 1.0, (0, 0))],
+         note="walks right, camera follows; ends with him on the left and the glass control room on the right"),
+    dict(file="S2_control_room.mp4", segs=[(2.40, 4.30, 1.0)], tf=[(0, 1.0, (0, 0))],
+         note="spatial continuity into the control room; cut while the right hand is coming down"),
+    dict(file="S3_robot_cell.mp4", segs=[(0.60, 1.25, 1.3), (1.25, 3.10, 2.3), (3.10, 3.80, 1.0)],
+         tf=[(0, 1.0, (0, 0)), (0.6, 1.0, (0, 0)), (1.0, 1.25, (85, -58))],
+         note="match on action: tool head continues the hand's downward motion; settles on the ring"),
+    dict(file="S4_quality_engineer.mp4", segs=[(2.50, 4.50, 1.0)],
+         tf=[(0, 1.45, (-139, 18)), (1.0, 1.0, (0, 0))],
+         note="shape match on the ring (position/size aligned), then a gentle pull-back"),
 ]
+
+
+def ease(p):
+    return 1 - (1 - p) ** 3 if p < 1 else 1.0
+
+
+def tf_at(keys, p):
+    if p <= keys[0][0]:
+        return keys[0][1], keys[0][2]
+    for (p0, s0, o0), (p1, s1, o1) in zip(keys, keys[1:]):
+        if p <= p1:
+            u = (p - p0) / max(1e-6, p1 - p0)
+            u = u * u * (3 - 2 * u)            # smooth in/out
+            return s0 + (s1 - s0) * u, (o0[0] + (o1[0] - o0[0]) * u, o0[1] + (o1[1] - o0[1]) * u)
+    return keys[-1][1], keys[-1][2]
+
+
+def retime(frames, segs):
+    """Source segments at given speeds -> list of output frames (nearest source frame)."""
+    out = []
+    for a, b, sp in segs:
+        n = int(round((b - a) / sp * FPS))
+        for k in range(n):
+            t = a + k / FPS * sp
+            out.append(frames[min(len(frames) - 1, int(round(t * FPS)))])
+    return out
 
 
 def decode(path):
@@ -124,7 +157,7 @@ def build_audio(cuts, total, path):
 
 def build():
     gen = HERE / "generated"
-    shots = [decode(gen / f) for f, *_ in EDL]
+    shots = [decode(gen / e["file"]) for e in EDL]
     stats = [lab_stats(s) for s in shots]
     target_mean = np.mean([m for m, _ in stats], axis=0)
     target_mean[0] = max(target_mean[0], 150.0)      # bright corporate exposure
@@ -136,13 +169,14 @@ def build():
                             "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-crf", "16",
                             "-preset", "slow", "-pix_fmt", "yuv420p", str(silent)], stdin=subprocess.PIPE)
     cuts, t = [], 0.0
-    for (f, a, b, scale, off, _), frames, (mean, std) in zip(EDL, shots, stats):
+    for e, frames, (mean, std) in zip(EDL, shots, stats):
         cuts.append(t)
-        i0, i1 = int(round(a * FPS)), int(round(b * FPS))
-        for fr in frames[i0:i1]:
+        seq = retime(frames, e["segs"])
+        for k, fr in enumerate(seq):
+            scale, off = tf_at(e["tf"], k / max(1, len(seq) - 1))
             g = grade(transform(fr, scale, off), mean, std, target_mean, target_std)
             enc.stdin.write(cv2.resize(g, (W, H), interpolation=cv2.INTER_AREA).tobytes())
-        t += (i1 - i0) / FPS
+        t += len(seq) / FPS
     enc.stdin.close()
     enc.wait()
     wav = OUT.with_name("audio_mix.wav")
@@ -156,8 +190,8 @@ def build():
 
 def sheets():
     gen = HERE / "generated"
-    for f, *_ in EDL:
-        p = gen / f
+    for e in EDL:
+        p = gen / e["file"]
         if p.exists():
             subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(p), "-vf",
                             "fps=6,scale=240:-1,drawtext=text='%{pts\\:hms}':x=4:y=4:fontsize=14:fontcolor=yellow,tile=6x5",

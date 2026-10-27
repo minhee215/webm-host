@@ -60,13 +60,7 @@ T_ORGANISE = (17.0, 19.0)
 T_REL = (18.6, 20.2)
 T_PATH = (20.2, 22.0)
 
-ENT = [  # (ko, en, angle deg)
-    ("공정", "Process", -90), ("제품", "Product", -30), ("업무", "Task", 30),
-    ("사람", "Person", 90), ("설비", "Equipment", 150), ("자재", "Material", 210),
-]
-RELS = [(5, 0, "투입"), (4, 0, "수행"), (0, 1, "생산"), (3, 2, "담당"), (2, 0, "관리"), (3, 4, "운전")]
-PATH = [1, 0, 4, 3, 2]   # 제품(불량) → 공정 → 설비 → 사람 → 업무
-RX, RY = 420, 300
+
 
 SFX = [(0.05, "push", 0.6), (T_CLICK, "select", 0.7), (1.25, "ui_open", 0.6)] + \
       [(t, "select", 0.5) for t in PICK_T] + \
@@ -76,9 +70,9 @@ SFX = [(0.05, "push", 0.6), (T_CLICK, "select", 0.7), (1.25, "ui_open", 0.6)] + 
       [(9.5, "push", 0.45), (10.25, "scan_long", 0.6), (11.1, "chip_land", 0.4), (11.4, "chip_land", 0.4),
        (11.7, "chip_land", 0.4), (12.5, "merge", 0.55), (13.7, "air", 0.35), (14.1, "swell", 0.55),
        (15.1, "data_rise", 0.45), (17.0, "resolve", 0.5)] + \
-      [(T_ORGANISE[0] + 0.3 + 0.18 * i, "node", 0.4) for i in range(6)] + \
-      [(T_REL[0] + 0.22 * i, "line", 0.25) for i in range(6)] + \
-      [(T_PATH[0] + 0.35 * i, "node_soft", 0.5) for i in range(5)] + [(21.0, "ui_open", 0.4)]
+      [(14.9 + 0.42 * i, "node", 0.4) for i in range(6)] + \
+      [(18.3, "line", 0.5), (19.6, "connector", 0.45)] + \
+      [(20.9, "ui_open", 0.45)]
 
 
 def motion_blur(t):
@@ -390,127 +384,270 @@ def _ocr(c, t):
         if merge > 0.7:
             pa = prog(merge, 0.7, 1.0)
             fly = prog(t, 13.6, 14.3, in_cubic)
-            gx, gy = lerp(1280, CX, fly), lerp(760, CY, fly)
+            gx, gy = lerp(1280, AI_POS[0], fly), lerp(760, AI_POS[1], fly)
             gfx.chip(c, gx, gy, "EQ-PRS-03", 28, 700, "white", "axblue", None, pa * (1 - fly), dot="white")
             gfx.text_rise(c, "표준 코드", gx, gy + 56, pa * (1 - fly), 22, 600, "ice", 1.0, "center")
 
 
-# --- 4D: ontology -------------------------------------------------------------------------
+# --- 4D: ontology (2.5D glass plane, entity tiles, AI node, process timeline) ----------------
+# Layout follows the AXCORE Ontology frame supplied by the client; rebuilt as vectors.
+PLANE_W, PLANE_H = 1000.0, 600.0
+PLANE_Q = [(430, 395), (1530, 412), (1715, 790), (215, 762)]      # tl, tr, br, bl (design px)
+AI_POS = (CX + 20, 318)
+ENT = [  # (label, icon, plane u, v, chip style)
+    ("설비", "gear", 0.12, 0.47, "sky"), ("자재", "cube", 0.30, 0.12, "white"),
+    ("공정", "factory", 0.47, 0.45, "sky"), ("제품", "cube", 0.67, 0.16, "sky"),
+    ("사람", "person", 0.62, 0.70, "white"), ("업무", "doc", 0.86, 0.47, "sky"),
+]
+RELS = [(0, 1), (1, 2), (0, 2), (2, 3), (2, 4), (3, 5), (4, 5), (0, 4)]
+STAGES = ["시작", "수주", "생산 계획", "자재 구매", "생산", "품질 검사", "출하", "끝"]
+TL_Y0, TL_Y1, TL_X0, TL_X1 = 860, 885, 215, 1700
+ENT_TO_STAGE = {1: 3, 2: 4, 4: 5, 5: 6, 0: 2}
+T_PLANE = (15.2, 16.4)
+T_ENT = 16.2
+T_REL = (17.6, 18.8)
+T_AI = (18.2, 19.2)
+T_TL = (19.0, 20.4)
+T_FLOW = (20.6, 22.4)
+
+_H_PLANE = None
+
+
+def _plane_H():
+    global _H_PLANE
+    if _H_PLANE is None:
+        import cv2
+        src = np.float32([(0, 0), (PLANE_W, 0), (PLANE_W, PLANE_H), (0, PLANE_H)])
+        _H_PLANE = cv2.getPerspectiveTransform(src, np.float32(PLANE_Q))
+    return _H_PLANE
+
+
+def plane_pt(u, v):
+    H = _plane_H()
+    x, y, w = H @ np.array([u * PLANE_W, v * PLANE_H, 1.0])
+    return x / w, y / w
+
+
 def ent_pos(i, t=99.0):
-    ang = math.radians(ENT[i][2] + 4 * math.sin(t * 0.3))
-    return CX + RX * math.cos(ang), CY + RY * math.sin(ang)
+    """Top of the entity tile (where lines from the AI node land)."""
+    _, _, u, v, _ = ENT[i]
+    x, y = plane_pt(u, v)
+    return x, y - 70
 
 
-_cloud = {}
+def _stage_x(k):
+    return lerp(TL_X0, TL_X1, k / (len(STAGES) - 1))
+
+
+def _stage_y(k):
+    return lerp(TL_Y0, TL_Y1, k / (len(STAGES) - 1))
+
+
+def _icon(c, kind, x, y, s, a):
+    st = gfx.stroke("white", s * 0.075, a)
+    if kind == "gear":
+        c.drawCircle(x, y, s * 0.18, st)
+        for k in range(8):
+            ang = math.radians(k * 45)
+            c.drawLine(x + math.cos(ang) * s * 0.27, y + math.sin(ang) * s * 0.27,
+                       x + math.cos(ang) * s * 0.38, y + math.sin(ang) * s * 0.38, st)
+    elif kind == "cube":
+        r = s * 0.32
+        top = [(x, y - r), (x + r * 0.87, y - r * 0.5), (x, y), (x - r * 0.87, y - r * 0.5)]
+        p = skia.Path()
+        p.addPoly([skia.Point(*q) for q in top], True)
+        p.moveTo(x - r * 0.87, y - r * 0.5)
+        p.lineTo(x - r * 0.87, y + r * 0.5)
+        p.lineTo(x, y + r)
+        p.lineTo(x + r * 0.87, y + r * 0.5)
+        p.lineTo(x + r * 0.87, y - r * 0.5)
+        p.moveTo(x, y)
+        p.lineTo(x, y + r)
+        c.drawPath(p, st)
+    elif kind == "factory":
+        p = skia.Path()
+        p.addPoly([skia.Point(x - s * 0.36, y + s * 0.3), skia.Point(x - s * 0.36, y - s * 0.05),
+                   skia.Point(x - s * 0.12, y + s * 0.08), skia.Point(x - s * 0.12, y - s * 0.05),
+                   skia.Point(x + s * 0.12, y + s * 0.08), skia.Point(x + s * 0.12, y - s * 0.32),
+                   skia.Point(x + s * 0.36, y - s * 0.32), skia.Point(x + s * 0.36, y + s * 0.3)], True)
+        c.drawPath(p, st)
+    elif kind == "person":
+        c.drawCircle(x, y - s * 0.14, s * 0.14, st)
+        p = skia.Path()
+        p.addArc(skia.Rect.MakeXYWH(x - s * 0.3, y + s * 0.08, s * 0.6, s * 0.5), 180, 180)
+        c.drawPath(p, st)
+    else:  # doc
+        c.drawRRect(gfx.rrect(x - s * 0.24, y - s * 0.32, s * 0.48, s * 0.64, s * 0.05), st)
+        for k in range(3):
+            c.drawLine(x - s * 0.13, y - s * 0.08 + k * s * 0.12, x + s * 0.13, y - s * 0.08 + k * s * 0.12, st)
 
 
 def _cloud_specs():
     if "s" not in _cloud:
         rng = np.random.default_rng(3)
-        _cloud["s"] = [(rng.uniform(0, 2 * math.pi), rng.uniform(120, 620), rng.uniform(0.5, 1.6),
-                        int(rng.integers(0, 6)), rng.uniform(0, 2 * math.pi), rng.uniform(40, 95))
-                       for _ in range(140)]
+        _cloud["s"] = [(rng.uniform(0, 2 * math.pi), rng.uniform(120, 560), rng.uniform(0.5, 1.6),
+                        int(rng.integers(0, 6)), rng.uniform(0, 2 * math.pi)) for _ in range(110)]
     return _cloud["s"]
 
 
+_cloud = {}
+
+
+def _onto_bg(c, a):
+    """Horizon glow + faint perspective floor (part of the ontology space)."""
+    hy = 690
+    sh = skia.GradientShader.MakeLinear([skia.Point(0, hy - 140), skia.Point(0, hy + 140)],
+                                        [gfx.color("light", 0.0), gfx.color("light", 0.16 * a),
+                                         gfx.color("light", 0.0)], [0.0, 0.5, 1.0])
+    c.drawRect(skia.Rect.MakeXYWH(0, hy - 140, DESIGN_W, 280), skia.Paint(Shader=sh))
+    c.drawLine(0, hy, DESIGN_W, hy, gfx.stroke("ice", 1.5, 0.35 * a, blur=2))
+    for k in range(-6, 7):
+        c.drawLine(CX + k * 60, hy, CX + k * 420, DESIGN_H, gfx.stroke("light", 1.0, 0.08 * a))
+
+
 def draw_ontology(c, t, a=1.0, labels=True):
-    """Also used by S05 as the monitor content (same object, same layout)."""
-    pc = prog(t, *T_CONVERGE, ease=house_io)
-    po = prog(t, *T_ORGANISE, ease=in_out_cubic)
-    # slow orbits around the core
-    oa = a * prog(t, 15.2, 16.4)
-    for k, (rx, ry, rot) in enumerate(((560, 380, -8), (300, 210, 12), (720, 470, 4))):
-        gfx.orbit(c, CX, CY, rx, ry, rot + t * (2 + k), "line", 1.3, 0.35 * oa, 0.3,
-                  prog(t, 15.2 + k * 0.2, 16.6 + k * 0.2), start=t * 12 + k * 90)
-    # data cloud → clustered satellites of each entity
-    pos = []
-    for k, (ang, rad, sp, ent, ph, orb) in enumerate(_cloud_specs()):
-        pa = prog(t, T_CLOUD[0] + (k % 20) * 0.03, T_CLOUD[0] + 0.6 + (k % 20) * 0.03)
+    """AXCORE Ontology frame (S05 also draws this as the monitor content)."""
+    pp = prog(t, *T_PLANE, ease=in_out_cubic)
+    if pp > 0:
+        _onto_bg(c, a * pp)
+    # header: real logo + "Ontology"
+    ha = prog(t, 15.4, 16.0) * a
+    if ha > 0:
+        ui.draw_logo(c, CX - 350, 70 + (1 - ha) * 10, 64, a=ha)
+        gfx.text(c, "Ontology", CX + 60, 108 + (1 - ha) * 10, 64, 500, "white", ha)
+    # glass plane (draw-on border, then fill + thickness)
+    if pp > 0:
+        path = skia.Path()
+        path.addPoly([skia.Point(*q) for q in PLANE_Q], True)
+        thick = skia.Path()
+        thick.addPoly([skia.Point(*PLANE_Q[3]), skia.Point(*PLANE_Q[2]), skia.Point(PLANE_Q[2][0] - 4, PLANE_Q[2][1] + 22),
+                       skia.Point(PLANE_Q[3][0] + 4, PLANE_Q[3][1] + 22)], True)
+        c.drawPath(thick, gfx.fill("light", 0.18 * a * pp))
+        c.drawPath(path, gfx.fill("ice", 0.10 * a * pp))
+        gfx.glow_path(c, path, "ice", 2.0, 0.75 * a, 0.5, 0, pp)
+    # data cloud settles onto the plane (complex → structured)
+    for k, (ang, rad, sp, ent, ph) in enumerate(_cloud_specs()):
+        pa = prog(t, 14.6 + (k % 20) * 0.02, 15.2 + (k % 20) * 0.02)
         if pa <= 0:
             continue
+        po = prog(t, 15.6 + (k % 11) * 0.06, 16.9 + (k % 11) * 0.06, in_out_cubic)
         aa = ang + t * 0.35 * sp
-        x0, y0 = CX + rad * math.cos(aa) * 1.25, CY + rad * math.sin(aa) * 0.78
-        ex, ey = ent_pos(ent, t)
-        x1 = ex + orb * math.cos(ph + t * 0.6)
-        y1 = ey + orb * 0.7 * math.sin(ph + t * 0.6)
-        x, y = lerp(x0, x1, po), lerp(y0, y1, po)
-        x, y = lerp(CX, x, pa), lerp(CY, y, pa)
-        pos.append((x, y, ent))
-        c.drawCircle(x, y, lerp(3.5, 2.8, po), gfx.fill("light" if k % 3 else "white", a * pa * lerp(0.85, 0.55, po)))
-    # messy links while unorganised
-    ml = a * window(t, T_CLOUD[0] + 0.4, T_ORGANISE[0] + 0.8, 0.5, 0.9)
-    if ml > 0 and len(pos) > 20:
-        for k in range(0, len(pos) - 7, 3):
-            x0, y0, _ = pos[k]
-            x1, y1, _ = pos[k + 7]
-            c.drawLine(x0, y0, x1, y1, gfx.stroke("line", 1.0, 0.35 * ml))
-    # entities
-    for i, (ko, en, ang) in enumerate(ENT):
-        pe = prog(t, T_ORGANISE[0] + 0.3 + i * 0.18, T_ORGANISE[0] + 0.8 + i * 0.18)
-        if pe <= 0:
-            continue
-        x, y = ent_pos(i, t)
-        c.drawLine(CX, CY, x, y, gfx.stroke("line", 1.2, 0.25 * a * pe, dash=(6, 8)))
-        hl = _path_hl(i, t)
-        c.drawCircle(x, y, 58, gfx.fill("navy", 0.95 * a * pe))
-        c.drawCircle(x, y, 58, gfx.stroke(gfx.mix("line", "white", hl), 2 + 2 * hl, a * pe))
-        if hl > 0:
-            c.drawCircle(x, y, 74, gfx.stroke("light", 6, 0.25 * hl * a, blur=8))
-        if labels:
-            gfx.text(c, ko, x, y - 8, 34, 700, "white", a * pe, "center")
-            gfx.text(c, en, x, y + 26, 18, 500, "ice", a * pe, "center")
-    # relations
-    for j, (s_, e_, verb) in enumerate(RELS):
-        pr = prog(t, T_REL[0] + j * 0.22, T_REL[0] + 0.5 + j * 0.22, in_out_cubic)
+        x0, y0 = AI_POS[0] + rad * math.cos(aa) * 1.3, 560 + rad * math.sin(aa) * 0.6
+        _, _, u, v, _ = ENT[ent]
+        ex, ey = plane_pt(u + 0.05 * math.cos(ph), v + 0.08 * math.sin(ph))
+        x, y = lerp(x0, ex, po), lerp(y0, ey, po)
+        x, y = lerp(AI_POS[0], x, pa), lerp(AI_POS[1], y, pa)
+        c.drawCircle(x, y, 3.2, gfx.fill("light" if k % 3 else "white", a * pa * (1 - 0.8 * prog(t, 17.0, 17.6))))
+    H = _plane_H()
+    # relations (dashed, on the plane)
+    for j, (s_, e_) in enumerate(RELS):
+        pr = prog(t, T_REL[0] + j * 0.1, T_REL[0] + 0.5 + j * 0.1, in_out_cubic)
         if pr <= 0:
             continue
-        (x0, y0), (x1, y1) = ent_pos(s_, t), ent_pos(e_, t)
-        d = math.hypot(x1 - x0, y1 - y0)
-        ux, uy = (x1 - x0) / d, (y1 - y0) / d
-        ax, ay = x0 + ux * 64, y0 + uy * 64
-        bx, by = x1 - ux * 64, y1 - uy * 64
-        hl = _edge_hl(s_, e_, t)
-        col = gfx.mix("line", "white", hl)
-        gfx.glow_line(c, ax, ay, bx, by, col, 2.2 + 1.5 * hl, a, 0.6 + hl, pr)
-        if pr >= 1:  # arrow head
-            hx, hy = bx, by
+        (x0, y0), (x1, y1) = plane_pt(*ENT[s_][2:4]), plane_pt(*ENT[e_][2:4])
+        c.drawLine(x0, y0, lerp(x0, x1, pr), lerp(y0, y1, pr), gfx.stroke("ice", 1.6, 0.55 * a, dash=(8, 8)))
+    # timeline + entity drops
+    pt_ = prog(t, *T_TL, ease=in_out_cubic)
+    flow = prog(t, *T_FLOW, ease=in_out_cubic)
+    if pt_ > 0:
+        gfx.glow_line(c, TL_X0, TL_Y0, lerp(TL_X0, TL_X1, pt_), lerp(TL_Y0, TL_Y1, pt_), "sky", 4, a, 1.0)
+        for k, name in enumerate(STAGES):
+            ps = prog(pt_, k / len(STAGES), k / len(STAGES) + 0.2)
+            if ps <= 0:
+                continue
+            sx, sy = _stage_x(k), _stage_y(k)
+            kk = k / (len(STAGES) - 1)
+            lit = window(flow, kk - 0.05, kk + 0.3, 0.05, 0.2)
+            sq = 11 if k in (0, len(STAGES) - 1) else 8
+            c.drawRect(skia.Rect.MakeXYWH(sx - sq, sy - sq, sq * 2, sq * 2), gfx.fill(gfx.mix("sky", "white", lit), a * ps))
+            if labels:
+                end = k in (0, len(STAGES) - 1)
+                gfx.chip(c, sx, sy + 62, name, 26, 700, "white" if not end else "navy_deep",
+                         "axblue" if not end else "sky", "sky", a * ps, pad=18)
+        if flow > 0:   # one pulse runs the whole process
+            fx = lerp(TL_X0, TL_X1, flow)
+            gfx.node(c, fx, lerp(TL_Y0, TL_Y1, flow), 9, "white", a, glow=1.2)
+    # entity tiles (billboards standing on their pads)
+    order = sorted(range(len(ENT)), key=lambda i: ENT[i][3])
+    for i in order:
+        label, icon, u, v, chip_style = ENT[i]
+        pe = prog(t, T_ENT + i * 0.18, T_ENT + 0.6 + i * 0.18)
+        if pe <= 0:
+            continue
+        px, py = plane_pt(u, v)
+        # pad = circle on the plane
+        c.save()
+        c.concat(gfx.homography_matrix(H))
+        r = 70 * out_cubic(pe)
+        cu, cv = u * PLANE_W, v * PLANE_H
+        c.drawCircle(cu, cv, r, gfx.fill("ice", 0.12 * a))
+        c.drawCircle(cu, cv, r, gfx.stroke("sky", 2.5, 0.8 * a))
+        c.drawCircle(cu, cv, r * 1.3, gfx.stroke("sky", 1.2, 0.35 * a))
+        c.restore()
+        # drop line to the process timeline
+        if i in ENT_TO_STAGE and pt_ > 0:
+            k = ENT_TO_STAGE[i]
+            sx, sy = _stage_x(k), _stage_y(k)
             path = skia.Path()
-            path.moveTo(hx - ux * 14 - uy * 8, hy - uy * 14 + ux * 8)
-            path.lineTo(hx, hy)
-            path.lineTo(hx - ux * 14 + uy * 8, hy - uy * 14 - ux * 8)
-            c.drawPath(path, gfx.stroke(col, 2.2, a))
+            path.moveTo(px, py)
+            path.cubicTo(px, py + 120, sx, sy - 160, sx, sy)
+            kk = k / (len(STAGES) - 1)
+            lit = window(flow, kk - 0.06, kk + 0.3, 0.06, 0.2)
+            gfx.glow_path(c, path, gfx.mix("sky", "white", lit), 2.2 + 1.5 * lit, a, 0.9 + lit, 0, pt_)
+        lit_e = 0.0
+        if i in ENT_TO_STAGE:
+            k = ENT_TO_STAGE[i]
+            lit_e = window(flow, k / (len(STAGES) - 1) - 0.04, k / (len(STAGES) - 1) + 0.25, 0.04, 0.15)
+        ty = py - 70 - (1 - pe) * 30
+        s = 116
+        c.drawRRect(gfx.rrect(px - s / 2, ty - s / 2 + 8, s, s, 22), gfx.fill("#000000", 0.35 * a * pe, blur=14))
+        c.drawRRect(gfx.rrect(px - s / 2, ty - s / 2, s, s, 22), gfx.fill(gfx.mix("navy", "navy_mid", lit_e), 0.95 * a * pe))
+        c.drawRRect(gfx.rrect(px - s / 2, ty - s / 2, s, s, 22), gfx.stroke(gfx.mix("sky", "white", lit_e), 2.5, a * pe))
+        if lit_e > 0:
+            c.drawRRect(gfx.rrect(px - s / 2 - 8, ty - s / 2 - 8, s + 16, s + 16, 26), gfx.stroke("sky", 10, 0.3 * lit_e * a, blur=10))
+        _icon(c, icon, px, ty, s * 0.78, a * pe)
         if labels:
-            mx, my = (ax + bx) / 2, (ay + by) / 2
-            gfx.chip(c, mx, my, verb, 20, 600, "white", "navy_mid", "line", a * prog(pr, 0.6, 1.0), pad=12)
-    # core
-    core = a * max(pc, prog(t, 0, 0.01) * 0)
+            gfx.chip(c, px, ty - s / 2 - 34, label, 26, 700, "navy_deep", chip_style, None, a * pe, pad=18)
+    # AI node with rings; lines to every entity
+    pa = prog(t, *T_AI, ease=house)
+    core = prog(t, T_CONVERGE[0] + 0.6, T_CONVERGE[1])
     if core > 0:
-        gfx.diamond(c, CX, CY, lerp(10, 26, pc), "axblue", core, glow=1.0, edge="light")
-    # context path tags
-    if labels:
-        for i, txt, kind in ((1, "불량 발생", "red"), (4, "PRS-03", "blue"), (3, "정비 담당", "blue")):
-            pt = prog(t, T_PATH[0] + PATH.index(i) * 0.35, T_PATH[0] + PATH.index(i) * 0.35 + 0.3) * a
-            if pt > 0:
-                x, y = ent_pos(i, t)
-                w = ui.tag(c, x - 50, y + 88, txt, kind, pt, 20)
-        la = prog(t, 21.0, 21.6) * a
-        if la > 0:
-            gfx.text_rise(c, "AXCORE Ontology", CX, DESIGN_H - 70, la, 34, 700, "white", 1.0, "center")
+        ax, ay = AI_POS
+        for k, rr in enumerate((58, 84, 112)):
+            c.drawCircle(ax, ay, rr * (0.6 + 0.4 * pa), gfx.stroke("sky", 1.6, (0.55 - k * 0.15) * a * core))
+        c.drawCircle(ax, ay, 150, gfx.fill("line", 0.12 * a * core, blur=40))
+        c.drawCircle(ax, ay, 50, gfx.fill("navy_deep", a * core))
+        c.drawCircle(ax, ay, 50, gfx.stroke("sky", 2.5, a * core))
+        ta = prog(t, T_AI[0], T_AI[0] + 0.4)
+        gfx.diamond(c, ax, ay, 14 * (1 - ta) + 0.01, "axblue", a * core * (1 - ta), glow=0.8, edge="light")
+        gfx.text(c, "AI", ax, ay, 40, 700, "white", a * ta, "center")
+        for i in range(len(ENT)):
+            pl = prog(t, T_AI[0] + i * 0.08, T_AI[0] + 0.5 + i * 0.08, in_out_cubic)
+            if pl > 0:
+                ex, ey = ent_pos(i)
+                c.drawLine(ax, ay + 50, lerp(ax, ex, pl), lerp(ay + 50, ey - 50, pl), gfx.stroke("ice", 1.2, 0.45 * a))
 
 
-def _path_hl(i, t):
-    if i not in PATH:
-        return 0.0
-    k = PATH.index(i)
-    return prog(t, T_PATH[0] + k * 0.35, T_PATH[0] + k * 0.35 + 0.25)
+# --- ontology footage (client-supplied scene, used as-is) ------------------------------------
+ONTO_START = 14.2     # scene time at which the clip starts
+BAND_H = DESIGN_W * 536 / 1280
+BAND_Y = (DESIGN_H - BAND_H) / 2
 
 
-def _edge_hl(s_, e_, t):
-    for k in range(len(PATH) - 1):
-        a_, b_ = PATH[k], PATH[k + 1]
-        if {a_, b_} == {s_, e_}:
-            return prog(t, T_PATH[0] + (k + 1) * 0.35 - 0.2, T_PATH[0] + (k + 1) * 0.35 + 0.1)
-    return 0.0
+def draw_onto_clip(c, ct, a=1.0):
+    """Cinemascope clip in a 16:9 frame: bars filled by its own defocused image."""
+    pl = Plate("ONTO")
+    c.drawRect(skia.Rect.MakeWH(DESIGN_W, DESIGN_H), gfx.fill("navy_deep", a))
+    pl.draw_blurred(c, ct, sigma=40, a=a, scale=1.25)
+    c.saveLayer(None, None)
+    gfx.draw_image(c, pl.image(ct), 0, BAND_Y, DESIGN_W, BAND_H, a)
+    mask = skia.Paint(BlendMode=skia.BlendMode.kDstIn)
+    mask.setShader(skia.GradientShader.MakeLinear(
+        [skia.Point(0, BAND_Y), skia.Point(0, BAND_Y + BAND_H)],
+        [gfx.color("white", 0), gfx.color("white", 1), gfx.color("white", 1), gfx.color("white", 0)],
+        [0.0, 0.12, 0.88, 1.0]))
+    c.drawRect(skia.Rect.MakeWH(DESIGN_W, DESIGN_H), mask)
+    c.restore()
 
 
 # --- frame -------------------------------------------------------------------------------
@@ -548,8 +685,8 @@ def render(c, t):
     sa = 1 - prog(t, T_CONVERGE[0] + 0.2, T_CONVERGE[0] + 1.0)
     c.save()
     if shrink > 0:  # systems + workspace recede into the core
-        c.translate(CX, CY)
-        c.scale(1 - 0.85 * shrink, 1 - 0.85 * shrink)
+        c.translate(AI_POS[0], AI_POS[1])
+        c.scale(1 - 0.92 * shrink, 1 - 0.92 * shrink)
         c.translate(-CX, -CY)
     ocr_dim = window(t, T_OCR[0], T_OCR[1], 0.4, 0.4)
     _connectors(c, t, sa * (1 - 0.6 * ocr_dim))
@@ -562,5 +699,15 @@ def render(c, t):
         gfx.text_rise(c, "사내 시스템", 250, 160, la, 26, 600, "ice", 1.0, "center")
         gfx.text_rise(c, "업무 파일 · 외부 SaaS", DESIGN_W - 250, 160, la, 26, 600, "ice", 1.0, "center")
     _ocr(c, t)
-    if t >= T_CONVERGE[0]:
-        draw_ontology(c, t)
+    if t >= ONTO_START:
+        # the clip opens from the convergence point (shape reveal, not a dissolve)
+        rp = prog(t, ONTO_START, ONTO_START + 1.0, in_out_cubic)
+        c.save()
+        if rp < 1:
+            path = skia.Path()
+            path.addCircle(AI_POS[0], AI_POS[1], lerp(1, 2300, rp))
+            c.clipPath(path, skia.ClipOp.kIntersect, True)
+        draw_onto_clip(c, t - ONTO_START)
+        c.restore()
+        if rp < 1:
+            c.drawCircle(AI_POS[0], AI_POS[1], lerp(1, 2300, rp), gfx.stroke("sky", 2.5, 1 - rp))

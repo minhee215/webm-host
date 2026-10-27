@@ -68,3 +68,14 @@ def prepare_all():
     for f in (v1_sim, v2_bg, v2_clipboard, v3_plane, v4_screen, v5_bezel, v6_sim, v7_screen):
         r = f()
         print(f.__name__, np.asarray(r).shape)
+
+
+@lru_cache(maxsize=None)
+def v8_screen():
+    return T.track_screen("V8", [(394, 200), (624, 198), (616, 373), (394, 366)], "V8_screen")
+
+
+@lru_cache(maxsize=None)
+def v8_plane():
+    # window wall behind the desk (for environmental panels)
+    return T.track_plane("V8", [(640, 0), (960, 0), (960, 330), (640, 330)], "V8_plane")

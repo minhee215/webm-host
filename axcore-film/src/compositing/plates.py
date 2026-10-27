@@ -22,6 +22,11 @@ PLATES = {
     "V5": "V5_control_panel",
     "V6": "V6_conveyor",
     "V7": "V7_engineer_ots",
+    "V8": "V8_engineer_wide",
+}
+# client-supplied footage used as-is (no grading): key -> (path, crop filter, w, h)
+CLIENT = {
+    "ONTO": ("source/client/ontology_scene_prev.mp4", "crop=3840:1608:0:276", 1280, 536),
 }
 SRC_FPS = 24.0
 PLATE_DIR = CACHE / "plates"
@@ -30,11 +35,11 @@ PLATE_DIR = CACHE / "plates"
 SX, SY = DESIGN_W / PLATE_W, DESIGN_H / PLATE_H
 
 
-def _decode(path):
-    cmd = ["ffmpeg", "-v", "error", "-i", str(path), "-vf",
-           f"scale={PLATE_W}:{PLATE_H}:flags=lanczos", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
+def _decode(path, vf="", w=PLATE_W, h=PLATE_H):
+    chain = (vf + "," if vf else "") + f"fps=24,scale={w}:{h}:flags=lanczos"
+    cmd = ["ffmpeg", "-v", "error", "-i", str(path), "-vf", chain, "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
     raw = subprocess.run(cmd, check=True, capture_output=True).stdout
-    return np.frombuffer(raw, np.uint8).reshape(-1, PLATE_H, PLATE_W, 3)
+    return np.frombuffer(raw, np.uint8).reshape(-1, h, w, 3)
 
 
 def prepare(key, force=False):
@@ -43,13 +48,16 @@ def prepare(key, force=False):
     out = PLATE_DIR / f"{key}.npy"
     if out.exists() and not force:
         return out
-    frames = _decode(ASSETS / "generated-video" / f"{PLATES[key]}.mp4")
-    mean, std = plate_stats(frames[:: max(1, len(frames) // 12)])
-    arr = np.lib.format.open_memmap(out, mode="w+", dtype=np.uint8,
-                                    shape=(len(frames), PLATE_H, PLATE_W, 4))
+    if key in CLIENT:
+        rel, vf, w, h = CLIENT[key]
+        frames = _decode(ASSETS / rel, vf, w, h)
+        mean, std = np.zeros(3), np.ones(3)
+    else:
+        frames = _decode(ASSETS / "generated-video" / f"{PLATES[key]}.mp4")
+        mean, std = plate_stats(frames[:: max(1, len(frames) // 12)])
+    arr = np.lib.format.open_memmap(out, mode="w+", dtype=np.uint8, shape=(*frames.shape[:3], 4))
     for i, f in enumerate(frames):
-        g = grade_frame(f, mean, std)
-        arr[i, ..., :3] = g
+        arr[i, ..., :3] = f if key in CLIENT else grade_frame(f, mean, std)
         arr[i, ..., 3] = 255
     arr.flush()
     (PLATE_DIR / f"{key}.json").write_text(json.dumps(
@@ -98,7 +106,8 @@ class Plate:
         if key not in cache:
             if len(cache) > 64:
                 cache.clear()
-            small = cv2.resize(np.asarray(self.frames[i]), (PLATE_W // 4, PLATE_H // 4),
+            fh, fw = self.frames.shape[1:3]
+            small = cv2.resize(np.asarray(self.frames[i]), (fw // 4, fh // 4),
                                interpolation=cv2.INTER_AREA)
             small = cv2.GaussianBlur(small, (0, 0), sigma / 4)
             cache[key] = gfx.to_image(np.ascontiguousarray(small))

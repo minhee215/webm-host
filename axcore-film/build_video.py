@@ -88,6 +88,12 @@ def assemble():
                     "-c", "copy", str(video)], check=True)
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     stems = build_audio(AUDIO_DIR)
+    stem_dir = RENDERS / "stems"
+    stem_dir.mkdir(parents=True, exist_ok=True)
+    for k in ("bgm", "sfx", "master"):
+        src = stems[k]
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-c:a", "flac",
+                        str(stem_dir / (src.stem + ".flac"))], check=True)
     out = RENDERS / OUTPUT_NAME
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(video), "-i", str(stems["master"]),
                     "-map", "0:v", "-map", "1:a",

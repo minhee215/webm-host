@@ -5,6 +5,8 @@ For every clip in assets/clips.json with a "track" block:
            estimated from Lucas-Kanade feature tracks with RANSAC ("global" = whole frame)
   points:  {name: [u, v]}            single optical-flow point tracks (e.g. a robot gripper)
   hand:    true                      MediaPipe hand landmarks (21 points) + pinch strength
+  matte:   true                      MediaPipe person segmentation -> clips/<name>_matte.npy (uint8, 480x270
+                                     per frame) so graphics can sit behind the person
 Output: clips/<name>_track.json (normalized frame coordinates).
 Needs: opencv-python-headless, mediapipe (hand model fetched on first use).
 Usage: python3 track.py [clip_dir] [name ...]
@@ -22,6 +24,8 @@ CLIP_DIR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "clips")
 ONLY = set(sys.argv[2:])
 TW, TH = 960, 540
 HAND_MODEL = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
+SEG_MODEL = "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite"
+MW, MH = 480, 270
 
 
 def read_frames(path):
@@ -161,6 +165,29 @@ def track_hand(frames, near=None):
     return out
 
 
+def track_matte(frames):
+    """Soft person matte per frame (uint8 MH x MW), lightly smoothed over time."""
+    import mediapipe as mp
+    from mediapipe.tasks import python as mpt
+    from mediapipe.tasks.python import vision
+    model = os.path.join(CLIP_DIR, "selfie_segmenter.tflite")
+    if not os.path.exists(model):
+        urllib.request.urlretrieve(SEG_MODEL, model)
+    opts = vision.ImageSegmenterOptions(base_options=mpt.BaseOptions(model_asset_path=model),
+                                        running_mode=vision.RunningMode.VIDEO, output_confidence_masks=True)
+    seg = vision.ImageSegmenter.create_from_options(opts)
+    out = []
+    for i, f in enumerate(frames):
+        rgb = cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
+        res = seg.segment_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), int(i * 1000 / 24))
+        m = res.confidence_masks[-1].numpy_view().astype(np.float32)
+        out.append(cv2.resize(m, (MW, MH), interpolation=cv2.INTER_AREA))
+    seg.close()
+    a = np.stack(out)
+    a[1:-1] = (a[:-2] + 2 * a[1:-1] + a[2:]) / 4
+    return np.clip(a * 255 + 0.5, 0, 255).astype(np.uint8)
+
+
 def track_screen(frames, box):
     """Corners (TL, TR, BR, BL; normalized) of the bright blank device screen inside box, per frame.
     Thresholds the bright low-saturation blob, takes its convex hull (fingers over the edge are
@@ -223,6 +250,8 @@ def main():
             data["hand"] = track_hand(frames, cfg.get("hand_near"))
         if cfg.get("screens"):
             data["screens"] = {k: track_screen(frames, b) for k, b in cfg["screens"].items()}
+        if cfg.get("matte"):
+            np.save(os.path.join(CLIP_DIR, name + "_matte.npy"), track_matte(frames))
         json.dump(data, open(os.path.join(CLIP_DIR, name + "_track.json"), "w"))
         hs = data["H"]["global"][-1]
         print(name, len(frames), "frames; global H end", [round(v, 3) for v in hs[:6]],

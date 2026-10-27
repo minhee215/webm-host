@@ -391,8 +391,8 @@ def s5_cam(T):
     """(centre world x, centre world z, zoom) of the iso camera."""
     t = T - SC05_T0
     k = lerp(84, 90, drift(t, 9.75))
-    keys = [(22.2, (0.0, 0.0), 1.0), (22.95, (S5_FLOW_X[0], 0.0), 1.55), (23.5, (S5_FLOW_X[1], 0.0), 1.55),
-            (24.05, (S5_FLOW_X[2], 0.0), 1.55), (24.6, (S5_FLOW_X[3], 0.0), 1.55), (25.6, (0.0, 0.0), 0.95),
+    keys = [(22.2, (0.0, 0.0), 1.0), (22.95, (s5_fx(0), 0.0), 1.55), (23.5, (s5_fx(1), 0.0), 1.55),
+            (24.05, (s5_fx(2), 0.0), 1.55), (24.6, (s5_fx(3), 0.0), 1.55), (25.6, (0.0, 0.0), 0.95),
             (27.2, (0.0, 0.0), 1.0)]
     if T <= keys[0][0]:
         return 0.0, 0.0, k
@@ -403,9 +403,43 @@ def s5_cam(T):
     return 0.0, 0.0, k
 
 
+# frontal variant (the client's re-edit): the same world and choreography seen straight on - the ground plane
+# faces the camera (x across, z down), height only lifts things slightly; labels in Korean
+S5_FRONT = False
+S5_FRONT_K, S5_FRONT_VY, S5_FRONT_CY = 0.80, 0.35, 540
+S5_FRONT_SPREAD, S5_FRONT_FLOW = 1.8, 1.32     # the 21:9 band is wide: spread the ring and the flow sideways
+S5_KO = {"Planning": "기획", "Production": "생산", "Logistics": "물류", "Sales": "영업", "Quality": "품질",
+         "Office": "사무", "IT Systems": "IT 시스템", "Finance": "재무",
+         "Diagnose": "진단", "Analyze": "분석", "Design": "설계", "Execute": "실행"}
+
+
+def s5_fx(i):
+    return S5_FLOW_X[i] * (S5_FRONT_FLOW if S5_FRONT else 1.0)
+
+
+# frontal re-edit: footage in the same bright, clean factory look as the shots before it
+S5_FRONT_CLIPS = {"Planning": "n4_office", "Production": "n3_evline", "Logistics": "n2_warehouse", "Sales": "n8_sales",
+                  "Quality": "s04_inspect", "Office": "s02_monitor", "IT Systems": "n6_server", "Finance": "n9_finance",
+                  "Diagnose": "n1_pharma", "Analyze": "s02_monitor", "Design": "n4_office", "Execute": "17_robot"}
+
+
+def s5_clip(lab, name):
+    return S5_FRONT_CLIPS.get(lab, name) if S5_FRONT else name
+
+
+def s5_lab(lab):
+    return S5_KO.get(lab, lab) if S5_FRONT else lab
+
+
 def s5_iso(T):
     cx, cz, k = s5_cam(T)
     ox = lerp(-18, 18, drift(T - SC05_T0, 9.75))
+    if S5_FRONT:
+        kf = k * S5_FRONT_K
+
+        def P(x, y, z):
+            return (W / 2 + ox + (x - cx) * kf, S5_FRONT_CY + (z - cz) * kf - y * kf * S5_FRONT_VY)
+        return P, kf
 
     def P(x, y, z):
         return (W / 2 + ox + ((x - cx) - (z - cz)) * ISO_C * k, 566 + ((x - cx) + (z - cz)) * ISO_S * k - y * k)
@@ -520,6 +554,8 @@ def sc05(c, T, t, d):
             c.drawPath(poly(ring, True), paint_stroke(CYAN, (1 - q) * 0.7 * (1 - fold), 1.6, blend=skia.BlendMode.kScreen))
     labels = []
     for i, (name, (x, z), lab, tag, foc) in enumerate(S5_TILES):
+        if S5_FRONT:
+            x *= S5_FRONT_SPREAD
         t0 = 17.35 + i * 0.11
         kk = enter(T, t0, 0.6)
         if kk <= 0:
@@ -532,7 +568,7 @@ def sc05(c, T, t, d):
         dim = find * (0.0 if tag else 0.55)
         tq = s5_slab(c, P, x, z, 2.5, 1.6, y, a, top=0.06, edge=CYAN if tag == "AX" and sel > 0.5 else
                      ("#7FA6FF" if tag else "#5D7BC4"), glow=sel * (1.0 if tag == "AX" else 0.6))
-        s5_video(c, name, tq, T + i * 0.7, a, foc, dim)
+        s5_video(c, s5_clip(lab, name), tq, T + i * 0.7, a, (0.5, 0.5) if S5_FRONT else foc, dim)
         # link to the core
         g = e_out_expo(prog(T, t0 + 0.3, 0.9))
         p0, p1 = P(x * 0.62, 0.02, z * 0.62), P(x * 0.3, 0.02, z * 0.3)
@@ -548,23 +584,27 @@ def sc05(c, T, t, d):
                 b0, b1 = P(bx, y, z - 0.95), P(bx, y + hgt, z - 0.95)
                 c.drawLine(*b0, *b1, paint_stroke(CYAN if sel > 0.5 else "#7FA6FF", 0.9 * bars * (1 - dim), 4))
         lx, ly = P(x - 1.25, y, z + 0.8)
-        labels.append((lx + 6, ly + 22, lab, a * (1 - dim * 0.6), tag, sel))
-    s5_core(c, P, T, clamp(enter(T, 17.3, 0.8)), pulse_=find * 0.3)
+        labels.append((lx + 6, ly + 22, s5_lab(lab), a * (1 - dim * 0.6), tag, sel))
+    core_a = clamp(enter(T, 17.3, 0.8)) * ((1 - fold) if S5_FRONT else 1.0)   # frontally it would sit between cards
+    if core_a > 0.003:
+        s5_core(c, P, T, core_a, pulse_=find * 0.3)
     for (lx, ly, lab, a, tag, sel) in labels:
         s5_label(c, lx, ly, lab, a, tag, sel * 1.05)
     if T < 22.2:
         return
     # flow: Diagnose -> Analyze -> Design -> Execute, the camera rides along it
     lg = e_out_expo(prog(T, 22.6, 2.4))
-    fa, fb = P(-7.5, 0.05, 1.3), P(7.5, 0.05, 1.3)
+    FZ = 1.75 if S5_FRONT else 1.3          # flow line depth (in front of the cards' labels when seen frontally)
+    FW = S5_FRONT_FLOW if S5_FRONT else 1.0
+    fa, fb = P(-7.5 * (S5_FRONT_FLOW if S5_FRONT else 1), 0.05, FZ), P(7.5 * (S5_FRONT_FLOW if S5_FRONT else 1), 0.05, FZ)
     fl = poly([fa, fb])
     line(c, fl, "#3A63C9", 0.6, 2.0)
     line(c, fl, CYAN, 1.0, 3.0, (0, lg), glow=0.9, glow_w=10)
     pulse(c, fl, prog(T, 25.2, 1.5), WHITE, 1.0, 16, 0.12, 3.0)
-    pts = [P(x, 0.4 + dz * 0.4, 1.3 + dz) for x, dz in ((-8, 0.3), (-3, -0.2), (1, 0.25), (5, -0.15), (9, 0.2))]
+    pts = [P(x * FW, 0.4 + dz * 0.4, FZ + dz) for x, dz in ((-8, 0.3), (-3, -0.2), (1, 0.25), (5, -0.15), (9, 0.2))]
     line_flow(c, pts, e_io_sine(prog(T, 22.5, 2.6)) * 1.45, 0.45, n=12, spread=14, twist=1.4, width=1.6,
               color=CYAN, key="s5fa", tsec=T)
-    pts = [P(x, 0.6 + dz, 1.3 + dz) for x, dz in ((-8, -0.4), (-3, 0.3), (1, -0.3), (5, 0.4), (9, -0.3))]
+    pts = [P(x * FW, 0.6 + dz, FZ + dz) for x, dz in ((-8, -0.4), (-3, 0.3), (1, -0.3), (5, 0.4), (9, -0.3))]
     line_flow(c, pts, e_io_sine(prog(T, 25.0, 1.8)) * 1.5, 0.5, n=16, spread=34, twist=1.6, width=1.5,
               color=CYAN, key="s5fb", tsec=T)
     out = e_io_cubic(prog(T, 26.2, 0.75))          # morph into the next shot's starting card
@@ -575,7 +615,7 @@ def sc05(c, T, t, d):
         if kk <= 0:
             continue
         a = clamp(kk)
-        x = S5_FLOW_X[i]
+        x = s5_fx(i)
         y = 0.35 + 0.8 * (1 - clamp(kk))
         lit = e_out_expo(prog(T, t_in + 0.25, 0.5))
         aa = a * (1 - out) if i else a
@@ -586,13 +626,13 @@ def sc05(c, T, t, d):
             tgt = [(S5_MATCH.left(), S5_MATCH.top()), (S5_MATCH.right(), S5_MATCH.top()),
                    (S5_MATCH.right(), S5_MATCH.bottom()), (S5_MATCH.left(), S5_MATCH.bottom())]
             tq = [(lerp(p[0], q[0], out), lerp(p[1], q[1], out)) for p, q in zip(tq, tgt)]
-        quads.append((i, tq, aa, lit, lab, name, foc))
+        quads.append((i, tq, aa, lit, s5_lab(lab), s5_clip(lab, name), (0.5, 0.5) if S5_FRONT else foc))
         q_ = prog(T, t_in + 0.25, 0.8)
         if 0 < q_ < 1:
             ring = [P(x + (1.6 + 1.5 * e_out_cubic(q_)) * math.cos(a_), 0.02, -0.4 + (1.6 + 1.5 * e_out_cubic(q_)) * math.sin(a_))
                     for a_ in np.linspace(0, 2 * math.pi, 48)]
             c.drawPath(poly(ring, True), paint_stroke(CYAN, (1 - q_) * 0.8 * aa, 1.6))
-        nx_, ny_ = P(x, 0.05, 1.3)
+        nx_, ny_ = P(x, 0.05, FZ)
         c.drawCircle(nx_, ny_, 7, paint_fill(CYAN if lit > 0.5 else "#7FA6FF", aa))
         c.drawLine(nx_, ny_, *P(x, y, 0.6), paint_stroke(CYAN, 0.5 * lit * aa, 1.2))
     for (i, tq, aa, lit, lab, name, foc) in quads:

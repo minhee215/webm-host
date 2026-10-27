@@ -53,7 +53,8 @@ DT = FPS_DEN / FPS_NUM
 BAR = 138                      # 21:9 letterbox in 1080 logical px (276 at 4K)
 F = 1100.0                     # focal length (px); a panel at Z=F is drawn 1:1
 OPENER = "s04_inspect"         # the shot the scene opens on (full frame), before it becomes a panel
-OPENER_T0 = 0.4                # its clip time at the first frame
+OPENER_T0 = 91 / 24            # its clip time at the first frame: the edit's previous cut ends on s04 frame 90
+OPENER_SCALE, OPENER_DX = 1.031, 0.0155   # ...framed at 103.1 %, left edge on the frame edge (matched to that cut)
 CYAN_L = "#46B4FF"
 GRADE = E.grade_filter(bright=0.92, contrast=1.04, sat=0.88, tint=(-0.01, 0.0, 0.02))
 
@@ -96,7 +97,9 @@ def clip_time(n, i, t):
     """Each panel plays once through its usable part over the scene (no loop jump), offset per panel."""
     if n not in _DUR:
         _DUR[n] = json.load(open(os.path.join(media.CLIP_DIR, n + ".json")))["dur"]
-    a, b = CLIP_SPAN.get(n, (OPENER_T0 if n == OPENER else 0.12 * (i % 4), _DUR[n] - 0.08))
+    if n == OPENER:                      # carries straight on from the previous cut at normal speed
+        return min(OPENER_T0 + t, _DUR[n] - 1 / 24)
+    a, b = CLIP_SPAN.get(n, (0.12 * (i % 4), _DUR[n] - 0.08))
     return a + (b - a) * clamp(t / SCENE_T)
 
 
@@ -349,7 +352,7 @@ def render(c, t):
     for i, n in enumerate(ORDER):
         slot = SLOTS[n]
         if n == OPENER:
-            start = (0, 0, F, W, H, 0.0)
+            start = (OPENER_DX * W, 0, F, W * OPENER_SCALE, H * OPENER_SCALE, 0.0)
             p = mix(start, slot, a_pull)
             a = 1.0
         else:

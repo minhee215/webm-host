@@ -365,37 +365,49 @@
    "_note": "Seedance 2.5 1080p final of draft 4d5cad02 (same motion as r3_wind)"
   },
   "s01_walk": {
-   "file": "https://d2ol7oe51mr4n9.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/2d6e05a8-b33d-4c5b-b9cc-13cd1765f337.mp4"
+   "file": "https://d2ol7oe51mr4n9.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/2d6e05a8-b33d-4c5b-b9cc-13cd1765f337.mp4",
+   "pre": 0.0
   },
   "s02_monitor": {
-   "file": "https://d2ol7oe51mr4n9.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/0c2a49bc-0bc0-446f-bcb3-da9cde7857d9.mp4"
+   "file": "https://d2ol7oe51mr4n9.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/0c2a49bc-0bc0-446f-bcb3-da9cde7857d9.mp4",
+   "pre": 0.0
   },
   "s03_robot": {
-   "file": "https://d2ol7oe51mr4n9.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/05ce35ff-8b01-4717-a2e1-47ad29985309.mp4"
+   "file": "https://d2ol7oe51mr4n9.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/05ce35ff-8b01-4717-a2e1-47ad29985309.mp4",
+   "pre": 0.0
   },
   "s04_inspect": {
-   "file": "https://d2ol7oe51mr4n9.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/f14aa3b4-7ed3-440e-bf52-236fcd9ac2d1.mp4"
+   "file": "https://d2ol7oe51mr4n9.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/36462442-f807-40a4-8456-03557921c3e4.mp4",
+   "pre": 0.0,
+   "_note": "client s04 + Seedance forward extension (frames 97-192), so seg_where can carry on from the edit's cut at frame 90"
   },
   "n1_pharma": {
-   "file": "hf_20261027_123346_1dc01e0e-d16a-4ebd-ab4e-331b71eae855.mp4"
+   "file": "hf_20261027_123346_1dc01e0e-d16a-4ebd-ab4e-331b71eae855.mp4",
+   "pre": 0.0
   },
   "n2_warehouse": {
-   "file": "hf_20261027_123346_324b9ab3-cfb6-4373-aa50-f1512e6666f8.mp4"
+   "file": "hf_20261027_123346_324b9ab3-cfb6-4373-aa50-f1512e6666f8.mp4",
+   "pre": 0.0
   },
   "n3_evline": {
-   "file": "hf_20261027_123346_1d393914-ba4b-4869-83b2-1d6ded4a1d13.mp4"
+   "file": "hf_20261027_123346_1d393914-ba4b-4869-83b2-1d6ded4a1d13.mp4",
+   "pre": 0.0
   },
   "n4_office": {
-   "file": "hf_20261027_123346_af94f47a-9361-42eb-9d1f-c5700be5661b.mp4"
+   "file": "hf_20261027_123346_af94f47a-9361-42eb-9d1f-c5700be5661b.mp4",
+   "pre": 0.0
   },
   "n5_battery": {
-   "file": "hf_20261027_123346_4ff6f1c7-e8aa-4208-9554-6476d2a81691.mp4"
+   "file": "hf_20261027_123346_4ff6f1c7-e8aa-4208-9554-6476d2a81691.mp4",
+   "pre": 0.0
   },
   "n6_server": {
-   "file": "hf_20261027_123346_83f376cf-ab0a-46a9-8332-9a4e6e3eab26.mp4"
+   "file": "hf_20261027_123346_83f376cf-ab0a-46a9-8332-9a4e6e3eab26.mp4",
+   "pre": 0.0
   },
   "n7_campus": {
-   "file": "hf_20261027_123346_31e522ba-7ab6-44a5-a307-0c96fe969f0e.mp4"
+   "file": "hf_20261027_123346_31e522ba-7ab6-44a5-a307-0c96fe969f0e.mp4",
+   "pre": 0.0
   }
  }
 }

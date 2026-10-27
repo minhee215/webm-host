@@ -407,7 +407,11 @@ def s5_cam(T):
 # faces the camera (x across, z down), height only lifts things slightly; labels in Korean
 S5_FRONT = False
 S5_FRONT_K, S5_FRONT_VY, S5_FRONT_CY = 0.80, 0.35, 540
-S5_FRONT_SPREAD, S5_FRONT_FLOW = 1.8, 1.32     # the 21:9 band is wide: spread the ring and the flow sideways
+S5_FRONT_SPREAD, S5_FRONT_FLOW = 1.8, 1.68     # the 21:9 band is wide: spread the ring and the flow sideways
+BAR_TOP, BAR_BOT = 138, 942
+S5_FRONT_STAGGER = 0.16                         # tiles come in one by one, clockwise from the top left
+S5_FLOW_INFO = {"Diagnose": ("업무 · 데이터 현황 진단", "디지털 수준 L3"), "Analyze": ("개선 과제 도출", "개선 과제 70개"),
+                "Design": ("우선순위 · 로드맵 설계", "5단계 로드맵"), "Execute": ("AI 적용과 자동화 실행", "현장 적용")}
 S5_KO = {"Planning": "기획", "Production": "생산", "Logistics": "물류", "Sales": "영업", "Quality": "품질",
          "Office": "사무", "IT Systems": "IT 시스템", "Finance": "재무",
          "Diagnose": "진단", "Analyze": "분석", "Design": "설계", "Execute": "실행"}
@@ -556,7 +560,7 @@ def sc05(c, T, t, d):
     for i, (name, (x, z), lab, tag, foc) in enumerate(S5_TILES):
         if S5_FRONT:
             x *= S5_FRONT_SPREAD
-        t0 = 17.35 + i * 0.11
+        t0 = 17.35 + i * (S5_FRONT_STAGGER if S5_FRONT else 0.11)
         kk = enter(T, t0, 0.6)
         if kk <= 0:
             continue
@@ -591,6 +595,9 @@ def sc05(c, T, t, d):
     for (lx, ly, lab, a, tag, sel) in labels:
         s5_label(c, lx, ly, lab, a, tag, sel * 1.05)
     if T < 22.2:
+        return
+    if S5_FRONT:
+        s5_front_flow(c, P, k, T)
         return
     # flow: Diagnose -> Analyze -> Design -> Execute, the camera rides along it
     lg = e_out_expo(prog(T, 22.6, 2.4))
@@ -649,6 +656,103 @@ def sc05(c, T, t, d):
         text(c, "0%d" % (i + 1), r.left() + 14, r.top() + 25, 15, "Bold", CYAN, la)
         text(c, lab, r.left() + 44, r.top() + 25, 20, "Bold", WHITE, la)
     # hand-over to the next shot: the navy world lifts into the warm white of the AXpoint scene
+    if out > 0:
+        c.saveLayer(None, None)
+        c.drawRect(R(0, 0, W, H), paint_fill(WARM_W, out))
+        if quads and quads[0][0] == 0:
+            q0 = quads[0][1]
+            c.drawPath(poly(q0, True), paint_fill(WHITE, out))
+            c.drawPath(poly(q0, True), paint_stroke(STEEL_200, out, 1.2))
+        c.restore()
+
+
+def s5_front_flow(c, P, k, T):
+    """Frontal flow: four step panels on one lit pipeline (image, step, title, one line, a key figure); the
+    pipeline fills left to right and lights each step as it arrives; the camera rides along as in the iso cut."""
+    ts = k / (90 * S5_FRONT_K)                      # text scale follows the camera zoom
+    ZC, CW_, CH_ = -0.9, 4.3, 2.7                   # card centre depth, image size (world)
+    xs = [s5_fx(i) for i in range(4)]
+    xa, xb = xs[0] - 3.4, xs[-1] + 3.4
+    out = e_io_cubic(prog(T, 26.2, 0.75))
+    fill = e_io_sine(prog(T, 22.75, 3.0))           # pipeline progress (reaches each step as it lights)
+    # faint dot field
+    for gx in range(-14, 15):
+        for gz in range(-6, 7):
+            px, py = P(gx * 1.0, 0, gz * 1.0)
+            if -20 < px < W + 20 and BAR_TOP - 10 < py < BAR_BOT + 10:
+                c.drawCircle(px, py, 1.3, paint_fill("#5C86E0", 0.22 * (1 - out)))
+    # pipeline rail through the card centres (behind the cards), lit fill, arrows between steps
+    ra, rb = P(xa, 0, ZC), P(xb, 0, ZC)
+    rail = poly([ra, rb])
+    line(c, rail, "#24438F", 0.9 * (1 - out), 10 * ts)
+    xf = lerp(xa, xb, fill)
+    if fill > 0:
+        line(c, poly([ra, P(xf, 0, ZC)]), CYAN, 1.0 * (1 - out), 4 * ts, glow=1.0, glow_w=16 * ts)
+        hx, hy = P(xf, 0, ZC)
+        if fill < 0.999:
+            radial(c, hx, hy, 70 * ts, CYAN, 0.55 * (1 - out))
+            c.drawCircle(hx, hy, 6 * ts, paint_fill(WHITE, 1 - out))
+    for i in range(3):
+        mx = (xs[i] + xs[i + 1]) / 2
+        on = 1.0 if xf > mx else 0.0
+        ax, ay = P(mx, 0, ZC)
+        for j in (-1, 0, 1):
+            ox = j * 16 * ts
+            c.drawPath(poly([(ax + ox - 7 * ts, ay - 11 * ts), (ax + ox + 5 * ts, ay), (ax + ox - 7 * ts, ay + 11 * ts)]),
+                       paint_stroke(CYAN if on else "#4E6FB8", (0.9 if on else 0.5) * (1 - out), 3 * ts))
+    pts = [P(x, 0, ZC + dz) for x, dz in ((xa, 0.25), (xs[1], -0.2), (xs[2], 0.2), (xb, -0.15))]
+    line_flow(c, pts, e_io_sine(prog(T, 22.7, 3.0)) * 1.4, 0.4, n=10, spread=18 * ts, twist=1.3, width=1.3,
+              color=CYAN, key="s5ff", tsec=T)
+    quads = []
+    for i, (lab, name, foc) in enumerate(S5_FLOW):
+        t_in = 22.75 + i * 0.55
+        kk = enter(T, t_in, 0.6)
+        if kk <= 0:
+            continue
+        a = clamp(kk)
+        lit = e_out_expo(prog(T, t_in + 0.25, 0.5))
+        aa = a * (1 - out) if i else a
+        if aa <= 0.003:
+            continue
+        x, dy = xs[i], 0.5 * (1 - a)
+        z0, z1 = ZC - CH_ / 2 + dy, ZC + CH_ / 2 + dy
+        # glass panel behind image + info
+        p0, p1 = P(x - CW_ / 2 - 0.22, 0, z0 - 0.22), P(x + CW_ / 2 + 0.22, 0, z1 + 2.45)
+        pr = R(p0[0], p0[1], p1[0] - p0[0], p1[1] - p0[1])
+        pa = aa * (1 - out) if i == 0 else aa
+        rrect(c, pr, 16 * ts, NAVY_900, 0.82 * pa)
+        if lit > 0:
+            rrect(c, pr.makeOutset(4, 4), 18 * ts, BLUE, 0.35 * lit * pa, blur=18 * ts)
+        rrect_stroke(c, pr, 16 * ts, CYAN if lit > 0.5 else "#4E6FB8", (0.55 + 0.45 * lit) * pa, 1.4)
+        q0, q1 = P(x - CW_ / 2, 0, z0), P(x + CW_ / 2, 0, z1)
+        tq = [(q0[0], q0[1]), (q1[0], q0[1]), (q1[0], q1[1]), (q0[0], q1[1])]
+        if i == 0 and out > 0:
+            tgt = [(S5_MATCH.left(), S5_MATCH.top()), (S5_MATCH.right(), S5_MATCH.top()),
+                   (S5_MATCH.right(), S5_MATCH.bottom()), (S5_MATCH.left(), S5_MATCH.bottom())]
+            tq = [(lerp(p[0], q[0], out), lerp(p[1], q[1], out)) for p, q in zip(tq, tgt)]
+        quads.append((i, tq, aa, lit, s5_clip(lab, name)))
+        # info: step, title, one line, a key figure
+        desc, chip = S5_FLOW_INFO.get(lab, ("", ""))
+        ix, iy = pr.left() + 22 * ts, q1[1] + 44 * ts
+        text(c, "STEP 0%d" % (i + 1), ix, iy, 15 * ts, "Bold", CYAN, pa)
+        text(c, s5_lab(lab), ix, iy + 42 * ts, 34 * ts, "Bold", WHITE, pa)
+        text(c, desc, ix, iy + 72 * ts, 17 * ts, "Medium", "#B9CCF2", 0.95 * pa)
+        if chip:
+            cw = text_w(chip, 15 * ts, "SemiBold") + 26 * ts
+            cr = R(pr.right() - 22 * ts - cw, iy - 20 * ts, cw, 28 * ts)
+            rrect(c, cr, 14 * ts, CYAN if lit > 0.5 else "#2A4A8F", (0.95 if lit > 0.5 else 0.7) * pa)
+            text(c, chip, cr.centerX(), cr.top() + 19.5 * ts, 15 * ts, "SemiBold", NAVY_950 if lit > 0.5 else WHITE,
+                 pa, "center")
+        # the step lights: a ring opens from its node on the rail
+        nx_, ny_ = P(x, 0, ZC)
+        q_ = prog(T, t_in + 0.25, 0.8)
+        if 0 < q_ < 1:
+            c.drawCircle(nx_, ny_, (20 + 120 * e_out_cubic(q_)) * ts, paint_stroke(CYAN, (1 - q_) * 0.8 * aa, 1.6))
+    for (i, tq, aa, lit, name) in quads:
+        s5_video(c, name, tq, T + i, aa, (0.5, 0.5), dim=0.45 * (1 - lit))
+        c.drawPath(poly(tq, True), paint_stroke(CYAN if lit > 0.5 else "#7FA6FF", 0.8 * aa, 1.2))
+        if i == 0 and out > 0:
+            c.drawPath(poly(tq, True), paint_fill(WHITE, out * 0.85))
     if out > 0:
         c.saveLayer(None, None)
         c.drawRect(R(0, 0, W, H), paint_fill(WARM_W, out))

@@ -1,0 +1,8 @@
+# render outputs & caches (rebuilt by build_video.py)
+renders/cache/
+renders/stills/
+renders/audio/
+# third-party references / confidential source (kept locally, not versioned)
+assets/source/reference/
+__pycache__/
+*.pyc

@@ -6,3 +6,5 @@ renders/audio/
 assets/source/reference/
 __pycache__/
 *.pyc
+intro8/renders/*_sheet.jpg
+intro8/renders/audio_mix.wav

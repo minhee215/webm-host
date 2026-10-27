@@ -25,7 +25,8 @@ def prep(item):
     if os.path.exists(dst) and os.path.exists(meta):
         return name, "cached"
     raw = os.path.join(OUT, name + "_src.mp4")
-    urllib.request.urlretrieve(info["file"] if info["file"].startswith("http") else MANIFEST["base"] + info["file"], raw)
+    if not os.path.exists(raw):          # a source placed there beforehand is used as is
+        urllib.request.urlretrieve(info["file"] if info["file"].startswith("http") else MANIFEST["base"] + info["file"], raw)
     w, h = info.get("res", (1920, 1080))
     subprocess.check_call(["ffmpeg", "-loglevel", "error", "-y", "-i", raw, "-an", "-vf",
                            "scale=%d:%d:force_original_aspect_ratio=increase:flags=lanczos,crop=%d:%d,fps=24" % (w, h, w, h),

@@ -1,20 +1,22 @@
 """Segment 00:00:08:02-00:00:14:03 - "성과를 위해 어디를 바꾸고 / 어디에 AI를 적용할 것인가입니다".
 
 Motion graphic (references: floating industry panels around a facade; a facade grid with a locked target):
-  A 0.00-1.15  the robot shot that ends the previous cut keeps playing, then pulls back and becomes one glass
-               panel in a dark space while other industry panels fly in from depth
+  A 0.00-1.15  the inspection shot (s04) opens full frame, then pulls back and becomes one glass panel in a dark
+               space while the other industry panels fly in from depth
   B 1.15-2.05  constellation of panels around a central "performance" panel (a rising KPI chart), blue
                connectors draw in, brackets hop ("성과를 위해 어디를 바꾸고")
   C 2.05-3.05  the performance panel recedes while the panels slide into the windows of a dark glass facade
   D 3.05-6.08  a blue crosshair settles on one window, then glides once to the target and locks ("어디에 AI를 적용할 것인가"); the shot
                holds on the locked grid with a slow push (no zoom into the window - the bridge to the next
                scene is designed with that scene)
-All footage is the project's own generated clips. 23.976 fps, 21:9 letterbox to match the edit.
+Footage: the client's clips s01-s04 plus generated clips in the same bright, clean factory look. 23.976 fps, 21:9 letterbox to match the edit.
 Usage: python3 seg_where.py <out.mp4> [height=480] [frames=146] [first last]
   height > 1080 renders natively at that size with full-resolution footage in every panel (e.g. 1440 = 2K);
   first/last render a frame range (for parallel chunks). Text is set in Pretendard (engine.text).
 """
+import json
 import math
+import os
 import subprocess
 import sys
 
@@ -26,7 +28,7 @@ import media
 from engine import W, H, R, clamp, lerp, prog, e_io_cubic, e_out_cubic, e_io_sine, paint_fill, paint_stroke, col
 
 out, height, NF, F0, F1, HD = None, 480, 146, 0, 146, False
-HD_NAME = {"r3_wind": "r3_wind_hd"}
+HD_NAME = {}
 width = 854
 
 
@@ -50,39 +52,52 @@ FPS_NUM, FPS_DEN = 24000, 1001
 DT = FPS_DEN / FPS_NUM
 BAR = 138                      # 21:9 letterbox in 1080 logical px (276 at 4K)
 F = 1100.0                     # focal length (px); a panel at Z=F is drawn 1:1
-ROBOT_T0 = 47 / 24             # r5_robot time of the previous cut's last frame
+OPENER = "s04_inspect"         # the shot the scene opens on (full frame), before it becomes a panel
+OPENER_T0 = 0.4                # its clip time at the first frame
 CYAN_L = "#46B4FF"
 GRADE = E.grade_filter(bright=0.92, contrast=1.04, sat=0.88, tint=(-0.01, 0.0, 0.02))
 
 # constellation slots: (X, Y, Z, w, h, yaw)
 CENTER = (0, -30, 1700, 900, 500, 0.0)
 SLOTS = {
-    "r5_robot": (-1250, -560, 2000, 700, 394, -0.42),
-    "q1_refinery": (-1350, -30, 2050, 700, 394, -0.45),
-    "14_monitors": (-1250, 480, 2000, 660, 372, -0.42),
-    "05_warehouse": (1350, -480, 2050, 700, 394, 0.45),
-    "p2_carline": (1300, 0, 2000, 700, 394, 0.42),
-    "q5_city": (1350, 500, 2050, 700, 394, 0.45),
-    "r3_wind": (-430, -620, 2100, 620, 350, -0.12),
-    "20_team": (430, -620, 2100, 620, 350, 0.12),
-    "10_datacenter": (-430, 560, 2100, 620, 350, -0.12),
-    "17_robot": (430, 560, 2100, 620, 350, 0.12),
-    "19_aerial": (-2000, -150, 2700, 700, 394, -0.5),
-    "q3_silos": (2000, 200, 2700, 700, 394, 0.5),
+    "s04_inspect": (-1250, -560, 2000, 700, 394, -0.42),
+    "n1_pharma": (-1350, -30, 2050, 700, 394, -0.45),
+    "s02_monitor": (-1250, 480, 2000, 660, 372, -0.42),
+    "n2_warehouse": (1350, -480, 2050, 700, 394, 0.45),
+    "n3_evline": (1300, 0, 2000, 700, 394, 0.42),
+    "n4_office": (1350, 500, 2050, 700, 394, 0.45),
+    "n5_battery": (-430, -620, 2100, 620, 350, -0.12),
+    "s01_walk": (430, -620, 2100, 620, 350, 0.12),
+    "n6_server": (-430, 560, 2100, 620, 350, -0.12),
+    "s03_robot": (430, 560, 2100, 620, 350, 0.12),
+    "n7_campus": (-2000, -150, 2700, 700, 394, -0.5),
+    "17_robot": (2000, 200, 2700, 700, 394, 0.5),
 }
 # facade windows: 3x3 cells of 560x240 on a wall a little behind the 1:1 plane, so the facade shows around them
 Z_WALL = 1270.0
 CW, CH, GX, GY = 560, 240, 600, 270
 CELLS = {
-    "r3_wind": (0, 0), "20_team": (0, 1), "05_warehouse": (0, 2),
-    "q1_refinery": (1, 0), "17_robot": (1, 1), "p2_carline": (1, 2),
-    "14_monitors": (2, 0), "10_datacenter": (2, 1), "q5_city": (2, 2),
+    "n5_battery": (0, 0), "s01_walk": (0, 1), "n2_warehouse": (0, 2),
+    "n1_pharma": (1, 0), "s03_robot": (1, 1), "n3_evline": (1, 2),
+    "s02_monitor": (2, 0), "n6_server": (2, 1), "n4_office": (2, 2),
 }
-TARGET = "17_robot"
+TARGET = "s03_robot"
 SCAN_FROM = (2, 0)             # the crosshair first settles on the office window...
 SCAN_MOVE, SCAN_MOVE_D = 3.6, 0.8   # ...then glides once to the target
 SCAN_LOCK = SCAN_MOVE + SCAN_MOVE_D
 ORDER = list(SLOTS)            # fly-in order
+SCENE_T = 146 * 1001 / 24000
+CLIP_SPAN = {"s03_robot": (0.15, 2.2),   # usable part (s): s03 ends behind a foreground pillar
+             "s01_walk": (0.0, 2.6)}    # ... and s01 with the walker gone from frame
+_DUR = {}
+
+
+def clip_time(n, i, t):
+    """Each panel plays once through its usable part over the scene (no loop jump), offset per panel."""
+    if n not in _DUR:
+        _DUR[n] = json.load(open(os.path.join(media.CLIP_DIR, n + ".json")))["dur"]
+    a, b = CLIP_SPAN.get(n, (OPENER_T0 if n == OPENER else 0.12 * (i % 4), _DUR[n] - 0.08))
+    return a + (b - a) * clamp(t / SCENE_T)
 
 
 def cell_params(name):
@@ -159,7 +174,7 @@ def background(c, t, wall):
         lp.setAlphaf(0.32 * (1 - wall))
         c.saveLayer(None, lp)
         rng = np.random.default_rng(7)
-        names = list(SLOTS) + ["16_retail", "06_line", "18_factory", "22_city"]
+        names = list(SLOTS) + ["06_line", "18_factory"]
         for i in range(22):
             n = names[i % len(names)]
             x, y = rng.uniform(-1.0, 1.0) * 1.15 * W / 2, rng.uniform(-1, 1) * 0.9 * H / 2
@@ -333,7 +348,7 @@ def render(c, t):
     items = []
     for i, n in enumerate(ORDER):
         slot = SLOTS[n]
-        if n == "r5_robot":
+        if n == OPENER:
             start = (0, 0, F, W, H, 0.0)
             p = mix(start, slot, a_pull)
             a = 1.0
@@ -354,16 +369,16 @@ def render(c, t):
     dim = 0.62 * lock * (1 - push)
     for z, n, p, a, i in items:
         q = project(p, cam)
-        full = n == TARGET or (n == "r5_robot" and a_pull < 0.5)
-        tt = ROBOT_T0 + t if n == "r5_robot" else t + 0.31 * i
-        g = None if (n == "r5_robot" and a_pull < 0.05) else GRADE
+        full = n == TARGET or (n == OPENER and a_pull < 0.5)
+        tt = clip_time(n, i, t)
+        g = None if (n == OPENER and a_pull < 0.05) else GRADE
         draw_quad(c, frame_img(n, tt, full), q, a, g)
         if n != TARGET and dim > 0:
             c.drawPath(E.poly(q, True), paint_fill("#030814", dim * a))
-        border = a * (1 - 0.6 * wall) * (a_pull if n == "r5_robot" else 1.0)
+        border = a * (1 - 0.6 * wall) * (a_pull if n == OPENER else 1.0)
         glow_frame(c, q, border * (1 - 0.5 * dim))
         # connectors from the centre panel (constellation only)
-        if wall < 0.99 and n in SLOTS and n not in ("19_aerial", "q3_silos"):
+        if wall < 0.99 and n in SLOTS and n not in ("n7_campus", "17_robot"):
             kc = e_out_cubic(prog(t, 1.0 + 0.04 * i, 0.55))
             side = "l" if p[0] < -600 else "r" if p[0] > 600 else ("t" if p[1] < 0 else "b")
             if side in "lr":
@@ -377,7 +392,7 @@ def render(c, t):
                 connector(c, st, end, kc, a * (1 - wall), t, i)
 
     # "어디를 바꾸고": brackets hop across panels
-    for j, (n, t0) in enumerate((("q1_refinery", 1.05), ("p2_carline", 1.38), ("20_team", 1.70), ("10_datacenter", 2.0))):
+    for j, (n, t0) in enumerate((("n1_pharma", 1.05), ("n3_evline", 1.38), ("s01_walk", 1.70), ("n6_server", 2.0))):
         av = E.vis(t, t0, 0.12, t0 + 0.30, 0.15)
         if av > 0:
             p = [x for x in items if x[1] == n][0][2]

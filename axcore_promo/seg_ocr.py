@@ -36,7 +36,7 @@ VIOLET = "#8B6CFF"
 BG_DIR = os.path.join(E.HERE, "clips", "bg_ocr_lo")
 BG_SHARP = 12                    # frames 0-11 sharp (640 wide); later frames come pre-blurred (480 wide, sigma 2.2)
 BG_PRE = 2.2 * W / 480           # their blur in logical px
-BG_BLUR = 13.0
+BG_BLUR = 30.0
 SCV = 1.0
 
 # beats, in seconds from the cut
@@ -47,8 +47,9 @@ S_SWIRL = 1.70                   # ... swirl into the ring
 S_TABLE = 1.95                   # the data table
 S_POUR = 2.15                    # files pour into it
 S_SHIFT = 2.55                   # table to the left, the handwritten card rises
-S_SCAN, S_SCAN_D = 3.00, 0.75
-S_SEND = 3.80                    # the recognised record flies to the table
+S_SCAN, S_SCAN_D = 2.92, 0.68
+S_SEND, SEND_D = 3.62, 0.95      # the recognised record flies to the table (unhurried: the next shot's
+S_LAND = S_SEND + SEND_D - 0.1   # transition starts from this frame)
 
 
 def ft(f):
@@ -67,6 +68,7 @@ def bg_img(i):
 
 
 def background(c, s):
+    c.drawRect(R(0, 0, W, H), paint_fill("#071230", 1.0))
     i = int(round(s * 24))
     img = bg_img(i)
     k = max(W / img.width(), H / img.height())
@@ -81,9 +83,10 @@ def background(c, s):
     c.translate(W / 2, H / 2)
     c.scale(z * k, z * k)
     c.translate(-img.width() / 2, -img.height() / 2)
+    d = e_io_sine(prog(s, 0.10, 0.5))
+    p.setAlphaf(1 - 0.5 * d)                              # it goes soft and half transparent over the navy
     c.drawImage(img, 0, 0, E.SAMP, p)
     c.restore()
-    d = e_io_sine(prog(s, 0.10, 0.5))                     # settles darker so the graphics read
     c.drawRect(R(0, 0, W, H), paint_fill(NAVY_950, 0.30 * d))
     sh = skia.GradientShader.MakeRadial(skia.Point(W / 2, H / 2), 1150,
                                         [colint(NAVY_950, 0.0), colint(NAVY_950, 0.45 * d)], [0.35, 1.0])
@@ -339,7 +342,7 @@ def row_fill(j, s):
 def records(s):
     n = sum(1 for i in range(len(DOCS)) if s >= pour_time(i) + 0.32)
     v = int(round(1248 * n / len(DOCS)))
-    if s >= S_SEND + 0.55:
+    if s >= S_LAND:
         v += 1
     return v
 
@@ -380,8 +383,8 @@ def table(c, s):
             if 0 < row_fill(j, s) < 1:
                 rrect(c, R(18, y - 4, TW_ - 36, 28), 8, BLUE, 0.06)
         else:                                            # the OCR row
-            f = e_out_cubic(prog(s, S_SEND + 0.45, 0.4))
-            hl = math.sin(math.pi * clamp(prog(s, S_SEND + 0.45, 1.0)))
+            f = e_out_cubic(prog(s, S_LAND - 0.05, 0.45))
+            hl = e_io_sine(prog(s, S_LAND - 0.05, 0.3))
             if f > 0:
                 rrect(c, R(18, y - 4, TW_ - 36, 28), 8, CYAN, 0.10 * f + 0.10 * hl)
                 rrect_stroke(c, R(18, y - 4, TW_ - 36, 28), 8, "#29B6E8", 0.6 * hl, 1.2)
@@ -530,13 +533,13 @@ def send(c, s):
     sc = tr.width() / TW_
     row_y = tr.top() + (134 + N_ROWS * 32 + 10) * sc
     p1 = (tr.right(), row_y)
-    g = e_io_cubic(prog(s, S_SEND - 0.1, 0.45))
+    g = e_io_cubic(prog(s, S_SEND - 0.15, 0.8))
     if g > 0:
         pth = E.curve(p0, p1, 0.45)
         E.line(c, pth, CYAN, 0.9, 1.8, (0, g), glow=0.8)
-        if s > S_SEND + 0.5:
-            E.pulse(c, pth, ((s - S_SEND - 0.5) * 0.7) % 1.0, CYAN, 0.8, 12, 0.15)
-    q = e_io_cubic(prog(s, S_SEND, 0.5))
+        if s > S_SEND + 0.65:
+            E.pulse(c, pth, ((s - S_SEND - 0.65) * 0.7) % 1.0, CYAN, 0.8, 12, 0.15)
+    q = e_io_cubic(prog(s, S_SEND, SEND_D))
     if 0 < q < 1:
         x = lerp(p0[0] + 120, tr.centerX(), q)
         y = lerp(p0[1], row_y, q) - 60 * math.sin(math.pi * q)

@@ -42,7 +42,7 @@ FPS_NUM, FPS_DEN = 24000, 1001
 BAR = 138
 F_TL = 684                      # timeline frame of f = 0 (00:00:28:12)
 NF = 375                        # ... through 00:00:44:02
-COMPANY = "(주)에이엑스코어"
+COMPANY = "우리 회사"
 LINE = "#E3E7EE"
 ORANGE = "#FF9D5C"
 VIOLET = "#7B5CFF"

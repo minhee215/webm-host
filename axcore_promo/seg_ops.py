@@ -4,7 +4,8 @@
 The original film's three shots (stock footage and its moves unchanged: 16_retail, 06_line, 17_robot) with their
 graphics in the film's own glass cards (white on the aisle, navy on the factory), more opaque and with larger
 type than before; their content after the client's cards (team chip + the question they would ask), kept simple.
-  85.83  straight in on the retail aisle (no transition; nothing moves before the narration, 86:10)
+  85.83  continues seg_ask's last frame (실행 완료 just pressed): the button's fill grows over the whole frame and
+         turns into white light, which clears onto the retail aisle (the cards wait for the narration, 86:10)
   86.45  영업팀 · 다음 달 수요는? - sales so far, the 오늘 marker, the forecast running on (dashed, +12.4%)
   88.25  line-particle cut to the production line: the inspection gate over the conveyor (kept), and
          생산팀 · 지금 이상 징후 있어? - the vibration signal, its spike boxed (이상 감지 · 14:20)
@@ -34,7 +35,7 @@ FPS_NUM, FPS_DEN = 24000, 1001
 BAR = 138
 F_TL = 85 * 24 + 20              # 00:01:25:20: seg_ask's last frame
 NF = 95 * 24 + 19 - F_TL + 1     # through 00:01:35:19 (240 frames)
-GRAIN0 = K.GRAIN0 + K.NF        # film-grain index of frame 0 (after seg_ask's last frame)
+GRAIN0 = K.GRAIN0 + K.NF - 1    # film-grain index of frame 0, as seg_ask's last frame
 T0 = F_TL / 24.0
 SCV = 1.0
 
@@ -394,7 +395,45 @@ def toggle(c, t):
     c.restore()
 
 
+# ---------------------------------------------------------------- in: the 실행 완료 button becomes white light
+IN0, IN_GROW, IN_CLEAR = T0, 0.32, 0.42     # the fill grows over the frame, then the light clears
+
+
+def run_button():
+    """The 실행 완료 button on seg_ask's last frame, in screen coordinates."""
+    t = K.T0 + (K.NF - 1) / 24.0
+    r = K.LEFT
+    b = R(r.left() + 52, r.top() + 450, 250, 72)
+    push = 1.0 + 0.035 * e_io_sine(prog(t, K.PANES0, K.T0 + K.NF / 24.0 - K.PANES0))
+    return R(W / 2 + (b.left() - W / 2) * push, H / 2 + (b.top() - H / 2) * push, b.width() * push,
+             b.height() * push), 16 * push
+
+
+def light_in(c, t):
+    g = e_io_cubic(prog(t, IN0 + 0.02, IN_GROW))              # the fill grows over the frame
+    clear = e_io_sine(prog(t, IN0 + IN_GROW - 0.02, IN_CLEAR))  # the white clears onto the aisle
+    if clear < 1 and t < IN0 + IN_GROW + 0.02:
+        K.render(c, min(t, K.T0 + (K.NF - 1) / 24.0))
+    if clear > 0:
+        img = A.snap(31, lambda cc: shot(cc, 0, t))
+        A.draw_img(c, img, 1.0, 14 * (1 - clear), lerp(1.06, 1.0, e_out_cubic(clear)))
+    if g <= 0:
+        return
+    b, rad = run_button()
+    far = R(-700, -500, W + 1400, H + 1000)             # well past the frame, so it covers it early
+    r = R(lerp(b.left(), far.left(), g), lerp(b.top(), far.top(), g), lerp(b.width(), far.width(), g),
+          lerp(b.height(), far.height(), g))
+    col = A.colint_mix(K.HL, "#FFFFFF", e_io_sine(clamp(g * 1.3)))
+    a = 1 - clear
+    rrect(c, r.makeOutset(30 * g, 30 * g), rad * (1 - g), col, 0.35 * a, blur=40 * g + 4)
+    rrect(c, r, rad * (1 - g), col, a)
+    E.radial(c, b.centerX(), b.centerY(), 300 + 1800 * g, "#FFFFFF", 0.5 * a * g)
+
+
 def render(c, t):
+    if t < IN0 + IN_GROW + IN_CLEAR:
+        light_in(c, t)
+        return
     if t >= OUT0:
         bl = 18 * e_io_sine(prog(t, OUT0, 0.45))
         fx = e_io_sine(prog(t, OUT0 + 0.12, 0.42))

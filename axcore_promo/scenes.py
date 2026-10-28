@@ -409,6 +409,13 @@ S5_FRONT = False
 S5_FRONT_K, S5_FRONT_VY, S5_FRONT_CY = 0.80, 0.35, 540
 S5_FRONT_SPREAD, S5_FRONT_FLOW = 1.8, 1.68     # the 21:9 band is wide: spread the ring and the flow sideways
 BAR_TOP, BAR_BOT = 138, 942
+S5_FRONT_END = "card"     # "card": card 01 turns into the white AXpoint card; "line": every card carries a small
+                          # diamond on its right edge; the camera pans right, the last card's diamond leaves it and
+                          # draws a line (BAR_LINE) on the navy stage, which the AXpoint opening turns into its search bar
+S5_LINE_HIDE = False      # (line end) leave the diamond and line out: the next segment draws them from the same state
+S5_LINE_T0, S5_LINE_D = 26.0, 1.1
+BAR_LINE = (1232.0, 640.0, 542.0)   # diamond x, line start x, y (screen)
+LINE_BLUE = "#3D74FF"
 S5_FRONT_STAGGER = 0.16                         # tiles come in one by one, clockwise from the top left
 S5_FLOW_INFO = {"Diagnose": ("업무 · 데이터 현황 진단", "디지털 수준 L3"), "Analyze": ("개선 과제 도출", "개선 과제 70개"),
                 "Design": ("우선순위 · 로드맵 설계", "5단계 로드맵"), "Execute": ("AI 적용과 자동화 실행", "현장 적용")}
@@ -419,6 +426,11 @@ S5_KO = {"Planning": "기획", "Production": "생산", "Logistics": "물류", "S
 
 def s5_fx(i):
     return S5_FLOW_X[i] * (S5_FRONT_FLOW if S5_FRONT else 1.0)
+
+
+def s5_port(i):
+    """World point of flow card i's diamond (right edge of its panel, on the rail)."""
+    return (s5_fx(i) + 4.3 / 2 + 0.22, 0.0, -0.9)
 
 
 # frontal re-edit: footage in the same bright, clean factory look as the shots before it
@@ -441,8 +453,18 @@ def s5_iso(T):
     if S5_FRONT:
         kf = k * S5_FRONT_K
 
-        def P(x, y, z):
+        def P0(x, y, z):
             return (W / 2 + ox + (x - cx) * kf, S5_FRONT_CY + (z - cz) * kf - y * kf * S5_FRONT_VY)
+        if S5_FRONT_END != "line":
+            return P0, kf
+        # line end: the camera pans until the last card's diamond port sits where the line starts
+        u = e_io_cubic(prog(T, S5_LINE_T0, S5_LINE_D))
+        px, py = P0(*s5_port(3))
+        dx, dy = u * (px - BAR_LINE[1]), u * (py - BAR_LINE[2])
+
+        def P(x, y, z):
+            q = P0(x, y, z)
+            return (q[0] - dx, q[1] - dy)
         return P, kf
 
     def P(x, y, z):
@@ -694,6 +716,7 @@ def s5_front_flow(c, P, k, T):
     rail = poly([ra, rb])
     line(c, rail, "#24438F", 0.9 * (1 - out), 10 * ts)
     xf = lerp(xa, xb, fill)
+    lend = S5_FRONT_END == "line"
     if fill > 0:
         line(c, poly([ra, P(xf, 0, ZC)]), CYAN, 1.0 * (1 - out), 4 * ts, glow=1.0, glow_w=16 * ts)
         hx, hy = P(xf, 0, ZC)
@@ -719,7 +742,7 @@ def s5_front_flow(c, P, k, T):
             continue
         a = clamp(kk)
         lit = e_out_expo(prog(T, t_in + 0.25, 0.5))
-        aa = a * (1 - out) if i else a
+        aa = a * (1 - out) if i or lend else a
         if aa <= 0.003:
             continue
         x, dy = xs[i], 0.5 * (1 - a)
@@ -727,14 +750,14 @@ def s5_front_flow(c, P, k, T):
         # glass panel behind image + info
         p0, p1 = P(x - CW_ / 2 - 0.22, 0, z0 - 0.22), P(x + CW_ / 2 + 0.22, 0, z1 + 2.45)
         pr = R(p0[0], p0[1], p1[0] - p0[0], p1[1] - p0[1])
-        pa = aa * (1 - out) if i == 0 else aa
+        pa = aa * (1 - out) if i == 0 and not lend else aa
         rrect(c, pr, 16 * ts, NAVY_900, 0.82 * pa)
         if lit > 0:
             rrect(c, pr.makeOutset(4, 4), 18 * ts, BLUE, 0.35 * lit * pa, blur=18 * ts)
         rrect_stroke(c, pr, 16 * ts, CYAN if lit > 0.5 else "#4E6FB8", (0.55 + 0.45 * lit) * pa, 1.4)
         q0, q1 = P(x - CW_ / 2, 0, z0), P(x + CW_ / 2, 0, z1)
         tq = [(q0[0], q0[1]), (q1[0], q0[1]), (q1[0], q1[1]), (q0[0], q1[1])]
-        if i == 0 and out > 0:
+        if i == 0 and out > 0 and not lend:
             tgt = [(S5_MATCH.left(), S5_MATCH.top()), (S5_MATCH.right(), S5_MATCH.top()),
                    (S5_MATCH.right(), S5_MATCH.bottom()), (S5_MATCH.left(), S5_MATCH.bottom())]
             tq = [(lerp(p[0], q[0], out), lerp(p[1], q[1], out)) for p, q in zip(tq, tgt)]
@@ -759,8 +782,11 @@ def s5_front_flow(c, P, k, T):
     for (i, tq, aa, lit, name) in quads:
         s5_step_art(c, i, tq, T, aa, lit, ts)
         c.drawPath(poly(tq, True), paint_stroke(CYAN if lit > 0.5 else "#7FA6FF", 0.8 * aa, 1.2))
-        if i == 0 and out > 0:
+        if i == 0 and out > 0 and not lend:
             c.drawPath(poly(tq, True), paint_fill(WHITE, out * 0.85))
+    if lend:
+        s5_line_end(c, P, T, ts, quads)
+        return
     if out > 0:
         c.saveLayer(None, None)
         c.drawRect(R(0, 0, W, H), paint_fill(WARM_W, out))
@@ -769,6 +795,39 @@ def s5_front_flow(c, P, k, T):
             c.drawPath(poly(q0, True), paint_fill(WHITE, out))
             c.drawPath(poly(q0, True), paint_stroke(STEEL_200, out, 1.2))
         c.restore()
+
+
+def diamond(c, x, y, r, fill, a, stroke=None, glow=0.0, sw=1.4):
+    pth = poly([(x, y - r), (x + r, y), (x, y + r), (x - r, y)], True)
+    if glow > 0:
+        c.drawPath(pth, paint_fill(fill, a * glow, blur=r * 0.9))
+    c.drawPath(pth, paint_fill(fill, a))
+    if stroke:
+        c.drawPath(pth, paint_stroke(stroke, a, sw))
+
+
+def s5_line_end(c, P, T, ts, quads):
+    """Line end of the frontal flow: a diamond on every card; the last card's leaves to the right drawing a line
+    while the camera pans after it and the cards fall away."""
+    u = e_io_cubic(prog(T, S5_LINE_T0 + 0.08, S5_LINE_D - 0.08))
+    radial(c, (BAR_LINE[1] + BAR_LINE[0]) / 2, BAR_LINE[2], 560, "#1C46B8", 0.40 * u)
+    for (i, tq, aa, lit, name) in quads:
+        if i == 3:
+            continue
+        x, y = P(*s5_port(i))
+        diamond(c, x, y, 12 * ts, CYAN if lit > 0.5 else "#4E6FB8", aa, stroke=WHITE if lit > 0.5 else None,
+                glow=0.6 * lit, sw=1.0)
+    t3 = 22.75 + 3 * 0.55
+    a3 = clamp(enter(T, t3, 0.6))
+    if a3 <= 0 or S5_LINE_HIDE:
+        return
+    lit = e_out_expo(prog(T, t3 + 0.25, 0.5))
+    px, py = P(*s5_port(3))
+    dx = lerp(px, BAR_LINE[0], u)
+    if dx > px + 1:
+        line(c, poly([(px, py), (dx, py)]), LINE_BLUE, 1.0, lerp(3.0 * ts, 2.2, u), glow=0.8, glow_w=10)
+    diamond(c, dx, py, lerp(12 * ts, 11.0, u), LINE_BLUE if u > 0.5 else (CYAN if lit > 0.5 else "#4E6FB8"), a3,
+            stroke=WHITE if lit > 0.5 else None, glow=0.6 * lit, sw=1.2)
 
 
 def s5_step_art(c, i, tq, T, a, lit, ts):

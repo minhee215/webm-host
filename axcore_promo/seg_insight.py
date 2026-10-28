@@ -220,6 +220,7 @@ def draw_touch(c, f):
 # ---------------------------------------------------------------- 2: SC05 frontal
 def draw_map(c, f):
     S.S5_FRONT = True
+    S.S5_FRONT_END = "line"           # hands over to seg_axpoint on the search-bar line
     T = mg_time(ft(f))
     S.sc05(c, T, T - S.SC05_T0, 10.0)
 

@@ -217,47 +217,22 @@ def left_panels(c, t):
             E.text(c, n, r.left() + 32, r.centerY() + C.CHIP_SZ * 0.36, C.CHIP_SZ, "Medium", WHITE, ca)
 
 
-def _rr(c, x, y, w, h, r, color, a=1.0):
-    E.rrect(c, R(x, y, w, h), r, color, a)
+LOGO_FILES = {"Gmail": "gmail", "Slack": "slack", "Notion": "notion", "Microsoft Teams": "teams",
+              "Google Drive": "gdrive"}
+_LOGOS = {}
 
 
 def logo(c, name, cx, cy, s, a):
-    """Simple vector marks of the services, s = box size."""
-    u = s / 32.0
-    c.save()
-    c.translate(cx - 16 * u, cy - 16 * u)
-    c.scale(u, u)
-    if name == "Gmail":
-        c.drawPath(E.poly([(3, 9), (9, 13.5), (9, 26), (5, 26), (3, 24)], True), paint_fill("#4285F4", a))
-        c.drawPath(E.poly([(29, 9), (23, 13.5), (23, 26), (27, 26), (29, 24)], True), paint_fill("#34A853", a))
-        c.drawPath(E.poly([(3, 9), (16, 18.5), (29, 9), (29, 6.5), (26, 5.5), (16, 13), (6, 5.5), (3, 6.5)], True),
-                   paint_fill("#EA4335", a))
-        c.drawPath(E.poly([(23, 13.5), (29, 9), (29, 6.5), (26, 5.5), (23, 7.8)], True), paint_fill("#FBBC04", a))
-        c.drawPath(E.poly([(3, 9), (9, 13.5), (9, 7.8), (6, 5.5), (3, 6.5)], True), paint_fill("#C5221F", a))
-    elif name == "Slack":
-        cols = ["#36C5F0", "#2EB67D", "#ECB22E", "#E01E5A"]
-        for k_ in range(4):
-            c.save()
-            c.translate(16, 16)
-            c.rotate(90 * k_)
-            c.translate(-16, -16)
-            _rr(c, 12.5, 3, 5, 12.5, 2.5, cols[k_], a)
-            _rr(c, 3, 12.5, 7.5, 5, 2.5, cols[k_], a)
-            c.restore()
-    elif name == "Notion":
-        _rr(c, 4, 3, 24, 26, 4, WHITE, a)
-        E.rrect_stroke(c, R(4, 3, 24, 26), 4, "#111111", a, 2.2)
-        E.text(c, "N", 16, 24.5, 19, "Bold", "#111111", a, "center")
-    elif name == "Microsoft Teams":
-        _rr(c, 2, 6, 21, 21, 4, "#5059C9", a)
-        c.drawCircle(25, 9, 4.5, paint_fill("#7B83EB", a))
-        _rr(c, 19, 14, 11, 13, 5, "#7B83EB", a)
-        E.text(c, "T", 12.5, 22.5, 15, "Bold", WHITE, a, "center")
-    elif name == "Google Drive":
-        c.drawPath(E.poly([(11, 4), (21, 4), (31, 21), (26, 29.5)], True), paint_fill("#FBBC04", a))
-        c.drawPath(E.poly([(11, 4), (16, 12.5), (6, 29.5), (1, 21)], True), paint_fill("#0F9D58", a))
-        c.drawPath(E.poly([(6, 29.5), (11, 21), (31, 21), (26, 29.5)], True), paint_fill("#4285F4", a))
-    c.restore()
+    """The service's own mark (assets/logos, from the client), fitted into an s x s box."""
+    if name not in _LOGOS:
+        import os
+        _LOGOS[name] = skia.Image.open(os.path.join(E.HERE, "assets", "logos", LOGO_FILES[name] + ".png"))
+    img = _LOGOS[name]
+    k = s / max(img.width(), img.height())
+    w, h = img.width() * k, img.height() * k
+    p = skia.Paint(AntiAlias=True)
+    p.setAlphaf(clamp(a))
+    c.drawImageRect(img, R(cx - w / 2, cy - h / 2, w, h), skia.SamplingOptions(skia.CubicResampler.Mitchell()), p)
 
 
 def saas_rect(i):

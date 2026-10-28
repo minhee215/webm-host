@@ -15,7 +15,6 @@ Frame f is timeline frame 1507 + f; film time = timeline frame / 24 (narration a
 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_onto.py <out.mp4> [height=480] [first last]
 """
-import json
 import math
 import os
 import subprocess
@@ -62,14 +61,14 @@ def ft(f):
 # ---------------------------------------------------------------- the floating panel
 # The last frame becomes a glass panel floating in the blue space: the camera pulls back from it while it turns
 # to an oblique angle (the client's transition reference, without the monitor). Its shape: a screen seen from
-# the front-left, measured on a generated plate (clips/mon_plate.json), centred and enlarged.
+# the front-left, measured on a generated plate, centred and enlarged.
+PANEL_SHAPE = [(0.33665, 0.25680), (0.67488, 0.18316), (0.67776, 0.63721), (0.33503, 0.63985)]
 _PAN = {}
 
 
 def panel():
     if not _PAN:
-        meta = json.load(open(os.path.join(E.HERE, "clips", "mon_plate.json")))
-        q = [(u * W, v * W * 9 / 16) for u, v in meta["screen"]]
+        q = [(u * W, v * W * 9 / 16) for u, v in PANEL_SHAPE]
         cx, cy = sum(p[0] for p in q) / 4, sum(p[1] for p in q) / 4
         k = 1.30
         _PAN["q"] = [((x - cx) * k + W / 2, (y - cy) * k + H / 2 - 10) for x, y in q]

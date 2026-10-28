@@ -1,16 +1,16 @@
-"""Connect scene, second version, new timeline 00:00:48:24-00:00:62:01 (314 frames) - "AXCORE는 다양한 업무 환경을
-하나로 연결합니다. / ERP, MES, CRM과 같은 사내 시스템부터 / 협업, 커뮤니케이션 등 다양한 외부 SaaS까지 커넥터로 연결합니다."
+"""Connect scene, second version, timeline 00:00:48:23-00:00:57:21 (215 frames) - "ERP, MES, CRM과 같은 사내
+시스템부터 / 협업, 커뮤니케이션 등 다양한 외부 SaaS까지 커넥터로 연결합니다." (narration at its original timing)
 
-  48:24  carries on from the M-AI Works ceiling shot (seg_axpoint): the camera pushes in toward the ceiling UI,
-         which turns to face the lens and grows past the frame while the room falls away out of focus; light
-         swells out of the UI, fills the frame and draws back into the AXCORE node in a datacenter corridor
-         ("AXCORE는 다양한 업무 환경을 하나로 연결합니다" is the transition)
-  53.7s  the corridor stays soft and bright behind the graphics (slow push throughout); on "사내 시스템부터" the
+  48:23  carries on from the M-AI Works ceiling shot (seg_axpoint, same first frame): the camera pushes in toward
+         the ceiling UI, which turns to face the lens and grows past the frame while the room falls away out of
+         focus; light swells out of the UI, fills the frame and draws back into the AXCORE node in a datacenter
+         corridor (about 1 s)
+  50.1s  the corridor stays soft and bright behind the graphics (slow push throughout); on "사내 시스템부터" the
          company's own systems dock on the left one panel at a time, their items one by one, each panel joined
          to the node
-  58.0s  on "외부 SaaS까지" the external SaaS cards (Gmail, Slack, Notion, Microsoft Teams, Google Drive: logo,
-         name, 연결됨 + check) come in on the right one at a time, each joined to the node
-Film time = new timeline frame / 24 (the narration was re-placed: narr_v3). 23.976 fps, 21:9 letterbox.
+  53.4s  on "협업, 커뮤니케이션 등 다양한 외부 SaaS까지" the external SaaS cards (Gmail, Slack, Notion, Microsoft
+         Teams, Google Drive: logo, name, 연결됨 + check) come in on the right one at a time, each joined to the node
+Film time = timeline frame / 24. 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_connect2.py <out.mp4> [height=480] [first last]
 """
 import math
@@ -28,19 +28,20 @@ import seg_connect as C
 from engine import (W, H, R, clamp, lerp, prog, e_io_cubic, e_io_sine, e_out_cubic, paint_fill, paint_stroke,
                     colint, CYAN, WHITE, NAVY_950, BLUE, INK)
 
-F_TL = 48 * 24 + 24             # first frame: new timeline 00:00:48:24 (film 49.0 s)
-NF = 62 * 24 + 1 - F_TL + 1     # through 00:00:62:01 (314 frames)
+F_TL = 48 * 24 + 23             # first frame: timeline 00:00:48:23 (film 48.96 s), the AXpoint file's last frame
+NF = 57 * 24 + 21 - F_TL + 1     # through 00:00:57:21 (215 frames)
+T_END = (F_TL + NF) / 24.0
 BAR = 138
 HUB = C.HUB
 GRADE_LIGHT = E.grade_filter(bright=1.26, contrast=0.98, sat=0.92, tint=(-0.006, 0.0, 0.012))
 
 # the transition out of the ceiling shot
-TURN0, TURN_D = 49.05, 2.0        # push-in + the UI turning to face the lens
-GLOW0, GLOW_PEAK, GLOW_END = 50.55, 51.15, 52.10   # light swells, fills the frame, draws back into the node
+TURN0, TURN_D = 49.00, 1.15       # push-in + the UI turning to face the lens
+GLOW0, GLOW_PEAK, GLOW_END = 49.50, 49.90, 50.55   # light swells, fills the frame, draws back into the node
 DC0 = GLOW_PEAK                   # the datacenter is under the light from here
 # the content
-PAN0, PAN_DT, CHIP_DT = 53.75, 1.30, 0.13     # left panels, one at a time, their items one by one
-SAAS0, SAAS_DT = 58.10, 0.60                   # right: SaaS cards one at a time
+PAN0, PAN_DT, CHIP_DT = 50.10, 0.85, 0.08     # left panels, one at a time, their items one by one
+SAAS0, SAAS_DT = 53.30, 0.42                   # right: SaaS cards one at a time
 SAAS = ["Gmail", "Slack", "Notion", "Microsoft Teams", "Google Drive"]
 SAAS_X, SAAS_W, SAAS_H, SAAS_DY = 1350, 430, 82, 100
 C.PAN_X = 96
@@ -65,7 +66,7 @@ def ui_quad(t):
     """The UI's screen quad: on the ceiling, then turning to face the lens and growing past the frame."""
     u = e_io_cubic(prog(t, TURN0, TURN_D))
     q0 = ui_quad_ceiling()
-    grow = 1.0 + 0.9 * e_io_sine(prog(t, TURN0 + 0.6, TURN_D))
+    grow = 1.0 + 0.9 * e_io_sine(prog(t, TURN0 + 0.3, TURN_D))
     w = 2150 * grow
     h = w * A.UH / A.UW
     cx, cy = W / 2, H / 2 - 20
@@ -130,16 +131,16 @@ def light(c, t):
 
 # ---------------------------------------------------------------- the datacenter
 def dc_zoom(t):
-    return 1.04 + 0.10 * prog(t, DC0, 62.1 - DC0)          # a slow, steady push the whole time
+    return 1.04 + 0.08 * prog(t, DC0, T_END - DC0)          # a slow, steady push the whole time
 
 
 def background(c, t):
-    # the corridor clip (5.5 s) is stretched over the whole scene (~11 s) so it never stops: slowed down, with
+    # the corridor clip (5.5 s) is stretched over the whole scene (~8 s) so it never stops: slowed down, with
     # neighbouring frames blended (it sits well out of focus)
     info = media.clip_info(C.BG) or {}
     sp = info.get("speed", 1.0)
     span = (info.get("frames", 121) - 1) / (24 * sp) - 0.6        # usable after the clip's 0.5 s head trim
-    rate = min(1.0, span / (62.15 - DC0))
+    rate = min(1.0, span / (T_END + 0.05 - DC0))
     fpos = max(0.0, t - DC0) * rate * 24 * sp
     i0 = int(fpos)
     w = fpos - i0
@@ -314,7 +315,7 @@ def hub(c, t):
 def datacenter(c, t):
     background(c, t)
     c.save()
-    zg = 1.0 + 0.035 * prog(t, PAN0 - 0.5, 62.1 - PAN0)          # the graphics drift in a little too
+    zg = 1.0 + 0.03 * prog(t, PAN0 - 0.5, T_END - PAN0 + 0.5)          # the graphics drift in a little too
     c.translate(*HUB)
     c.scale(zg, zg)
     c.translate(-HUB[0], -HUB[1])

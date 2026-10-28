@@ -1,16 +1,17 @@
-"""Segment 00:01:02:19-00:01:14:12 (282 frames) - "AI가 설비, 자재, 공정, 제품, 사람과 업무의 관계를 이해하도록
+"""Segment 00:01:03:12-00:01:14:10 (263 frames) - "AI가 설비, 자재, 공정, 제품, 사람과 업무의 관계를 이해하도록
 만듭니다. / 이것이 AXCORE 온톨로지입니다."
 
-  62.79  continues the OCR segment's last frame (the data table + OCR card). The transition after the client's
+  63.50  continues the OCR segment's last frame (the data table + OCR card). The transition after the client's
          reference, a zoom-out match cut: the camera pulls back from it, faster and faster, and at full speed cuts
          to the ontology seen very close, which keeps pulling back, decelerating, to its framing
-  63.6s  the isometric glass platform ontology (the earlier SC14, rebuilt in the current look): the work from 시작
+  64.3s  the isometric glass platform ontology (the earlier SC14, rebuilt in the current look): the work from 시작
          to 끝 comes in step by step, the entities rise on their words (설비 자재 공정 제품 사람 업무) with their
          relations; the company's systems stream data onto the platform. On "관계를 이해하도록" a pulse runs the
          work and lights what each step depends on, the AI core links everything. The camera orbits slowly
   70.4s  "이것이 AXCORE 온톨로지입니다": the camera turns quickly to the front and pulls back, so the whole
          structure is seen at once; a light wave runs over the platform, the AXCORE Ontology title lands on top
-Frame f is timeline frame 1507 + f; film time = timeline frame / 24 (narration at its original timing).
+Frame f is timeline frame 1524 + f (00:01:03:12-00:01:14:10, after the OCR segment with its 1 s head); film time =
+timeline frame / 24, narration as in the client's timeline (captions 63:12 / 67:22 / 70:09).
 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_onto.py <out.mp4> [height=480] [first last]
 """
@@ -32,8 +33,9 @@ from engine import (W, H, R, BLUE, INK, WHITE, NAVY_950, NAVY_900, NAVY_800, CYA
 
 FPS_NUM, FPS_DEN = 24000, 1001
 BAR = 138
-F_TL = 62 * 24 + 19              # 00:01:02:19 (the OCR segment's last frame)
-NF = 74 * 24 + 12 - F_TL + 1     # through 00:01:14:12 (282 frames)
+F_TL = 63 * 24 + 12              # 00:01:03:12: the OCR segment's last frame
+NF = 74 * 24 + 10 - F_TL + 1     # through 00:01:14:10 (263 frames)
+GRAIN0 = 62 * 24 + 19            # film-grain index of frame 0: the OCR file's last frame (identical first frame)
 T_END = (F_TL + NF) / 24.0
 SCV = 1.0
 
@@ -43,12 +45,12 @@ CUE = {"EQUIP": 64.40, "MATER": 65.15, "PROC": 65.89, "PROD": 66.58, "PEOPLE": 6
 PULSE0, PULSE_D = 68.05, 1.85     # "관계를 이해하도록 만듭니다": the work runs from 시작 to 끝
 CORE0 = 69.30
 BUILD0 = 61.90                    # the platform is there at the cut (built before it)
-ORBIT0 = 63.23                    # the camera's slow orbit
-FLOW0 = 63.62                     # the work from 시작 to 끝 comes in, step by step
+ORBIT0 = 63.90                    # the camera's slow orbit
+FLOW0 = 64.25                     # the work from 시작 to 끝 comes in, step by step
 PUNCH0, PUNCH_D = 70.40, 1.30     # "이것이 AXCORE 온톨로지입니다": the reveal move
 
 # transition
-SHR0, CUT = 62.84, 63.23          # the previous frame pulls back, accelerating, until the cut
+SHR0, CUT = 63.52, 63.90          # the previous frame pulls back, accelerating, until the cut
 ZIN_D, ZIN_Z = 1.10, 3.2          # after it the ontology, seen very close, pulls back decelerating
 
 
@@ -299,7 +301,7 @@ def core(c, t, P):
 def entities(c, t, P, lit):
     for n in sorted(ENT, key=lambda k_: ENT[k_][0][1]):
         (x, z), key, ic = ENT[n]
-        t0 = max(ent_time(n) - 0.1, 64.0)
+        t0 = max(ent_time(n) - 0.1, 64.45)
         k = e_io_sine(prog(t, t0, 0.6))
         if k <= 0.003:
             continue
@@ -409,7 +411,7 @@ def frame(f, surf, finish):
     c.scale(SCV, SCV)
     render(c, ft(f))
     c.restore()
-    fr = finish.apply(surf, F_TL + f)
+    fr = finish.apply(surf, GRAIN0 + f)
     bar = int(round(BAR * SCV))
     fr[:bar] = 0
     fr[-bar:] = 0

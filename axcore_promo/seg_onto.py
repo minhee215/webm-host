@@ -1,16 +1,15 @@
 """Segment 00:01:02:19-00:01:14:12 (282 frames) - "AI가 설비, 자재, 공정, 제품, 사람과 업무의 관계를 이해하도록
 만듭니다. / 이것이 AXCORE 온톨로지입니다."
 
-  62.79  continues the OCR segment's last frame (the data table + OCR card): the frame becomes a glass panel
-         floating in a blue space - the camera pulls back from it as it turns oblique (the client's transition
-         reference), the panel turns to the ontology, everything defocuses into a soft light and the ontology
-         comes out of it full frame
-  64.4s  the isometric glass platform ontology (the earlier SC14, rebuilt in the current look): the entities rise
-         on their words (설비 자재 공정 제품 사람 업무) with their relations; the company's systems stream data onto
-         the platform; along the front the work runs from 시작 to 끝 - on "관계를 이해하도록" a pulse runs it and
-         lights what each step depends on, the AI core links everything. The camera orbits slowly from the left
-  70.5s  "이것이 AXCORE 온톨로지입니다": the camera swings fast to the front and up (with a small overshoot) and
-         the whole structure lands, a light wave runs over the platform, the AXCORE Ontology title lands on top
+  62.79  continues the OCR segment's last frame (the data table + OCR card). The transition after the client's
+         reference, a zoom-out match cut: the camera pulls back from it, faster and faster, and at full speed cuts
+         to the ontology seen very close, which keeps pulling back, decelerating, to its framing
+  63.6s  the isometric glass platform ontology (the earlier SC14, rebuilt in the current look): the work from 시작
+         to 끝 comes in step by step, the entities rise on their words (설비 자재 공정 제품 사람 업무) with their
+         relations; the company's systems stream data onto the platform. On "관계를 이해하도록" a pulse runs the
+         work and lights what each step depends on, the AI core links everything. The camera orbits slowly
+  70.4s  "이것이 AXCORE 온톨로지입니다": the camera turns quickly to the front and pulls back, so the whole
+         structure is seen at once; a light wave runs over the platform, the AXCORE Ontology title lands on top
 Frame f is timeline frame 1507 + f; film time = timeline frame / 24 (narration at its original timing).
 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_onto.py <out.mp4> [height=480] [first last]
@@ -20,7 +19,6 @@ import os
 import subprocess
 import sys
 
-import cv2
 import numpy as np
 import skia
 
@@ -44,104 +42,41 @@ CUE = {"EQUIP": 64.40, "MATER": 65.15, "PROC": 65.89, "PROD": 66.58, "PEOPLE": 6
        "L18": 70.57, "ONTO": 71.25}
 PULSE0, PULSE_D = 68.05, 1.85     # "관계를 이해하도록 만듭니다": the work runs from 시작 to 끝
 CORE0 = 69.30
-BUILD0 = 62.90                    # the platform (it comes in with the zoom)
-FLOW0 = 63.90                     # the work from 시작 to 끝 comes in, step by step
+BUILD0 = 61.90                    # the platform is there at the cut (built before it)
+ORBIT0 = 63.23                    # the camera's slow orbit
+FLOW0 = 63.62                     # the work from 시작 to 끝 comes in, step by step
 PUNCH0, PUNCH_D = 70.40, 1.30     # "이것이 AXCORE 온톨로지입니다": the reveal move
 
 # transition
-PB0, PB_D = 62.84, 0.62           # pull back: the frame becomes an oblique panel
-AWAY0, AWAY_D = 63.12, 0.60       # ... which recedes fast into the depth and is gone
-ZIN0, ZIN_D, ZIN_Z = 62.88, 1.50, 2.6   # meanwhile the ontology, seen enlarged, settles to its size
+SHR0, CUT = 62.84, 63.23          # the previous frame pulls back, accelerating, until the cut
+ZIN_D, ZIN_Z = 1.10, 3.2          # after it the ontology, seen very close, pulls back decelerating
 
 
 def ft(f):
     return (F_TL + f) / 24.0
 
 
-# ---------------------------------------------------------------- the floating panel
-# The last frame becomes a glass panel floating in the blue space: the camera pulls back from it while it turns
-# to an oblique angle (the client's transition reference, without the monitor). Its shape: a screen seen from
-# the front-left, measured on a generated plate, centred and enlarged.
-PANEL_SHAPE = [(0.33665, 0.25680), (0.67488, 0.18316), (0.67776, 0.63721), (0.33503, 0.63985)]
-_PAN = {}
+# ---------------------------------------------------------------- the transition (the client's reference)
+# A zoom-out match cut: the camera pulls back from the previous frame, faster and faster (its graphics shrink
+# over the soft background); at full speed it cuts to the ontology seen very close, which keeps pulling back,
+# decelerating, to its framing. Both sides of the cut move the same way, so the cut is not felt.
 
 
-def panel():
-    if not _PAN:
-        q = [(u * W, v * W * 9 / 16) for u, v in PANEL_SHAPE]
-        cx, cy = sum(p[0] for p in q) / 4, sum(p[1] for p in q) / 4
-        k = 1.30
-        _PAN["q"] = [((x - cx) * k + W / 2, (y - cy) * k + H / 2 - 10) for x, y in q]
-        z = 1.0
-        while z < 12:
-            qq = [((x - W / 2) * z + W / 2, (y - H / 2 + 10) * z + H / 2) for x, y in _PAN["q"]]
-            if all(inside(qq, x, y) for x, y in ((0, 0), (W, 0), (W, H), (0, H))):
-                break
-            z *= 1.01
-        _PAN["z0"] = z * 1.03
-    return _PAN
-
-
-def inside(q, x, y):
-    s = None
-    for i in range(4):
-        (x0, y0), (x1, y1) = q[i], q[(i + 1) % 4]
-        cr = (x1 - x0) * (y - y0) - (y1 - y0) * (x - x0)
-        if s is None:
-            s = cr > 0
-        elif (cr > 0) != s:
-            return False
-    return True
-
-
-def panel_quad(t):
-    """The panel's screen quad: the whole frame at first, then the oblique panel while the camera pulls back."""
-    M = panel()
-    u = e_io_cubic(prog(t, PB0, PB_D))
-    z = math.exp(lerp(math.log(M["z0"]), 0.0, u))
-    z *= lerp(1.0, 0.08, e_in_cubic(prog(t, AWAY0, AWAY_D)))      # flies away into the depth
-    q = [((x - W / 2) * z + W / 2, (y - H / 2 + 10) * z + H / 2 - 10 - 40 * (1 - z) * u) for x, y in M["q"]]
-    w = e_io_sine(clamp(u / 0.35))
-    full = [(0, 0), (W, 0), (W, H), (0, H)]
-    return [(lerp(a[0], b[0], w), lerp(a[1], b[1], w)) for a, b in zip(full, q)], u
-
-
-def warp(c, img, quad, alpha=1.0, radius=0.0, edge=0.0):
-    M = cv2.getPerspectiveTransform(np.float32([[0, 0], [W, 0], [W, H], [0, H]]), np.float32(quad))
+def ocr_pullback(c, t):
+    s = min(t, O.T0 + (O.NF - 1) / 24.0) - O.T0
+    q = e_in_cubic(prog(t, SHR0, CUT - SHR0))
+    O.background(c, s)
+    z = lerp(1.0, 0.58, q)
     c.save()
-    c.concat(skia.Matrix.MakeAll(*(M / M[2, 2]).flatten().tolist()))
-    if radius > 0:
-        c.clipRRect(skia.RRect.MakeRectXY(R(0, 0, W, H), radius, radius), True)
-    p = skia.Paint(AntiAlias=True)
-    p.setAlphaf(clamp(alpha))
-    c.drawImageRect(img, R(0, 0, W, H), E.SAMP, p)
-    if edge > 0:
-        rrect_stroke(c, R(1, 1, W - 2, H - 2), radius, "#BFD8FF", 0.55 * edge, 3.0)
-        sh = skia.GradientShader.MakeLinear([skia.Point(0, 0), skia.Point(W, H)],
-                                            [colint(WHITE, 0.10 * edge), colint(WHITE, 0.0)], [0.0, 0.5])
-        c.drawRect(R(0, 0, W, H), skia.Paint(Shader=sh))
+    c.translate(W / 2, H / 2)
+    c.scale(z, z)
+    c.translate(-W / 2, -H / 2)
+    A.blur_layer(c, 7 * q * q, 1.0)
+    O.table(c, s)
+    O.card(c, s)
+    O.send(c, s)
     c.restore()
-
-
-def panel_shot(c, t):
-    quad, u = panel_quad(t)
-    away = prog(t, AWAY0, AWAY_D)
-    a = 1 - e_in_cubic(prog(t, AWAY0 + 0.25, AWAY_D - 0.2))
-    if a <= 0.003:
-        return
-    A.blur_layer(c, 10 * e_in_cubic(away), a)
-    warp(c, A.snap(10, lambda cc: O.render(cc, min(t, O.T0 + (O.NF - 1) / 24.0))), quad, 1.0, 40 * u, u)
     c.restore()
-
-
-def space(c, t, u):
-    """The blue space the panel floats in (same light as the ontology stage it leads to)."""
-    c.drawRect(R(0, 0, W, H), paint_fill("#081430", 1.0))
-    sh = skia.GradientShader.MakeRadial(skia.Point(W / 2, -120), 1300, [colint("#5E7FD0", 0.55),
-                                                                         colint("#22407E", 0.35),
-                                                                         colint("#081430", 0.0)], [0.0, 0.45, 1.0])
-    c.drawPaint(skia.Paint(Shader=sh))
-    E.radial(c, W / 2, H / 2 + 60, 1000, "#3A63C8", 0.25)
 
 
 # ---------------------------------------------------------------- the ontology
@@ -163,7 +98,7 @@ def punch(t):
 
 
 def cam(t):
-    a = e_io_sine(prog(t, BUILD0, PUNCH0 - BUILD0))       # slow orbit in from the left
+    a = e_io_sine(prog(t, ORBIT0, PUNCH0 - ORBIT0))       # slow orbit in from the left
     b = punch(t)
     d = prog(t, PUNCH0 + PUNCH_D, T_END - PUNCH0 - PUNCH_D)  # then a slow drift
     yaw = lerp(-36, -18, a)
@@ -448,19 +383,19 @@ def onto_full(c, t):
 
 
 def render(c, t):
-    k = e_io_sine(prog(t, ZIN0, 0.45))
-    if k > 0:                                            # the ontology, coming down from enlarged
-        z = lerp(ZIN_Z, 1.0, e_out_cubic(prog(t, ZIN0, ZIN_D)))
-        c.save()
-        c.translate(W / 2, H / 2)
-        c.scale(z, z)
-        c.translate(-W / 2, -H / 2)
-        A.blur_layer(c, 14 * (1 - e_out_cubic(prog(t, ZIN0, 0.8))), k)
-        onto_full(c, t)
-        c.restore()
-        c.restore()
-    if t < AWAY0 + AWAY_D:                               # the previous frame, pulling back and away on top
-        panel_shot(c, t)
+    if t < CUT:
+        ocr_pullback(c, t)
+        return
+    z = lerp(ZIN_Z, 1.0, e_out_expo(prog(t, CUT, ZIN_D)))
+    ax, ay, _ = cam(t)(0.0, 0.0, 0.6)                    # pull back from the middle of the platform
+    c.save()
+    c.translate(ax, ay)
+    c.scale(z, z)
+    c.translate(-ax, -ay)
+    A.blur_layer(c, 8 * (1 - e_out_cubic(prog(t, CUT, 0.35))), 1.0)
+    onto_full(c, t)
+    c.restore()
+    c.restore()
 
 
 def frame(f, surf, finish):

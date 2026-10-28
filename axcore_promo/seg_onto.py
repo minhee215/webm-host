@@ -222,11 +222,14 @@ def flow_lane(c, t, P, lit, pp):
         rrect(c, r, 18, "#1E4FC0" if passed else "#13285C", 0.92 * k)
         rrect_stroke(c, r, 18, CYAN if passed else "#6F9BFF", k, 1.3)
         text(c, lab, sx, r.top() + 24, 18, "SemiBold", WHITE, k, "center")
-        h = lit[ent] if 0 < pp < 1.0 else 0.0
-        if h > 0.02:
+        # the link to what the step depends on: drawn as the pulse passes, then it stays (bright while lit)
+        g = e_out_cubic(clamp((pp - f) * 5)) if pp > f else 0.0
+        if g > 0:
+            h = clamp((pp - f) * 7) * (1 - clamp((pp - f - 0.3) * 3))
             (ex, ez), _, _ = ENT[ent]
             q = P(ex, 0.05, ez)
-            line(c, E.curve((sx, sy - 10), q[:2], 0.3, False), CYAN, 0.9 * h, 2.0, glow=0.8 * h)
+            line(c, E.curve((sx, sy - 10), q[:2], 0.3, False), CYAN, 0.45 + 0.5 * h, 1.6 + 0.6 * h, (0, g),
+                 glow=0.3 + 0.5 * h)
 
 
 def relations(c, t, P, lit):
@@ -352,7 +355,8 @@ def title(c, t):
     L = E.logo()
     lw = 330
     tw = text_w("Ontology", 52, "Light")
-    x0 = W / 2 - (lw + 28 + tw) / 2
+    gap = 14
+    x0 = W / 2 - (lw + gap + tw) / 2
     y0 = 215
     c.save()
     c.translate(W / 2, y0)
@@ -360,7 +364,7 @@ def title(c, t):
     c.translate(-W / 2, -y0)
     A.blur_layer(c, 12 * (1 - k), k)
     L.draw(c, x0 + lw / 2, y0, lw, e_io_cubic(prog(t, CUE["ONTO"] - 0.15, 0.6)), k, (k, k, k), True, 1.0)
-    text(c, "Ontology", x0 + lw + 28, y0 + 22, 52, "Light", WHITE, 1.0)
+    text(c, "Ontology", x0 + lw + gap, y0 + 22, 52, "Light", WHITE, 1.0)
     c.restore()
     c.restore()
     fl = math.sin(math.pi * clamp(prog(t, CUE["ONTO"] - 0.1, 0.8)))

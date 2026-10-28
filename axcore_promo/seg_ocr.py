@@ -34,6 +34,7 @@ NF = 62 * 24 + 19 - F_TL + 1     # through 00:01:02:19 (119 frames)
 T0 = F_TL / 24.0
 VIOLET = "#8B6CFF"
 BG_DIR = os.path.join(E.HERE, "clips", "bg_ocr_lo")
+BG_DIR_HI = os.path.join(E.HERE, "clips", "bg_ocr_hi")
 BG_SHARP = 12                    # frames 0-11 sharp (640 wide); later frames come pre-blurred (480 wide, sigma 2.2)
 BG_PRE = 2.2 * W / 480           # their blur in logical px
 BG_BLUR = 30.0
@@ -63,7 +64,8 @@ _BG = {}
 def bg_img(i):
     i = max(0, min(NF - 1, i))
     if i not in _BG:
-        _BG[i] = skia.Image.open(os.path.join(BG_DIR, "%03d.png" % i))
+        hi = os.path.join(BG_DIR_HI, "%03d.jpg" % i)          # the first frames, still sharp, at full size
+        _BG[i] = skia.Image.open(hi if SCV > 1 and os.path.exists(hi) else os.path.join(BG_DIR, "%03d.png" % i))
     return _BG[i]
 
 

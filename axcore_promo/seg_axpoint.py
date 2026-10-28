@@ -35,7 +35,7 @@ import skia
 import engine as E
 import scenes as S
 from engine import (W, H, R, BLUE, INK, STEEL, STEEL_200, STEEL_400, WHITE, NAVY_950, lerp, prog, clamp,
-                    e_io_cubic, e_io_sine, e_out_cubic, e_out_expo, enter, paint_fill, paint_stroke,
+                    e_io_cubic, e_io_sine, e_out_cubic, e_out_expo, paint_fill, paint_stroke,
                     rrect, rrect_stroke, text, text_w, icon, poly, line, pulse, radial, colint)
 
 FPS_NUM, FPS_DEN = 24000, 1001
@@ -51,7 +51,8 @@ SEARCH = R(600, 508, 720, 68)   # landing search bar (screen = page at the start
 BTN = R(1152, 516, 160, 52)     # its "기업 찾기" button; the diamond of the previous segment sits at its centre
 
 # shot boundaries (film time)
-T_DOCS, T_DIAG, T_CANDS, T_MON, T_CEIL = 31.10, 36.80, 39.45, 41.85, 43.60
+T_DOCS, T_DIAG, T_CANDS, T_MON, T_CEIL = 31.00, 36.80, 39.45, 41.85, 43.60
+XS = 1.0                        # landing -> upload: slide (the bar leaves left, the upload page comes in)
 XB = 0.65                       # soft cross-blur between shots
 
 
@@ -61,8 +62,8 @@ def ft(f):
 
 # ---------------------------------------------------------------- camera (per shot, page coordinates)
 # one slow, one-directional move per shot (reference 4: 150-400 px/s, zoom ~0.1/s, holds in between)
-CAM_INTRO = [(28.50, 960, 540, 1.0), (29.60, 960, 540, 1.0), (31.75, 988, 548, 1.20)]
-CAM_DOCS = [(31.10, 960, 500, 1.08), (33.50, 905, 498, 1.32), (34.45, 960, 540, 1.02), (37.45, 1010, 556, 1.12)]
+CAM_INTRO = [(28.50, 960, 540, 1.0), (32.00, 960, 540, 1.0)]
+CAM_DOCS = [(31.00, 960, 472, 1.12), (34.10, 990, 472, 1.12), (35.00, 960, 540, 1.0), (36.90, 1000, 556, 1.08)]
 CAM_DIAG = [(36.80, 930, 532, 1.03), (40.10, 895, 526, 1.15)]
 CAM_CANDS = [(39.45, 900, 515, 1.15), (41.90, 960, 540, 1.0), (42.60, 960, 540, 1.0)]
 
@@ -255,12 +256,12 @@ TYPE0, TYPE_D = 30.00, 0.55
 CLICK_SEARCH = 30.85
 
 
-def intro(c, t):
+def intro(c, t, dx=0.0, a=1.0, bg=True):
     p1 = e_io_cubic(prog(t, 28.50, 0.40))          # line -> bar outline
     p2 = e_out_cubic(prog(t, 28.78, 0.30))         # the bar fills white
     p3 = e_io_cubic(prog(t, 28.98, 0.8))          # the white spreads over the frame
     q = e_io_cubic(prog(t, 28.52, 0.48))           # diamond -> button
-    if p3 < 1:
+    if p3 < 1 and bg:
         # the navy stage of the previous segment, unchanged (its line and diamond are drawn below)
         S.S5_FRONT, S.S5_FRONT_END, S.S5_LINE_HIDE = True, "line", True
         T = t - 1.0
@@ -268,7 +269,7 @@ def intro(c, t):
         S.S5_LINE_HIDE = False
     c.save()
     apply_cam(c, CAM_INTRO, t)
-    if p3 > 0:
+    if p3 > 0 and bg:
         r0 = SEARCH
         big = R(-420, -560, W + 840, H + 1120)
         rr = skia.Rect.MakeLTRB(lerp(r0.left(), big.left(), p3), lerp(r0.top(), big.top(), p3),
@@ -280,6 +281,10 @@ def intro(c, t):
         c.restore()
         if p3 < 1:
             c.drawRRect(skia.RRect.MakeRectXY(rr, rad, rad), paint_stroke("#9DB8FF", 0.6 * (1 - p3), 3, blur=6))
+    lp = skia.Paint()
+    lp.setAlphaf(clamp(a))
+    c.saveLayer(None, lp)
+    c.translate(dx, 0)
     landing(c, t, p3)
     # the bar
     h = lerp(2.2, SEARCH.height(), p1)
@@ -334,6 +339,7 @@ def intro(c, t):
     cq = e_io_cubic(prog(t, 30.32, 0.48))
     cursor(c, lerp(1520, bx + 6, cq), lerp(760, by + 4, cq), ca, press)
     c.restore()
+    c.restore()
 
 
 def landing(c, t, p3):
@@ -374,14 +380,11 @@ FILES = [("X", "#1E9E5A", "생산일보_2026_09", "XLSX · 2.4MB"), ("P", "#E548
          ("X", "#1E9E5A", "재고 현황_10월", "XLSX · 1.6MB"), ("W", "#2F6BFF", "공정 개선 회의록", "DOCX · 0.4MB")]
 BOX = R(420, 410, 1080, 210)
 CHIP_H = 58
-DRAG0, DROP = 31.30, 32.05            # the file stack is dragged in, dropped on the box
-CHIP0 = 32.08
+DRAG0, DROP = 31.75, 32.60            # the file stack is dragged in, dropped on the box
+CHIP0 = 32.65
 PROMPT = [("사내 자료 33건을 올렸어요. ", None), ("업무 흐름과 개선 과제", "g"), ("를 진단해 주세요.", None)]
-PROMPT0, PROMPT_D = 32.55, 0.70
-SEND = 33.45
-ORBIT0 = 33.55
-CORE = (960, 560)
-RINGS = (153, 230, 330)
+PROMPT0, PROMPT_D = 33.05, 0.80
+SEND = 34.05
 
 
 def chip_w(i):
@@ -418,38 +421,29 @@ def row_xs():
     return xs
 
 
-def scroll_at(t):
-    """The row scrolls left to keep the newest chip in view (eased toward it)."""
-    xs = row_xs()
-    acc = 0.0
-    for k in range(int(max(0.0, t - CHIP0) * 24) + 1):
-        tt = CHIP0 + k / 24
-        n_in = sum(1 for i in range(len(FILES)) if tt >= CHIP0 + i * 0.075)
-        tgt = 0.0
-        if n_in:
-            tgt = max(0.0, xs[n_in - 1] + chip_w(n_in - 1) - (BOX.right() - 24))
-        acc += (tgt - acc) * 0.3
-    return acc
-
-
-def orbit_pos(i, t):
-    ring = RINGS[1 + i % 2]
-    a0 = -math.pi / 2 + i * (2 * math.pi / len(FILES)) + (0.35 if i % 2 else 0)
-    ang = a0 + 0.22 * (t - ORBIT0)
-    return CORE[0] + ring * math.cos(ang), CORE[1] + ring * 0.94 * math.sin(ang)
-
-
-def docs(c, t):
+def docs(c, t, dx_head=0.0, dx_box=0.0, a_in=1.0, bg=True):
+    """File upload (drag the stack onto the box, drop, type the request, send), then the files fly straight into
+    the work flow they belong to. dx_head / dx_box / a_in: the slide-in from the right (transition from the
+    landing page)."""
     c.save()
     apply_cam(c, CAM_DOCS, t)
-    light_bg(c)
-    o = e_io_cubic(prog(t, ORBIT0, 1.0))
-    nav(c, t, 1.0, 0 if t < ORBIT0 + 0.05 else 1)
-    ha = 1 - e_io_cubic(prog(t, ORBIT0 - 0.05, 0.3))
+    if bg:
+        light_bg(c)
+    o = e_io_cubic(prog(t, GRAPH0, 0.7))        # the box gives way to the work flow
+    lp = skia.Paint()
+    lp.setAlphaf(clamp(a_in))
+    c.saveLayer(None, lp)
+    c.save()
+    c.translate(dx_head, 0)
+    nav(c, t, 1.0, 0 if t < GRAPH0 + 0.05 else 1)
+    ha = 1 - e_io_cubic(prog(t, GRAPH0 - 0.05, 0.4))
     if ha > 0:
         mixed(c, [(COMPANY, "g"), (" 자료를 올려 주세요", None)], 960, 332, 36, "Bold", ha, "center")
         text(c, "문서 · 엑셀 · PDF · 한글 파일을 그대로 올리면 AXpoint가 읽고 분류해요", 960, 372, 17, "Medium", STEEL,
              ha, "center")
+    c.restore()
+    c.save()
+    c.translate(dx_box, 0)
     # the prompt box
     ba = 1 - o
     if ba > 0.003:
@@ -499,65 +493,37 @@ def docs(c, t):
             cq = e_io_cubic(prog(t, SEND - 0.65, 0.58))
             cursor(c, lerp(1180, sx + 4, cq), lerp(660, sy + 4, cq), 1.0, press)
         c.restore()
-    # files: in the row, lifted into orbit, then sorted into the work flow
+    # files: in the box, then each flies into its place in the work flow
     xs = row_xs()
+    if t > GRAPH0:
+        graph(c, t)
     clip = o <= 0
     if clip:
         c.save()
         c.clipRRect(skia.RRect.MakeRectXY(BOX.makeInset(2, 2), 22, 22), skia.ClipOp.kIntersect, True)
-    gq = e_io_cubic(prog(t, GRAPH0, 0.7))        # orbit -> graph
-    # orbit: rings and the reading core (behind the files)
-    if o > 0 and gq < 1:
-        oa = o * (1 - gq)
-        for j, r in enumerate(RINGS):
-            c.drawOval(R(CORE[0] - r, CORE[1] - r * 0.94, 2 * r, 2 * r * 0.94),
-                       paint_stroke("#BFCBF2", 0.9 * oa * (0.6 if j == 0 else 1.0), 1.3))
-        ck = e_io_sine(prog(t, ORBIT0 + 0.15, 0.7)) * (1 - gq)
-        radial(c, CORE[0], CORE[1], 180, "#A9B8FF", 0.55 * ck, blend=skia.BlendMode.kSrcOver)
-        sh = skia.GradientShader.MakeLinear([skia.Point(CORE[0] - 48, CORE[1] - 48), skia.Point(CORE[0] + 48, CORE[1] + 48)],
-                                            [colint(BLUE, ck), colint(VIOLET, ck)])
-        c.drawCircle(CORE[0], CORE[1], 48 * ck, skia.Paint(AntiAlias=True, Shader=sh))
-        diamond(c, CORE[0], CORE[1], 20 * ck, WHITE, ck, rot=90 * (1 - ck))
-        g = e_io_sine(prog(t, ORBIT0 + 0.2, 0.85))
-        if g > 0.005:
-            c.drawArc(R(CORE[0] - 66, CORE[1] - 66, 132, 132), -90, 360 * g, False, paint_stroke(BLUE, ck, 3.2))
-    if t > GRAPH0:
-        graph(c, t)
     for i in range(len(FILES)):
         k = e_io_sine(prog(t, CHIP0 + i * 0.08, 0.5))
         if k <= 0:
             continue
         rx, ry = xs[i] - 24 * (1 - k), BOX.top() + 22
-        if o > 0:                               # chips past the box edge leave from inside it
-            rx = min(rx, BOX.right() - 24 - chip_w(i))
+        inside = xs[i] + chip_w(i) <= BOX.right() - 24
         if o <= 0:
             file_chip(c, i, rx, ry, k)
             continue
-        ox, oy = orbit_pos(i, min(t, GRAPH0))
-        w = chip_w(i) * 0.9
-        q = e_io_cubic(prog(t, ORBIT0 + i * 0.04, 1.0))
-        x = lerp(rx, ox - w / 2, q)
-        y = lerp(ry, oy - CHIP_H * 0.45, q) - 40 * math.sin(math.pi * q)
-        s_ = lerp(1.0, 0.9, q)
-        m = e_io_cubic(prog(t, GRAPH0 + i * 0.05, 0.85))     # into its node
-        if m > 0:
-            nr = node_rect(FILE_NODE[i])
-            x, y = lerp(x, nr.left(), m), lerp(y, nr.top(), m) - 30 * math.sin(math.pi * m)
-            s_ = lerp(s_, 0.8, m)
+        rx = min(rx, BOX.right() - 24 - chip_w(i))      # chips past the box edge leave from inside it
+        m = e_io_cubic(prog(t, GRAPH0 + i * 0.06, 0.9))
+        nr = node_rect(FILE_NODE[i])
+        x, y = lerp(rx, nr.left(), m), lerp(ry, nr.top(), m) - 40 * math.sin(math.pi * m)
         if m < 1:
-            vis_ = 1.0 if xs[i] + chip_w(i) <= BOX.right() - 24 else o
-            file_chip(c, i, x, y, (1.0 - m) * vis_, s_, check=e_io_sine(prog(t, ORBIT0 + 0.4 + i * 0.07, 0.35)))
+            file_chip(c, i, x, y, (1.0 - m) * (1.0 if inside else o), lerp(1.0, 0.8, m))
     if clip:
         c.restore()
-    if o > 0:
-        g = e_io_sine(prog(t, ORBIT0 + 0.2, 0.85))
-        k1 = e_io_sine(prog(t, ORBIT0 + 0.25, 0.5)) * (1 - e_io_sine(prog(t, GRAPH0 + 0.02, 0.35)))
-        k2, dy, _ = blur_in(t, GRAPH0 + 0.3, 0.6)
-        mixed(c, [("자료 ", None), ("%d건" % int(round(33 * g)), "g"), ("을 확인하고 있어요", None)], 960, 222, 32, "Bold",
-              k1, "center")
-        mixed(c, [("흩어진 자료를 ", None), ("업무 흐름", "g"), ("으로 정리했어요", None)], 960, 250 + dy, 32, "Bold", k2,
-              "center")
     drag_stack(c, t)
+    c.restore()
+    k2, dy, _ = blur_in(t, GRAPH0 + 0.3, 0.6)
+    mixed(c, [("자료 33건을 ", None), ("업무 흐름", "g"), ("으로 정리했어요", None)], 960, 250 + dy, 32, "Bold", k2,
+          "center")
+    c.restore()
     c.restore()
 
 
@@ -593,7 +559,7 @@ def drag_stack(c, t):
 
 
 # work flow (ontology) the documents are sorted into: (title, category, documents, x, y, broken record)
-GRAPH0 = 34.65
+GRAPH0 = 34.25
 CAT_COL = {"영업관리": "#4A78E8", "제품설계": "#8A63D2", "생산관리": "#2E9E5B", "품질검사": "#D08A2E",
            "장비관리": "#2AA7C8", "재고물류": "#C8508A", "고객지원": "#5B8DEF", "경영지원": "#7A8699"}
 NODES = [("수주 접수", "영업관리", ["수주 현황"], 230, 290), ("초도 설계 승인", "제품설계", ["제품 도면", "규격서"], 470, 290),
@@ -611,7 +577,7 @@ EDGES = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (6, 2), (7, 2), (2, 8), (8, 3),
 FILE_NODE = [3, 4, 3, 11, 0, 13, 7, 9]           # which node each uploaded file belongs to
 NW, NH = 200, 72
 DIAG_BTN = R(1510, 838, 214, 50)
-CLICK_DIAG = GRAPH0 + 1.85
+CLICK_DIAG = GRAPH0 + 2.30
 
 
 def node_rect(j):
@@ -619,7 +585,7 @@ def node_rect(j):
 
 
 def node_time(j):
-    return GRAPH0 + 0.2 + (NODES[j][3] - 230) / 1300 * 0.65 + (NODES[j][4] - 290) / 340 * 0.15
+    return GRAPH0 + 0.25 + (NODES[j][3] - 230) / 1300 * 0.8 + (NODES[j][4] - 290) / 340 * 0.2
 
 
 def edge_path(a, b):
@@ -676,7 +642,7 @@ def graph(c, t):
             continue
         r = node_rect(j).makeOffset(0, dy)
         broken = j in BROKEN
-        flag = e_io_sine(prog(t, GRAPH0 + 1.2, 0.6)) if broken else 0.0
+        flag = e_io_sine(prog(t, GRAPH0 + 1.4, 0.6)) if broken else 0.0
         blur_layer(c, bl, k)
         rrect(c, r.makeOffset(0, 4), 12, "#3A55B8", 0.06, blur=8)
         rrect(c, r, 12, colint_mix(WHITE, "#FDECEE", flag), 1.0)
@@ -688,12 +654,12 @@ def graph(c, t):
         if broken:
             text(c, "기록 끊김", r.right() - 12, r.top() + 27, 12, "Bold", "#E5484D", flag, "right")
             text(c, "문서 없음", r.left() + 14, r.top() + 55, 11, "Medium", "#E5484D", flag)
-            q = prog(t, GRAPH0 + 1.2, 0.9)
+            q = prog(t, GRAPH0 + 1.4, 0.9)
             if 0 < q < 1:
                 rrect_stroke(c, r.makeOutset(14 * q, 14 * q), 14, "#E5484D", 0.6 * (1 - q), 2.0)
         c.restore()
     # legend, finding, the next step
-    k, dy, _ = blur_in(t, GRAPH0 + 1.05, 0.6)
+    k, dy, _ = blur_in(t, GRAPH0 + 1.35, 0.6)
     if k > 0:
         items = list(CAT_COL.items()) + [("기록 끊김 2곳", "#E5484D")]
         tw = sum(text_w(n, 13, "Medium") + 34 for n, _ in items)
@@ -704,7 +670,7 @@ def graph(c, t):
                            "#E5484D" if colr == "#E5484D" else STEEL, k) + 12
         text(c, "표준 대비 기록 미확인 업무 26건  ·  설비 점검 · 견적 산출 기록이 끊겨 있어요", 960, 816 + dy, 14,
              "Medium", STEEL, k, "center")
-    kb = e_io_sine(prog(t, GRAPH0 + 1.2, 0.5))
+    kb = e_io_sine(prog(t, GRAPH0 + 1.6, 0.5))
     if kb > 0:
         press = math.sin(math.pi * prog(t, CLICK_DIAG - 0.05, 0.22))
         b = DIAG_BTN
@@ -925,8 +891,13 @@ def xblur(c, t, t0, d, fa, fb):
 def part_a(c, t):
     if t < T_DOCS:
         intro(c, t)
-    elif t < T_DOCS + XB:
-        xblur(c, t, T_DOCS, XB, intro, docs)
+    elif t < T_DOCS + XS:
+        # the landing content slides out to the left, the upload page's parts come in from the right (eased, staggered)
+        po = e_io_cubic(prog(t, T_DOCS, 0.8))
+        kh = e_io_cubic(prog(t, T_DOCS + 0.12, 0.8))
+        kb = e_io_cubic(prog(t, T_DOCS + 0.22, 0.78))
+        docs(c, t, 900 * (1 - kh), 900 * (1 - kb), kh)
+        intro(c, t, -1100 * po, 1 - e_io_sine(prog(t, T_DOCS + 0.2, 0.55)), bg=False)
     elif t < T_DIAG:
         docs(c, t)
     elif t < T_DIAG + XB:

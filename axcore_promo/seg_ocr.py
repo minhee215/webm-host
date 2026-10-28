@@ -11,7 +11,8 @@
          down it and the handwriting turns into digital fields (OCR); the record flies into the table as its new row
 Frame f is timeline frame 1389 + f; film time = timeline frame / 24 (narration at its original timing).
 23.976 fps, 21:9 letterbox.
-Usage: python3 seg_ocr.py <out.mp4> [height=480] [first last]
+Usage: python3 seg_ocr.py [--head] <out.mp4> [height=480] [first last]
+  --head: 3 s that replace the segment's first 2 s, one more second of the sharp plate before the cut-in
 """
 import math
 import os
@@ -69,14 +70,40 @@ def bg_img(i):
     return _BG[i]
 
 
+# --head: one more second of the sharp plate before the cut-in. 72 frames: 24 new ones, then the segment's own
+# first 48 frames, the last one identical to the segment's frame 47, so its frame 48 on follows straight after.
+# There is no plate before its frame 0, so the plate is slowed down in the head and speeds up to normal by the
+# join (plate frame = a*f + b*f^2, reaching frame 47 at slope 1); the sharp frames come in-betweened at full size
+# (clips/bg_ocr_head, frame f of the head).
+HEAD = 24
+HEAD_NF = HEAD + 48
+HEAD_B = HEAD / (HEAD_NF - 1) ** 2
+HEAD_A = 1 - 2 * (HEAD_NF - 1) * HEAD_B
+HEAD_DIR = os.path.join(E.HERE, "clips", "bg_ocr_head")
+HEAD_F = None                    # the head frame being drawn (None: the segment itself)
+
+
+def head_plate(f):
+    return HEAD_A * f + HEAD_B * f * f
+
+
 def background(c, s):
     c.drawRect(R(0, 0, W, H), paint_fill("#071230", 1.0))
     i = int(round(s * 24))
-    img = bg_img(i)
+    sharp = i < BG_SHARP
+    if HEAD_F is None:
+        img = bg_img(i)
+    elif sharp:
+        key = ("head", HEAD_F)
+        if key not in _BG:
+            _BG[key] = skia.Image.open(os.path.join(HEAD_DIR, "%03d.jpg" % HEAD_F))
+        img = _BG[key]
+    else:
+        img = bg_img(int(round(head_plate(HEAD_F))))
     k = max(W / img.width(), H / img.height())
     z = 1.02 + 0.05 * s / 5.0                             # a slow push the whole time
     target = BG_BLUR * e_io_sine(prog(s, 0.10, 0.45))
-    blur = target if i < BG_SHARP else math.sqrt(max(0.0, BG_BLUR ** 2 - BG_PRE ** 2))
+    blur = target if sharp else math.sqrt(max(0.0, BG_BLUR ** 2 - BG_PRE ** 2))
     p = skia.Paint(AntiAlias=True)
     p.setColorFilter(E.grade_filter(bright=1.0, contrast=1.02, sat=0.95))
     if blur > 0.1:
@@ -610,10 +637,30 @@ def frame(f, surf, finish):
     return np.ascontiguousarray(fr)
 
 
+def head_frame(f, surf, finish):
+    """Frame f of the head: film time and grain as the segment's frame f - HEAD."""
+    global HEAD_F
+    HEAD_F = f
+    c = surf.getCanvas()
+    c.clear(skia.Color4f(0, 0, 0, 1))
+    c.save()
+    c.scale(SCV, SCV)
+    render(c, ft(f - HEAD))
+    c.restore()
+    fr = finish.apply(surf, F_TL + f - HEAD)
+    bar = int(round(BAR * SCV))
+    fr[:bar] = 0
+    fr[-bar:] = 0
+    return np.ascontiguousarray(fr)
+
+
 if __name__ == "__main__":
+    head = "--head" in sys.argv
+    if head:
+        sys.argv.remove("--head")
     out = sys.argv[1]
     height = int(sys.argv[2]) if len(sys.argv) > 2 else 480
-    F0, F1 = (int(sys.argv[3]), int(sys.argv[4])) if len(sys.argv) > 4 else (0, NF)
+    F0, F1 = (int(sys.argv[3]), int(sys.argv[4])) if len(sys.argv) > 4 else (0, HEAD_NF if head else NF)
     width = int(round(height * 16 / 9 / 2)) * 2
     surf, finish, SWD, SHD = A.setup(height)
     SCV = A.SCV
@@ -623,7 +670,7 @@ if __name__ == "__main__":
                             "-c:v", "libx264", "-preset", "medium", "-crf", "18" if height <= 1080 else "14",
                             "-pix_fmt", "yuv420p", "-movflags", "+faststart", out], stdin=subprocess.PIPE)
     for f in range(F0, F1):
-        enc.stdin.write(frame(f, surf, finish).tobytes())
+        enc.stdin.write((head_frame if head else frame)(f, surf, finish).tobytes())
     enc.stdin.close()
     enc.wait()
     print(out)

@@ -16,8 +16,8 @@ AXpoint blue fields in between.
   monitor  36:03  the page turns into a browser window and goes transparent: through it the man looking at it
                   (live action, locked-off)
   ceiling         low-angle shot of him at his desk (locked-off); M-AI Works feature cards with toggles hang under
-                  the ceiling, his choices switch them on, then the chosen ones become his company's M-AI Works
-                  workspace.
+                  the ceiling, his choices switch them on, then the chosen ones become his company's AI workspace
+                  (with the AI chat).
                   The UI is laid on the ceiling with one fixed perspective (the camera does not move), so it cannot
                   drift or shake.
 Frame f is timeline frame 684 + f; film time = timeline frame / 24. 23.976 fps, 21:9 letterbox.
@@ -51,8 +51,8 @@ SEARCH = R(600, 508, 720, 68)   # landing search bar (screen = page at the start
 BTN = R(1152, 516, 160, 52)     # its "기업 찾기" button; the diamond of the previous segment sits at its centre
 
 # shot boundaries (film time)
-T_DOCS, T_DIAG, T_CANDS, T_MON, T_CEIL = 30.50, 33.36, 34.55, 36.10, 37.45
-XB = 0.22                       # cross-blur length intro -> docs
+T_DOCS, T_DIAG, T_CANDS, T_MON, T_CEIL = 30.40, 33.30, 34.50, 36.10, 37.45
+XB = 0.55                       # soft cross-blur between shots
 
 
 def ft(f):
@@ -60,14 +60,11 @@ def ft(f):
 
 
 # ---------------------------------------------------------------- camera (per shot, page coordinates)
-CAM_INTRO = [(28.50, 960, 540, 1.0), (29.55, 960, 540, 1.0), (30.05, 1000, 560, 1.30), (30.38, 1150, 555, 1.48),
-             (30.70, 1232, 542, 2.7)]
-CAM_DOCS = [(30.50, 1240, 520, 1.95), (30.78, 1180, 520, 1.55), (31.20, 1240, 505, 1.48), (31.45, 1010, 530, 1.30),
-            (31.95, 960, 548, 1.08), (32.22, 960, 556, 1.0), (32.60, 560, 420, 1.52), (33.05, 1200, 500, 1.48),
-            (33.42, 1470, 760, 1.40)]
-CAM_DIAG = [(33.36, 860, 528, 1.32), (33.95, 960, 548, 1.0), (34.70, 975, 560, 1.03)]
-CAM_CANDS = [(34.55, 960, 560, 1.0), (34.95, 700, 488, 1.40), (35.55, 1180, 600, 1.34), (36.00, 960, 548, 1.01),
-             (36.20, 960, 540, 1.0)]
+# one slow, one-directional move per shot (reference 4: 150-400 px/s, zoom ~0.1/s, holds in between)
+CAM_INTRO = [(28.50, 960, 540, 1.0), (29.40, 960, 540, 1.0), (31.00, 990, 548, 1.22)]
+CAM_DOCS = [(30.40, 1040, 515, 1.26), (31.95, 960, 540, 1.0), (33.90, 1010, 556, 1.12)]
+CAM_DIAG = [(33.30, 930, 532, 1.04), (35.10, 900, 528, 1.14)]
+CAM_CANDS = [(34.50, 900, 515, 1.16), (36.10, 960, 540, 1.0), (36.40, 960, 540, 1.0)]
 
 
 def _hermite(keys, t):
@@ -196,9 +193,9 @@ def blur_layer(c, sigma, alpha=1.0):
 
 
 def blur_in(t, t0, d=0.5):
-    """(alpha, y offset, blur) of a soft blur-in entrance."""
-    k = e_out_cubic(prog(t, t0, d))
-    return k, 14 * (1 - k), 9 * (1 - k)
+    """(alpha, y offset, blur) of a soft blur-in entrance (never shorter than 0.6 s)."""
+    k = e_io_sine(prog(t, t0, max(d, 0.6)))
+    return k, 12 * (1 - k), 10 * (1 - k)
 
 
 STEPS = ["파일 업로드", "자료 확인", "진단 결과", "개선 과제", "보고서"]
@@ -261,7 +258,7 @@ CLICK_SEARCH = 30.36
 def intro(c, t):
     p1 = e_io_cubic(prog(t, 28.50, 0.40))          # line -> bar outline
     p2 = e_out_cubic(prog(t, 28.78, 0.30))         # the bar fills white
-    p3 = e_io_cubic(prog(t, 28.98, 0.52))          # the white spreads over the frame
+    p3 = e_io_cubic(prog(t, 28.98, 0.62))          # the white spreads over the frame
     q = e_io_cubic(prog(t, 28.52, 0.48))           # diamond -> button
     if p3 < 1:
         # the navy stage of the previous segment, unchanged (its line and diamond are drawn below)
@@ -320,7 +317,7 @@ def intro(c, t):
     text(c, "기업 찾기  →", bx, by + 6, 16, "Bold", WHITE, ta, "center")
     ripple(c, bx, by, t, CLICK_SEARCH, WHITE, 90)
     # dropdown with the found company
-    dk = e_out_expo(prog(t, TYPE0 + TYPE_D - 0.02, 0.4))
+    dk = e_io_sine(prog(t, TYPE0 + TYPE_D - 0.05, 0.5))
     if dk > 0:
         r = R(SEARCH.left(), SEARCH.bottom() + 14 + 10 * (1 - dk), SEARCH.width(), 74)
         rrect(c, r.makeOffset(0, 8), 18, "#3A55B8", 0.10 * dk, blur=16)
@@ -377,11 +374,11 @@ FILES = [("X", "#1E9E5A", "생산일보_2026_09", "XLSX · 2.4MB"), ("P", "#E548
          ("X", "#1E9E5A", "재고 현황_10월", "XLSX · 1.6MB"), ("W", "#2F6BFF", "공정 개선 회의록", "DOCX · 0.4MB")]
 BOX = R(420, 410, 1080, 210)
 CHIP_H = 58
-CHIP0 = 30.62
+CHIP0 = 30.55
 PROMPT = [("사내 자료 33건을 올렸어요. ", None), ("업무 흐름과 개선 과제", "g"), ("를 진단해 주세요.", None)]
-PROMPT0, PROMPT_D = 30.86, 0.42
-SEND = 31.36
-ORBIT0 = 31.42
+PROMPT0, PROMPT_D = 30.78, 0.42
+SEND = 31.28
+ORBIT0 = 31.35
 CORE = (960, 560)
 RINGS = (153, 230, 330)
 
@@ -445,7 +442,7 @@ def docs(c, t):
     c.save()
     apply_cam(c, CAM_DOCS, t)
     light_bg(c)
-    o = e_io_cubic(prog(t, ORBIT0, 0.62))
+    o = e_io_cubic(prog(t, ORBIT0, 0.8))
     nav(c, t, 1.0, 0 if t < ORBIT0 + 0.05 else 1)
     ha = 1 - e_io_cubic(prog(t, ORBIT0 - 0.05, 0.3))
     if ha > 0:
@@ -496,14 +493,14 @@ def docs(c, t):
     if clip:
         c.save()
         c.clipRRect(skia.RRect.MakeRectXY(BOX.makeInset(2, 2), 22, 22), skia.ClipOp.kIntersect, True)
-    gq = e_io_cubic(prog(t, GRAPH0, 0.3))        # orbit -> graph
+    gq = e_io_cubic(prog(t, GRAPH0, 0.5))        # orbit -> graph
     # orbit: rings and the reading core (behind the files)
     if o > 0 and gq < 1:
         oa = o * (1 - gq)
         for j, r in enumerate(RINGS):
             c.drawOval(R(CORE[0] - r, CORE[1] - r * 0.94, 2 * r, 2 * r * 0.94),
                        paint_stroke("#BFCBF2", 0.9 * oa * (0.6 if j == 0 else 1.0), 1.3))
-        ck = e_out_expo(prog(t, ORBIT0 + 0.15, 0.6)) * (1 - gq)
+        ck = e_io_sine(prog(t, ORBIT0 + 0.15, 0.7)) * (1 - gq)
         radial(c, CORE[0], CORE[1], 180, "#A9B8FF", 0.55 * ck, blend=skia.BlendMode.kSrcOver)
         sh = skia.GradientShader.MakeLinear([skia.Point(CORE[0] - 48, CORE[1] - 48), skia.Point(CORE[0] + 48, CORE[1] + 48)],
                                             [colint(BLUE, ck), colint(VIOLET, ck)])
@@ -515,7 +512,7 @@ def docs(c, t):
     if t > GRAPH0:
         graph(c, t)
     for i in range(len(FILES)):
-        k = e_out_cubic(prog(t, CHIP0 + i * 0.075, 0.35))
+        k = e_io_sine(prog(t, CHIP0 + i * 0.075, 0.5))
         if k <= 0:
             continue
         rx, ry = xs[i] - scr + 60 * (1 - k), BOX.top() + 22
@@ -524,17 +521,17 @@ def docs(c, t):
             continue
         ox, oy = orbit_pos(i, min(t, GRAPH0))
         w = chip_w(i) * 0.9
-        q = e_io_cubic(prog(t, ORBIT0 + i * 0.03, 0.62))
+        q = e_io_cubic(prog(t, ORBIT0 + i * 0.03, 0.8))
         x = lerp(rx, ox - w / 2, q)
         y = lerp(ry, oy - CHIP_H * 0.45, q) - 40 * math.sin(math.pi * q)
         s_ = lerp(1.0, 0.9, q)
-        m = e_io_cubic(prog(t, GRAPH0 + i * 0.03, 0.45))     # into its node
+        m = e_io_cubic(prog(t, GRAPH0 + i * 0.03, 0.65))     # into its node
         if m > 0:
             nr = node_rect(FILE_NODE[i])
             x, y = lerp(x, nr.left(), m), lerp(y, nr.top(), m) - 30 * math.sin(math.pi * m)
             s_ = lerp(s_, 0.8, m)
         if m < 1:
-            file_chip(c, i, x, y, 1.0 - m, s_, check=prog(t, 31.65 + i * 0.04, 0.22))
+            file_chip(c, i, x, y, 1.0 - m, s_, check=e_io_sine(prog(t, 31.62 + i * 0.04, 0.35)))
     if clip:
         c.restore()
     if o > 0:
@@ -549,7 +546,7 @@ def docs(c, t):
 
 
 # work flow (ontology) the documents are sorted into: (title, category, documents, x, y, broken record)
-GRAPH0 = 32.02
+GRAPH0 = 31.98
 CAT_COL = {"영업관리": "#4A78E8", "제품설계": "#8A63D2", "생산관리": "#2E9E5B", "품질검사": "#D08A2E",
            "장비관리": "#2AA7C8", "재고물류": "#C8508A", "고객지원": "#5B8DEF", "경영지원": "#7A8699"}
 NODES = [("수주 접수", "영업관리", ["수주 현황"], 230, 290), ("초도 설계 승인", "제품설계", ["제품 도면", "규격서"], 470, 290),
@@ -567,7 +564,7 @@ EDGES = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (6, 2), (7, 2), (2, 8), (8, 3),
 FILE_NODE = [3, 4, 3, 11, 0, 13, 7, 9]           # which node each uploaded file belongs to
 NW, NH = 200, 72
 DIAG_BTN = R(1510, 838, 214, 50)
-CLICK_DIAG = GRAPH0 + 1.24
+CLICK_DIAG = GRAPH0 + 1.20
 
 
 def node_rect(j):
@@ -604,7 +601,7 @@ def graph(c, t):
     for e in EDGES:
         a, b = e[0], e[1]
         kind = e[2] if len(e) > 2 else ""
-        g = e_out_cubic(prog(t, max(node_time(a), node_time(b)) + 0.12, 0.4))
+        g = e_io_sine(prog(t, max(node_time(a), node_time(b)) + 0.2, 0.6))
         if g <= 0:
             continue
         pth = edge_path(a, b)
@@ -627,12 +624,12 @@ def graph(c, t):
         if kind != "r":
             pulse(c, pth, ((t - GRAPH0 - 0.5) * 0.7 + a * 0.17) % 1.0 if t > GRAPH0 + 0.5 else 0, BLUE, 0.8, 6, 0.18)
     for j, (title, cat, docs_, x, y) in enumerate(NODES):
-        k, dy, bl = blur_in(t, node_time(j), 0.4)
+        k, dy, bl = blur_in(t, node_time(j), 0.6)
         if k <= 0:
             continue
         r = node_rect(j).makeOffset(0, dy)
         broken = j in BROKEN
-        flag = e_out_expo(prog(t, GRAPH0 + 0.85, 0.35)) if broken else 0.0
+        flag = e_io_sine(prog(t, GRAPH0 + 0.85, 0.5)) if broken else 0.0
         blur_layer(c, bl, k)
         rrect(c, r.makeOffset(0, 4), 12, "#3A55B8", 0.06, blur=8)
         rrect(c, r, 12, colint_mix(WHITE, "#FDECEE", flag), 1.0)
@@ -660,7 +657,7 @@ def graph(c, t):
                            "#E5484D" if colr == "#E5484D" else STEEL, k) + 12
         text(c, "표준 대비 기록 미확인 업무 26건  ·  설비 점검 · 견적 산출 기록이 끊겨 있어요", 960, 816 + dy, 14,
              "Medium", STEEL, k, "center")
-    kb = e_out_expo(prog(t, GRAPH0 + 0.9, 0.4))
+    kb = e_io_sine(prog(t, GRAPH0 + 0.75, 0.55))
     if kb > 0:
         press = math.sin(math.pi * prog(t, CLICK_DIAG - 0.05, 0.22))
         b = DIAG_BTN
@@ -683,7 +680,7 @@ AXES = [("AI 전략", 36.4), ("조직 · 문화", 54.8), ("업무 · 인재", 46
 FLOW = [("수주", None), ("생산 계획", "AI 적용"), ("자재 구매", None), ("가공 · 조립", "수기 기록"),
         ("품질 검사", "병목"), ("출하", None)]
 RC, RR = (760, 520), 230
-MORPH0, POLY0 = 33.66, 33.95
+MORPH0, POLY0 = 33.62, 33.98
 
 
 def ring_path(cx, cy, r, m, n=100):
@@ -708,28 +705,28 @@ def diag(c, t):
     c.drawRect(R(-2000, -2000, W + 4000, H + 4000), paint_fill(BLUE))
     radial(c, RC[0], RC[1], 900, "#2C72FF", 0.55, blend=skia.BlendMode.kSrcOver)
     m = e_io_cubic(prog(t, MORPH0, 0.42))
-    g = e_out_expo(prog(t, T_DIAG + 0.02, 0.5))
+    g = e_io_sine(prog(t, T_DIAG + 0.05, 0.6))
     for ring, al in ((1 / 3, 0.32), (2 / 3, 0.40), (1.0, 0.6)):
         c.drawPath(ring_path(RC[0], RC[1], RR * ring, m), paint_stroke(WHITE, al * g, 1.3))
-    sp = e_out_cubic(prog(t, MORPH0 + 0.2, 0.35))
+    sp = e_io_sine(prog(t, MORPH0 + 0.15, 0.5))
     for i in range(5):
         line(c, poly([RC, axis_pt(i, RR)]), WHITE, 0.30, 1.0, (0, sp))
-    lx = lerp(-200, 2200, e_io_cubic(prog(t, T_DIAG + 0.10, 0.5)))
+    lx = lerp(-200, 2200, e_io_sine(prog(t, T_DIAG + 0.15, 0.9)))
     c.drawLine(-200, RC[1], lx, RC[1], paint_stroke(WHITE, 0.85, 1.6))
-    if t > POLY0:
+    if t > POLY0 - 0.01:
         vals = []
         for i, (_, v) in enumerate(AXES):
-            k = enter(t, POLY0 + i * 0.06, 0.6, step=False, over=0.06)
+            k = e_io_cubic(prog(t, POLY0 + i * 0.05, 0.6))
             vals.append(axis_pt(i, RR * v / 70.0 * k))
         pg = poly(vals, True)
         c.drawPath(pg, paint_fill(WHITE, 0.22))
         c.drawPath(pg, paint_stroke(WHITE, 1.0, 3.0))
         for i, (x, y) in enumerate(vals):
-            k = e_out_expo(prog(t, POLY0 + 0.25 + i * 0.06, 0.35))
+            k = e_io_sine(prog(t, POLY0 + 0.3 + i * 0.05, 0.4))
             diamond(c, x, y, 7 * k, WHITE, 1.0)
     diamond(c, RC[0], RC[1], 22, WHITE, 1.0)
     for i, (name, v) in enumerate(AXES):
-        k = e_out_cubic(prog(t, T_DIAG + 0.12 + i * 0.04, 0.35))
+        k = e_io_sine(prog(t, T_DIAG + 0.2 + i * 0.05, 0.6))
         x, y = axis_pt(i, RR + 34)
         al = "center" if i == 0 else ("left" if i in (1, 2) else "right")
         y += {0: -8, 1: 6, 2: 22, 3: 22, 4: 6}[i]
@@ -747,7 +744,7 @@ def diag(c, t):
         text(c, name, 1190, yy + 6, 16, "SemiBold", WHITE, k)
         bb = R(1330, yy - 4, 200, 7)
         rrect(c, bb, 3.5, WHITE, 0.22 * k)
-        gg = e_out_expo(prog(t, POLY0 + 0.12 + i * 0.05, 0.7))
+        gg = e_io_cubic(prog(t, POLY0 + 0.12 + i * 0.05, 0.7))
         rrect(c, R(bb.left(), bb.top(), bb.width() * v / 70 * gg, 7), 3.5, ORANGE if i == lo else WHITE, k)
         text(c, "%.1f" % (v * gg), 1592, yy + 6, 16, "Bold", ORANGE if i == lo else WHITE, k, "right")
     c.restore()
@@ -802,7 +799,7 @@ def cands_page(c, t):
         rrect(c, r, 16, WHITE, 1.0)
         rrect_stroke(c, r, 16, LINE, 1.0, 1.2)
         w1 = chip(c, field, r.left() + 18, r.top() + 16, 11, STEEL, "#EEF1F6", 1.0, h=22, pad=9)
-        sk = e_out_expo(prog(t, card_time(i) + 0.15, 0.35))
+        sk = e_io_sine(prog(t, card_time(i) + 0.2, 0.5))
         chip(c, "★ 추천", r.left() + 24 + w1, r.top() + 16, 11, BLUE, "#E6EEFF", sk, h=22, pad=9)
         c.drawCircle(r.right() - 26, r.top() + 27, 10, paint_stroke(STEEL_200, 1.0, 1.4))
         text(c, title, r.left() + 18, r.top() + 72, 17, "Bold", INK, 1.0)
@@ -810,7 +807,7 @@ def cands_page(c, t):
         text(c, "예상 %s개월" % months, r.left() + 36, r.bottom() - 17, 13, "Medium", STEEL, 1.0)
         text(c, "자세히  ›", r.right() - 18, r.bottom() - 17, 13, "Medium", STEEL, 1.0, "right")
         c.restore()
-    kb = e_out_expo(prog(t, card_time(10) + 0.2, 0.5))
+    kb = e_io_sine(prog(t, card_time(10) + 0.2, 0.6))
     if kb > 0:
         bar = R(330, 866 + 10 * (1 - kb), 1260, 58)
         rrect(c, bar.makeOffset(0, 4), 14, "#3A55B8", kb * 0.08, blur=10)
@@ -868,51 +865,31 @@ def draw_img(c, img, alpha=1.0, blur=0.0, scale=1.0, cx=W / 2, cy=H / 2, dy=0.0)
 
 
 # ---------------------------------------------------------------- part A shots
+def xblur(c, t, t0, d, fa, fb):
+    """Soft cross-blur between two shots: the outgoing one softens and fades, the incoming one comes out of a blur;
+    both keep moving with their own (slow) cameras."""
+    p = e_io_sine(clamp((t - t0) / d))
+    A = snap(1, lambda cc: fa(cc, t))
+    B = snap(2, lambda cc: fb(cc, t))
+    draw_img(c, A, 1.0, 10 * p)
+    draw_img(c, B, p, 12 * (1 - p))
+
+
 def part_a(c, t):
     if t < T_DOCS:
         intro(c, t)
-        return
-    if t < T_DOCS + XB:
-        p = e_io_sine((t - T_DOCS) / XB)
-        A = snap(1, lambda cc: intro(cc, t))
-        B = snap(2, lambda cc: docs(cc, t))
-        draw_img(c, A, 1.0, 14 * p, 1 + 0.10 * p, BTN.centerX(), BTN.centerY())
-        draw_img(c, B, p, 12 * (1 - p))
-        return
-    if t < T_DIAG:
+    elif t < T_DOCS + XB:
+        xblur(c, t, T_DOCS, XB, intro, docs)
+    elif t < T_DIAG:
         docs(c, t)
-        return
-    if t < T_DIAG + 0.40:
-        u = e_io_cubic((t - T_DIAG) / 0.40)
-        docs(c, t)
-        B = snap(1, lambda cc: diag(cc, t))
-        c.save()
-        pth = skia.Path()
-        wx, wy = to_screen(CAM_DOCS, t, DIAG_BTN.centerX(), DIAG_BTN.centerY())
-        pth.addCircle(wx, wy, 30 + 2300 * u)
-        c.clipPath(pth, skia.ClipOp.kIntersect, True)
-        draw_img(c, B)
-        c.restore()
-        c.drawCircle(wx, wy, 30 + 2300 * u, paint_stroke(WHITE, 0.6 * (1 - u), 3, blur=6))
-        return
-    if t < T_CANDS:
+    elif t < T_DIAG + XB:
+        xblur(c, t, T_DIAG, XB, docs, diag)
+    elif t < T_CANDS:
         diag(c, t)
-        return
-    if t < T_CANDS + 0.42:
-        u = e_io_cubic((t - T_CANDS) / 0.42)
-        A = snap(1, lambda cc: diag(cc, t))
-        draw_img(c, A, 1.0, 10 * u, 1 - 0.04 * u)
-        c.drawRect(R(0, 0, W, H), paint_fill(NAVY_950, 0.25 * u))
-        B = snap(2, lambda cc: cands(cc, t))
-        dy = (1 - u) * H * 0.75
-        c.drawRRect(skia.RRect.MakeRectXY(R(0, dy - 10, W, H + 60), 40, 40), paint_fill(NAVY_950, 0.25, blur=30))
-        c.save()
-        rad = 40 * (1 - u)
-        c.clipRRect(skia.RRect.MakeRectXY(R(0, dy, W, H + 60), rad, rad), skia.ClipOp.kIntersect, True)
-        draw_img(c, B, 1.0, 0.0, 1.0, dy=dy)
-        c.restore()
-        return
-    cands(c, t)
+    elif t < T_CANDS + XB:
+        xblur(c, t, T_CANDS, XB, diag, cands)
+    else:
+        cands(c, t)
 
 
 # ---------------------------------------------------------------- frame
@@ -926,7 +903,7 @@ def render(c, t):
 # ---------------------------------------------------------------- part B: live action (locked-off plates)
 CDN = "https://d8j0ntlcm91z4.cloudfront.net/user_3JwpXeeJ8WaJK5V5Ms4Pu2KVkZS/"
 LIVE = {"monitor": ("b1_monitor.mp4", CDN + "hf_20261028_004148_2c7c34cb-57f6-4ff4-bf5b-c490635e2911.mp4", T_MON),
-        "ceiling": ("b2_ceiling.mp4", CDN + "hf_20261028_004148_e420303e-6979-4516-a9f1-db1d85ee86d8.mp4", T_CEIL)}
+        "ceiling": ("b2_ceiling2.mp4", CDN + "hf_20261028_010822_dc07b1e3-12b3-4b85-94d2-5e43eb076709.mp4", T_CEIL)}
 
 
 class Plate:
@@ -987,8 +964,8 @@ def chrome(c, a, y0):
 def monitor(c, t):
     """The page becomes a browser window and turns transparent; behind it, the man reading it (seen from the
     screen)."""
-    k1 = e_io_cubic(prog(t, T_MON, 0.35))           # the chrome comes in, the page settles under it
-    k2 = e_io_cubic(prog(t, T_MON + 0.25, 0.9))     # the page turns transparent
+    k1 = e_io_cubic(prog(t, T_MON, 0.6))            # the chrome comes in, the page settles under it
+    k2 = e_io_cubic(prog(t, T_MON + 0.3, 1.1))      # the page turns transparent
     img = plate("monitor", t)
     if k2 > 0 and img is not None:
         p = skia.Paint(AntiAlias=True)
@@ -1014,35 +991,24 @@ def monitor(c, t):
     c.restore()
 
 
-# the ceiling plane, from the plate (1920 x 1080): its two seam families meet at vanishing points on one horizon;
-# being at right angles they give the focal length, and with it the plane's true perspective. The UI lies in that
-# plane, turned so that its rows run level across the frame (like the reference), receding toward the horizon.
-VP_D, VP_C = (507.0, 933.0), (3483.0, 919.0)      # depth seams, cross seams
+# the ceiling plane, from the plate (1920 x 1080): the depth rails of its tile grid meet at one vanishing point, the
+# cross seams run level (one-point perspective, a 20 mm lens). The UI lies flush in that plane like the reference:
+# big translucent panels covering the whole ceiling, rows level, receding toward the back of the room.
+VP_D = (939.0, 1134.0)                             # depth rails
+F_LENS = 1066.0                                    # focal length (px at 1920 wide), 20 mm
 UW, UH = 2280.0, 680.0                             # UI plane size (units)
-UI_NEAR_L, UI_NEAR_W = (110.0, 176.0), 1080.0      # where its near-left corner sits, the near edge's length (px)
-UI_TILT = 0.45                                     # panels hang tilted toward the camera (0: flush with the ceiling)
+UI_NEAR_L, UI_NEAR_W = (-300.0, 128.0), 2520.0     # where its near-left corner sits, the near edge's length (px)
 
 
 def _plane_h():
     pp = np.array([W / 2, H / 2])
-    f = math.sqrt(-np.dot(np.array(VP_D) - pp, np.array(VP_C) - pp))
+    f = F_LENS
     K = np.array([[f, 0, pp[0]], [0, f, pp[1]], [0, 0, 1.0]])
     Ki = np.linalg.inv(K)
+    e1 = np.array([1.0, 0.0, 0.0])                 # level cross seams: parallel to the image rows
     rd = Ki @ np.array([*VP_D, 1.0])
-    rc = Ki @ np.array([*VP_C, 1.0])
-    rd, rc = rd / np.linalg.norm(rd), rc / np.linalg.norm(rc)
-    n = np.cross(rd, rc)
-    th = math.atan2(-rc[2], rd[2])                 # in-plane direction parallel to the image plane: level rows
-    e1 = math.cos(th) * rc + math.sin(th) * rd
-    e1 /= np.linalg.norm(e1)
-    if e1[0] < 0:
-        e1 = -e1
-    e2 = np.cross(n, e1)
-    e2 /= np.linalg.norm(e2)
-    if e2[2] < 0:
-        e2 = -e2                                   # +v recedes, toward the horizon
-    e2 = (1 - UI_TILT) * e2 + UI_TILT * np.array([0.0, 1.0, 0.0])
-    e2 /= np.linalg.norm(e2)
+    rd -= e1 * np.dot(rd, e1)
+    e2 = rd / np.linalg.norm(rd)                   # +v recedes, toward the back of the room
     P0 = Ki @ np.array([*UI_NEAR_L, 1.0])          # depth 1
     sc = UI_NEAR_W / (f * UW)
     return K @ np.column_stack([sc * e1, sc * e2, P0])
@@ -1068,10 +1034,10 @@ MODS = [("경영관리", "인사 · 급여 · 회계", "user"), ("제품설계",
         ("품질검사", "불량 분석 · 검수", "scan"), ("재고·물류", "실시간 재고 · 수요 예측", "box"),
         ("영업관리", "수주 · 단가 견적", "chart"), ("고객지원", "AS · VOC 분석", "chat")]
 ON_T = {1: 38.35, 2: 38.75, 3: 39.15, 4: 39.55, 5: 39.95}     # module -> switched on
-MW, MH, MG = 540.0, 300.0, 40.0
+MW, MH, MG = 540.0, 330.0, 36.0
 WS0 = 40.50                                                  # the chosen ones become the workspace
 WS_RECTS = {2: R(0, 190, 740, 230), 4: R(770, 190, 740, 230), 3: R(1540, 190, 740, 230),
-            1: R(385, 450, 740, 230), 5: R(1155, 450, 740, 230)}
+            1: R(0, 450, 740, 230), 5: R(770, 450, 740, 230), "chat": R(1540, 450, 740, 230)}
 WS_TITLE = {1: "도면 · BOM", 2: "생산 실적", 3: "설비 가동률", 4: "불량률 추이", 5: "실시간 재고"}
 
 
@@ -1127,6 +1093,16 @@ def mod_card(c, i, r, a, on):
 def widget(c, key, r, t, a):
     """Workspace widget: the switched-on feature at work."""
     g = e_out_cubic(prog(t, WS0 + 0.55, 0.9))
+    if key == "chat":
+        text(c, "AI 대화", r.left() + 40, r.top() + 64, 34, "Bold", INK, a)
+        b = R(r.left() + 40, r.top() + 92, 440, 52)
+        rrect(c, b, 26, "#EEF1F6", a * g)
+        text(c, "이번 주 불량 원인 알려줘", b.left() + 24, b.centerY() + 10, 26, "Medium", INK, a * g)
+        g2 = e_out_cubic(prog(t, WS0 + 1.1, 0.6))
+        b2 = R(r.left() + 140, r.top() + 158, 560, 52)
+        rrect(c, b2, 26, BLUE, a * g2)
+        text(c, "가공 · 조립 공정의 수기 기록이 원인이에요", b2.left() + 24, b2.centerY() + 9, 23, "SemiBold", WHITE, a * g2)
+        return
     text(c, MODS[key][0], r.left() + 40, r.top() + 60, 26, "SemiBold", STEEL, a)
     text(c, WS_TITLE[key], r.left() + 40, r.top() + 104, 38, "Bold", INK, a)
     x0, y0, x1, y1 = r.left() + 330, r.top() + 50, r.right() - 40, r.bottom() - 40
@@ -1167,7 +1143,7 @@ def ceiling_ui(c, t):
         k = e_out_cubic(prog(t, T_CEIL + 0.18 + (i % 4) * 0.07 + (i // 4) * 0.12, 0.6))
         if k <= 0:
             continue
-        on = e_io_cubic(prog(t, ON_T[i], 0.25)) if i in ON_T else 0.0
+        on = e_io_cubic(prog(t, ON_T[i], 0.4)) if i in ON_T else 0.0
         r0 = mod_rect(i).makeOffset(0, 160 * (1 - k))
         if i not in ON_T:
             a = k * (1 - w)
@@ -1191,20 +1167,25 @@ def ceiling_ui(c, t):
             widget(c, i, r, t, e_out_cubic((w - 0.5) * 2))
     if w > 0:
         a = e_out_cubic(prog(t, WS0 + 0.35, 0.6))
+        r = WS_RECTS["chat"].makeOffset(0, 80 * (1 - a))
+        blur_layer(c, 8 * (1 - a), a)
+        ceiling_card(c, r, 1.0, 0.0)
+        widget(c, "chat", r, t, 1.0)
+        c.restore()
         hr = R(0, 0, UW, 160).makeOffset(0, 60 * (1 - a))
         blur_layer(c, 8 * (1 - a), a)
         ceiling_card(c, hr, 1.0, 0.0)
         diamond(c, hr.left() + 70, hr.centerY(), 24, BLUE, 1.0)
         text(c, COMPANY, hr.left() + 118, hr.centerY() - 8, 30, "SemiBold", STEEL, 1.0)
-        mixed(c, [("M-AI Works", "g"), (" 워크스페이스", None)], hr.left() + 118, hr.centerY() + 44, 48, "Bold", 1.0)
+        mixed(c, [("AI ", "g"), ("워크스페이스", None)], hr.left() + 118, hr.centerY() + 44, 48, "Bold", 1.0)
         chip(c, "기능 5개 연결됨", hr.right() - 40, hr.centerY() - 26, 26, BLUE, "#E6EEFF", 1.0, h=52, right=True, pad=24)
         c.restore()
 
 
 def caption(c, t):
     """Lower-left title over the shot (reference look)."""
-    for t0, t1, small, big in ((37.85, WS0 - 0.1, "필요한 기능만 골라 켜는", "M-AI Works 워크스페이스"),
-                               (WS0 + 0.2, 99, "우리 회사에 맞게 구성된", "M-AI Works 워크스페이스")):
+    for t0, t1, small, big in ((37.85, WS0 - 0.1, "필요한 기능만 골라 켜는", "M-AI Works"),
+                               (WS0 + 0.2, 99, "우리 회사에 맞게 구성된", "AI 워크스페이스")):
         k = e_out_cubic(prog(t, t0, 0.5)) * (1 - e_io_cubic(prog(t, t1, 0.3)))
         if k <= 0:
             continue
@@ -1241,12 +1222,12 @@ def part_b(c, t):
     if t < T_CEIL:
         monitor(c, t)
         return
-    if t < T_CEIL + 0.25:
-        u = e_io_cubic((t - T_CEIL) / 0.25)
+    if t < T_CEIL + 0.55:
+        u = e_io_sine((t - T_CEIL) / 0.55)
         A = snap(2, lambda cc: monitor(cc, t))
         B = snap(3, lambda cc: ceiling(cc, t))
         draw_img(c, B, 1.0, 10 * (1 - u))
-        draw_img(c, A, 1 - u, 12 * u, 1.0, dy=-260 * u)
+        draw_img(c, A, 1 - u, 12 * u, 1.0, dy=-140 * u)
         return
     ceiling(c, t)
 

@@ -11,6 +11,8 @@ type than before; their content after the client's cards (team chip + the questi
   91.9   match cut to the robot cell: 구매팀 · 새 도면, 자재 발주까지 돼? - the steps check themselves (AUTO);
   93.45  "설비와 로봇까지 연결하며": the card slides up to 설비팀 · 오래된 설비도 연결돼? (the machines, 연결됨)
          and a link runs to the robot gripper (로봇 셀 R-02 · 연결됨)
+  95.20  out: the robot shot goes soft while the next scene's factory comes in (already out of focus, punched in,
+         as the original SC20 opens) and the 분석 | 실행 switch rises from below to the centre
 Frame f is timeline frame 2060 + f; film time = timeline frame / 24. 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_ops.py <out.mp4> [height=480] [first last]
 """
@@ -347,7 +349,63 @@ def shot(c, i, t):
         robots(c, t, cam)
 
 
+# ---------------------------------------------------------------- out: into the next scene (analysis / execution)
+OUT0 = 95.20                     # after "연결하며" (95.17): the robot shot goes soft
+FAC0, FAC_D = 95.85, 4.05        # the next scene's factory shot (the original film's clock)
+SC20_OUT = 96.80                 # ... where it snaps open later (film time of the original SC20_OUT)
+
+
+def factory_soft(c, t):
+    """The next scene's opening state: the factory punched in and out of focus, as the original SC20 begins."""
+    creep = e_io_sine(prog(t, SC20_OUT - 1.15, 1.15))
+    z = 1.85 + 0.06 * creep
+    c.save()
+    c.translate(W / 2, H / 2 - 24)
+    c.scale(z, z)
+    c.translate(-W / 2, -H / 2)
+    lp = skia.Paint()
+    lp.setImageFilter(skia.ImageFilters.Blur(11, 11, skia.TileMode.kClamp))
+    c.saveLayer(None, lp)
+    E.draw_plate(c, "18_factory", t - FAC0, FAC_D, s=(1.05, 1.16), y=(20, -10), grade=S.GRADE_COOL)
+    c.drawRect(R(-W, -H, 3 * W, 3 * H), paint_fill(NAVY_950, 0.18))
+    c.restore()
+    c.restore()
+
+
+def toggle(c, t):
+    """The analysis / execution switch rising from below to the centre (large), as the next scene shows it."""
+    q = e_out_cubic(prog(t, OUT0 + 0.08, 0.55))
+    a = e_io_sine(prog(t, OUT0 + 0.08, 0.35))
+    if a <= 0.003:
+        return
+    fin = R(110, 176, 470, 100)
+    cy = lerp(H + 140, H / 2 - 30, q)
+    A.blur_layer(c, 10 * (1 - q), a)
+    c.save()
+    c.translate(W / 2, cy)
+    c.scale(1.8, 1.8)
+    c.translate(-fin.centerX(), -fin.centerY())
+    r = fin
+    E.glass(c, r, 50, 1.0, tint=S.NAVY_800, tint_a=0.5, blur=20, border=0.5, shadow=0.3, glow=0.15, glow_col=CYAN)
+    rrect(c, R(r.left() + 10, r.top() + 10, 225, 80), 40, CYAN, 1.0)
+    text(c, "분석", r.left() + 122, r.centerY() + 8, 22, "SemiBold", S.NAVY_900, 1.0, "center")
+    text(c, "실행", r.left() + 348, r.centerY() + 8, 22, "SemiBold", WHITE, 1.0, "center")
+    c.restore()
+    c.restore()
+
+
 def render(c, t):
+    if t >= OUT0:
+        bl = 18 * e_io_sine(prog(t, OUT0, 0.45))
+        fx = e_io_sine(prog(t, OUT0 + 0.12, 0.42))
+        if fx < 1:
+            img = A.snap(30, lambda cc: shot(cc, 2, t))
+            A.draw_img(c, img, 1.0, bl, 1.0 + 0.04 * e_io_sine(prog(t, OUT0, 0.6)))
+        if fx > 0:
+            img = A.snap(31, lambda cc: factory_soft(cc, t))
+            A.draw_img(c, img, fx)
+        toggle(c, t)
+        return
     for i, (c0, cd, kind, kw) in enumerate(CUTS):
         if c0 <= t < c0 + cd:
             p = (t - c0) / cd

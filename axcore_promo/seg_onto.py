@@ -44,14 +44,14 @@ CUE = {"EQUIP": 64.40, "MATER": 65.15, "PROC": 65.89, "PROD": 66.58, "PEOPLE": 6
        "L18": 70.57, "ONTO": 71.25}
 PULSE0, PULSE_D = 68.05, 1.85     # "관계를 이해하도록 만듭니다": the work runs from 시작 to 끝
 CORE0 = 69.30
-BUILD0 = 63.85                    # the platform builds, once the light clears
+BUILD0 = 62.90                    # the platform (it comes in with the zoom)
+FLOW0 = 63.90                     # the work from 시작 to 끝 comes in, step by step
 PUNCH0, PUNCH_D = 70.40, 1.30     # "이것이 AXCORE 온톨로지입니다": the reveal move
 
 # transition
 PB0, PB_D = 62.84, 0.62           # pull back: the frame becomes an oblique panel
-AWAY0, AWAY_D = 63.20, 0.55       # ... which recedes fast into the depth
-DF0, DF_D = 63.48, 0.32           # a soft light blooms where it vanishes
-RV0, RV_D = 63.72, 0.55           # ... and clears onto the ontology stage
+AWAY0, AWAY_D = 63.12, 0.60       # ... which recedes fast into the depth and is gone
+ZIN0, ZIN_D, ZIN_Z = 62.88, 1.50, 2.6   # meanwhile the ontology, seen enlarged, settles to its size
 
 
 def ft(f):
@@ -125,13 +125,6 @@ def warp(c, img, quad, alpha=1.0, radius=0.0, edge=0.0):
 
 def panel_shot(c, t):
     quad, u = panel_quad(t)
-    space(c, t, u)
-    # soft shadow and glow under the panel
-    if u > 0:
-        cx = sum(p[0] for p in quad) / 4
-        by = max(p[1] for p in quad)
-        c.drawOval(R(cx - 520, by + 40, 1040, 90), paint_fill(NAVY_950, 0.45 * u, blur=40))
-        E.radial(c, cx, (quad[0][1] + quad[3][1]) / 2, 900, "#7FA8FF", 0.18 * u)
     away = prog(t, AWAY0, AWAY_D)
     a = 1 - e_in_cubic(prog(t, AWAY0 + 0.25, AWAY_D - 0.2))
     if a <= 0.003:
@@ -260,7 +253,7 @@ def flow_lane(c, t, P, lit, pp):
     st, en = P(-6.9, FLOW_Y, FLOW_Z), P(6.9, FLOW_Y, FLOW_Z)
     stops = [P(x, FLOW_Y, FLOW_Z) for x in xs]
     pth = poly([st[:2]] + [p[:2] for p in stops] + [en[:2]])
-    fg = e_out_expo(prog(t, BUILD0 + 0.5, 1.4))
+    fg = e_out_expo(prog(t, FLOW0 - 0.1, 1.4))
     if fg <= 0:
         return
     band = poly([P(-7.4, FLOW_Y, FLOW_Z - 0.45)[:2], P(7.4, FLOW_Y, FLOW_Z - 0.45)[:2],
@@ -270,7 +263,7 @@ def flow_lane(c, t, P, lit, pp):
     line(c, pth, CYAN, 1.0, 4.2, (0, pp), glow=1.0, glow_w=12)
     if 0 < pp < 1:
         pulse(c, pth, pp, CYAN, 1.0, 26, 0.08, 4.0)
-    for lab, p, t0 in (("시작", st, BUILD0 + 0.45), ("끝", en, BUILD0 + 1.6)):
+    for lab, p, t0 in (("시작", st, FLOW0 - 0.15), ("끝", en, FLOW0 + 1.05)):
         k, dy, bl = A.blur_in(t, t0, 0.6)
         if k <= 0.003:
             continue
@@ -283,7 +276,7 @@ def flow_lane(c, t, P, lit, pp):
         E.square(c, p[0], p[1], 16, CYAN if on else WHITE, k)
     for i, (lab, ent) in enumerate(FLOW):
         f = (i + 1) / (len(FLOW) + 1)
-        k, dy, bl = A.blur_in(t, BUILD0 + 0.6 + i * 0.16, 0.6)
+        k, dy, bl = A.blur_in(t, FLOW0 + i * 0.16, 0.6)
         if k <= 0.003:
             continue
         sx, sy, _ = stops[i]
@@ -368,7 +361,7 @@ def core(c, t, P):
 def entities(c, t, P, lit):
     for n in sorted(ENT, key=lambda k_: ENT[k_][0][1]):
         (x, z), key, ic = ENT[n]
-        t0 = max(ent_time(n) - 0.1, BUILD0 + 0.5)
+        t0 = max(ent_time(n) - 0.1, 64.0)
         k = e_io_sine(prog(t, t0, 0.6))
         if k <= 0.003:
             continue
@@ -455,20 +448,19 @@ def onto_full(c, t):
 
 
 def render(c, t):
-    g = e_io_sine(prog(t, DF0, DF_D))                    # defocus of the panel shot
-    r = e_io_sine(prog(t, RV0, RV_D))                    # the ontology comes out of the light
-    if r < 1:
-        img = A.snap(12, lambda cc: panel_shot(cc, t))
-        A.draw_img(c, img, 1.0, 24 * g)
-    if g > 0:
-        a = g * (1 - r)
-        sh = skia.GradientShader.MakeRadial(skia.Point(W / 2, H / 2 - 20), 900,
-                                            [colint("#EDE6FF", 0.85 * a), colint("#4D74FF", 0.55 * a),
-                                             colint("#0A1838", 0.0)], [0.0, 0.42, 1.0])
-        c.drawPaint(skia.Paint(Shader=sh))
-    if r > 0:
-        img = A.snap(13, lambda cc: onto_full(cc, t))
-        A.draw_img(c, img, r, 30 * (1 - r), lerp(1.05, 1.0, r))
+    k = e_io_sine(prog(t, ZIN0, 0.45))
+    if k > 0:                                            # the ontology, coming down from enlarged
+        z = lerp(ZIN_Z, 1.0, e_out_cubic(prog(t, ZIN0, ZIN_D)))
+        c.save()
+        c.translate(W / 2, H / 2)
+        c.scale(z, z)
+        c.translate(-W / 2, -H / 2)
+        A.blur_layer(c, 14 * (1 - e_out_cubic(prog(t, ZIN0, 0.8))), k)
+        onto_full(c, t)
+        c.restore()
+        c.restore()
+    if t < AWAY0 + AWAY_D:                               # the previous frame, pulling back and away on top
+        panel_shot(c, t)
 
 
 def frame(f, surf, finish):

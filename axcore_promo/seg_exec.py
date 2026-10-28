@@ -1,12 +1,12 @@
-"""Segment 00:01:35:12-00:01:39:05 (90 frames) - "AI는 분석에서 실행으로 확장됩니다."
+"""Segment 00:01:35:01-00:01:39:05 (101 frames) - "AI는 분석에서 실행으로 확장됩니다."
 
 The original SC20 (the factory, the 분석 | 실행 switch), unchanged except for its way in: it carries on from the
 end of seg_ops (the robot shot gone soft, the factory already out of focus and punched in, the switch risen to the
 centre), so the frames it shares with seg_ops are identical.
-  95.50  seg_ops' last frames (the same render)
+  95.04  seg_ops' last frames (the same render: the robot shot goes soft at 95.20, the switch rises)
   95.85  the network grows over the soft factory
   96.22  "실행": the switch flips hard to 실행 and the shot snaps open (motion-blurred), the switch glides to its corner
-Frame f is timeline frame 2292 + f; film time = timeline frame / 24 (narration: "실행" at 96.26).
+Frame f is timeline frame 2281 + f; film time = timeline frame / 24 (narration: "실행" at 96.26).
 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_exec.py <out.mp4> [height=480] [first last]
 """
@@ -26,8 +26,8 @@ from engine import (W, H, R, WHITE, NAVY_950, CYAN, lerp, prog, clamp, e_io_sine
 
 FPS_NUM, FPS_DEN = 24000, 1001
 BAR = 138
-F_TL = 95 * 24 + 12              # 00:01:35:12
-NF = 99 * 24 + 5 - F_TL + 1      # through 00:01:39:05 (90 frames)
+F_TL = 95 * 24 + 1               # 00:01:35:01 (from before the robot shot goes soft)
+NF = 99 * 24 + 5 - F_TL + 1      # through 00:01:39:05 (101 frames)
 GRAIN0 = O.GRAIN0 + (F_TL - O.F_TL)   # the same grain as seg_ops on the frames they share
 OPS_END = O.T0 + (O.NF - 1) / 24.0
 SCV = 1.0

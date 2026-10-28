@@ -497,7 +497,7 @@ def answer(c, t):
     card(c, r, 1.0, 0.4 + 0.6 * e_io_sine(prog(t, ANS0, 0.6)), True)
     x = r.left() + 56
     diamond(c, x + 8, r.top() + 64, 11, HL, 1.0)
-    text(c, "A X C O R E   A I", x + 32, r.top() + 72, 21, "SemiBold", WHITE, 1.0)
+    text(c, "AXCORE AI", x + 32, r.top() + 73, 23, "Bold", WHITE, 1.0)
     # preparing: the reference's gradient "thinking" line
     if t < ANS0 + 0.1:
         pa = 1 - e_io_sine(prog(t, ANS0 - 0.15, 0.25))

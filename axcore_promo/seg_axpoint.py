@@ -41,7 +41,7 @@ from engine import (W, H, R, BLUE, INK, STEEL, STEEL_200, STEEL_400, WHITE, NAVY
 FPS_NUM, FPS_DEN = 24000, 1001
 BAR = 138
 F_TL = 684                      # timeline frame of f = 0 (00:00:28:12)
-NF = 375                        # ... through 00:00:44:02
+NF = 492                        # ... through 00:00:48:23
 COMPANY = "우리 회사"
 LINE = "#E3E7EE"
 ORANGE = "#FF9D5C"
@@ -51,8 +51,8 @@ SEARCH = R(600, 508, 720, 68)   # landing search bar (screen = page at the start
 BTN = R(1152, 516, 160, 52)     # its "기업 찾기" button; the diamond of the previous segment sits at its centre
 
 # shot boundaries (film time)
-T_DOCS, T_DIAG, T_CANDS, T_MON, T_CEIL = 30.40, 33.30, 34.50, 36.10, 37.45
-XB = 0.55                       # soft cross-blur between shots
+T_DOCS, T_DIAG, T_CANDS, T_MON, T_CEIL = 31.10, 36.80, 39.45, 41.85, 43.60
+XB = 0.65                       # soft cross-blur between shots
 
 
 def ft(f):
@@ -61,10 +61,10 @@ def ft(f):
 
 # ---------------------------------------------------------------- camera (per shot, page coordinates)
 # one slow, one-directional move per shot (reference 4: 150-400 px/s, zoom ~0.1/s, holds in between)
-CAM_INTRO = [(28.50, 960, 540, 1.0), (29.40, 960, 540, 1.0), (31.00, 990, 548, 1.22)]
-CAM_DOCS = [(30.40, 960, 500, 1.10), (31.84, 905, 498, 1.36), (32.62, 960, 540, 1.0), (33.90, 1010, 556, 1.10)]
-CAM_DIAG = [(33.30, 930, 532, 1.04), (35.10, 900, 528, 1.14)]
-CAM_CANDS = [(34.50, 900, 515, 1.16), (36.10, 960, 540, 1.0), (36.40, 960, 540, 1.0)]
+CAM_INTRO = [(28.50, 960, 540, 1.0), (29.60, 960, 540, 1.0), (31.75, 988, 548, 1.20)]
+CAM_DOCS = [(31.10, 960, 500, 1.08), (33.50, 905, 498, 1.32), (34.45, 960, 540, 1.02), (37.45, 1010, 556, 1.12)]
+CAM_DIAG = [(36.80, 930, 532, 1.03), (40.10, 895, 526, 1.15)]
+CAM_CANDS = [(39.45, 900, 515, 1.15), (41.90, 960, 540, 1.0), (42.60, 960, 540, 1.0)]
 
 
 def _hermite(keys, t):
@@ -219,7 +219,7 @@ def nav(c, t, a, cur):
             text(c, lab, x + 2, 186, 13, "SemiBold" if on else "Medium", colr, a, "center")
             if i < 4:
                 text(c, "›", x + step / 2, 186, 13, "Medium", STEEL_200, a, "center")
-    k = clamp((t - 30.45) / 0.3)
+    k = clamp((t - 30.95) / 0.4)
     if k > 0:
         tw = text_w(COMPANY, 14, "SemiBold")
         r = R(1824 - tw - 52, 164, tw + 52, 34)
@@ -251,14 +251,14 @@ def ripple(c, x, y, t, t0, color=BLUE, size=60):
 
 
 # ---------------------------------------------------------------- 1 intro (landing page)
-TYPE0, TYPE_D = 29.74, 0.46
-CLICK_SEARCH = 30.36
+TYPE0, TYPE_D = 30.00, 0.55
+CLICK_SEARCH = 30.85
 
 
 def intro(c, t):
     p1 = e_io_cubic(prog(t, 28.50, 0.40))          # line -> bar outline
     p2 = e_out_cubic(prog(t, 28.78, 0.30))         # the bar fills white
-    p3 = e_io_cubic(prog(t, 28.98, 0.62))          # the white spreads over the frame
+    p3 = e_io_cubic(prog(t, 28.98, 0.8))          # the white spreads over the frame
     q = e_io_cubic(prog(t, 28.52, 0.48))           # diamond -> button
     if p3 < 1:
         # the navy stage of the previous segment, unchanged (its line and diamond are drawn below)
@@ -330,8 +330,8 @@ def intro(c, t):
         text(c, "제조업  ·  경기도 화성시  ·  사업자 확인 완료", r.left() + 72, r.top() + 56, 13, "Medium", STEEL, dk)
         icon(c, "check", r.right() - 36, r.centerY(), 18, BLUE, dk, 2.2)
     # cursor to the button
-    ca = clamp((t - 29.95) / 0.15) * (1 - clamp((t - 30.55) / 0.1))
-    cq = e_io_cubic(prog(t, 29.98, 0.34))
+    ca = clamp((t - 30.30) / 0.2) * (1 - clamp((t - 31.10) / 0.2))
+    cq = e_io_cubic(prog(t, 30.32, 0.48))
     cursor(c, lerp(1520, bx + 6, cq), lerp(760, by + 4, cq), ca, press)
     c.restore()
 
@@ -339,7 +339,7 @@ def intro(c, t):
 def landing(c, t, p3):
     if p3 <= 0:
         return
-    k, dy, bl = blur_in(t, 29.22, 0.55)
+    k, dy, bl = blur_in(t, 29.30, 0.8)
     if k > 0:
         blur_layer(c, bl, k)
         mixed(c, [("제조 ", None), ("AX", BLUE), ("를 위한 ", None), ("AI", BLUE), (" 컨설턴트", None)],
@@ -374,12 +374,12 @@ FILES = [("X", "#1E9E5A", "생산일보_2026_09", "XLSX · 2.4MB"), ("P", "#E548
          ("X", "#1E9E5A", "재고 현황_10월", "XLSX · 1.6MB"), ("W", "#2F6BFF", "공정 개선 회의록", "DOCX · 0.4MB")]
 BOX = R(420, 410, 1080, 210)
 CHIP_H = 58
-DRAG0, DROP = 30.42, 30.98            # the file stack is dragged in, dropped on the box
-CHIP0 = 31.00
+DRAG0, DROP = 31.30, 32.05            # the file stack is dragged in, dropped on the box
+CHIP0 = 32.08
 PROMPT = [("사내 자료 33건을 올렸어요. ", None), ("업무 흐름과 개선 과제", "g"), ("를 진단해 주세요.", None)]
-PROMPT0, PROMPT_D = 31.20, 0.45
-SEND = 31.80
-ORBIT0 = 31.86
+PROMPT0, PROMPT_D = 32.55, 0.70
+SEND = 33.45
+ORBIT0 = 33.55
 CORE = (960, 560)
 RINGS = (153, 230, 330)
 
@@ -443,7 +443,7 @@ def docs(c, t):
     c.save()
     apply_cam(c, CAM_DOCS, t)
     light_bg(c)
-    o = e_io_cubic(prog(t, ORBIT0, 0.8))
+    o = e_io_cubic(prog(t, ORBIT0, 1.0))
     nav(c, t, 1.0, 0 if t < ORBIT0 + 0.05 else 1)
     ha = 1 - e_io_cubic(prog(t, ORBIT0 - 0.05, 0.3))
     if ha > 0:
@@ -454,7 +454,7 @@ def docs(c, t):
     ba = 1 - o
     if ba > 0.003:
         blur_layer(c, 10 * o, ba)
-        dz = e_io_sine(prog(t, DRAG0 + 0.22, 0.25)) * (1 - e_io_sine(prog(t, DROP, 0.3)))
+        dz = e_io_sine(prog(t, DRAG0 + 0.35, 0.35)) * (1 - e_io_sine(prog(t, DROP, 0.4)))
         if dz > 0:                              # drag-over: the page dims a little around the box
             c.drawRect(R(-2000, -2000, W + 4000, H + 4000), paint_fill("#5A6A90", 0.07 * dz))
         rrect(c, BOX.makeOffset(0, 10), 26, "#3A55B8", 0.10, blur=22)
@@ -495,8 +495,8 @@ def docs(c, t):
         c.drawLine(sx, sy + 7, sx, sy - 7, up)
         c.drawPath(poly([(sx - 6, sy - 1), (sx, sy - 7), (sx + 6, sy - 1)]), up)
         ripple(c, sx, sy, t, SEND, BLUE, 50)
-        if SEND - 0.45 < t < SEND + 0.15:
-            cq = e_io_cubic(prog(t, SEND - 0.45, 0.4))
+        if SEND - 0.65 < t < SEND + 0.2:
+            cq = e_io_cubic(prog(t, SEND - 0.65, 0.58))
             cursor(c, lerp(1180, sx + 4, cq), lerp(660, sy + 4, cq), 1.0, press)
         c.restore()
     # files: in the row, lifted into orbit, then sorted into the work flow
@@ -505,7 +505,7 @@ def docs(c, t):
     if clip:
         c.save()
         c.clipRRect(skia.RRect.MakeRectXY(BOX.makeInset(2, 2), 22, 22), skia.ClipOp.kIntersect, True)
-    gq = e_io_cubic(prog(t, GRAPH0, 0.5))        # orbit -> graph
+    gq = e_io_cubic(prog(t, GRAPH0, 0.7))        # orbit -> graph
     # orbit: rings and the reading core (behind the files)
     if o > 0 and gq < 1:
         oa = o * (1 - gq)
@@ -518,13 +518,13 @@ def docs(c, t):
                                             [colint(BLUE, ck), colint(VIOLET, ck)])
         c.drawCircle(CORE[0], CORE[1], 48 * ck, skia.Paint(AntiAlias=True, Shader=sh))
         diamond(c, CORE[0], CORE[1], 20 * ck, WHITE, ck, rot=90 * (1 - ck))
-        g = e_io_sine(prog(t, ORBIT0 + 0.1, 0.45))
+        g = e_io_sine(prog(t, ORBIT0 + 0.2, 0.85))
         if g > 0.005:
             c.drawArc(R(CORE[0] - 66, CORE[1] - 66, 132, 132), -90, 360 * g, False, paint_stroke(BLUE, ck, 3.2))
     if t > GRAPH0:
         graph(c, t)
     for i in range(len(FILES)):
-        k = e_io_sine(prog(t, CHIP0 + i * 0.06, 0.4))
+        k = e_io_sine(prog(t, CHIP0 + i * 0.08, 0.5))
         if k <= 0:
             continue
         rx, ry = xs[i] - 24 * (1 - k), BOX.top() + 22
@@ -535,24 +535,24 @@ def docs(c, t):
             continue
         ox, oy = orbit_pos(i, min(t, GRAPH0))
         w = chip_w(i) * 0.9
-        q = e_io_cubic(prog(t, ORBIT0 + i * 0.03, 0.8))
+        q = e_io_cubic(prog(t, ORBIT0 + i * 0.04, 1.0))
         x = lerp(rx, ox - w / 2, q)
         y = lerp(ry, oy - CHIP_H * 0.45, q) - 40 * math.sin(math.pi * q)
         s_ = lerp(1.0, 0.9, q)
-        m = e_io_cubic(prog(t, GRAPH0 + i * 0.03, 0.65))     # into its node
+        m = e_io_cubic(prog(t, GRAPH0 + i * 0.05, 0.85))     # into its node
         if m > 0:
             nr = node_rect(FILE_NODE[i])
             x, y = lerp(x, nr.left(), m), lerp(y, nr.top(), m) - 30 * math.sin(math.pi * m)
             s_ = lerp(s_, 0.8, m)
         if m < 1:
             vis_ = 1.0 if xs[i] + chip_w(i) <= BOX.right() - 24 else o
-            file_chip(c, i, x, y, (1.0 - m) * vis_, s_, check=e_io_sine(prog(t, ORBIT0 + 0.2 + i * 0.03, 0.3)))
+            file_chip(c, i, x, y, (1.0 - m) * vis_, s_, check=e_io_sine(prog(t, ORBIT0 + 0.4 + i * 0.07, 0.35)))
     if clip:
         c.restore()
     if o > 0:
-        g = e_io_sine(prog(t, ORBIT0 + 0.1, 0.45))
-        k1 = e_out_cubic(prog(t, ORBIT0 + 0.2, 0.4)) * (1 - e_out_cubic(prog(t, GRAPH0 + 0.02, 0.22)))
-        k2, dy, _ = blur_in(t, GRAPH0 + 0.12, 0.45)
+        g = e_io_sine(prog(t, ORBIT0 + 0.2, 0.85))
+        k1 = e_io_sine(prog(t, ORBIT0 + 0.25, 0.5)) * (1 - e_io_sine(prog(t, GRAPH0 + 0.02, 0.35)))
+        k2, dy, _ = blur_in(t, GRAPH0 + 0.3, 0.6)
         mixed(c, [("자료 ", None), ("%d건" % int(round(33 * g)), "g"), ("을 확인하고 있어요", None)], 960, 222, 32, "Bold",
               k1, "center")
         mixed(c, [("흩어진 자료를 ", None), ("업무 흐름", "g"), ("으로 정리했어요", None)], 960, 250 + dy, 32, "Bold", k2,
@@ -565,7 +565,7 @@ def drag_stack(c, t):
     """The stack of files dragged in by the cursor (reference: a column of file rows with a count badge), dropped
     onto the box."""
     q = e_io_cubic(prog(t, DRAG0, DROP - DRAG0))
-    out = e_io_sine(prog(t, DROP, 0.28))
+    out = e_io_sine(prog(t, DROP, 0.35))
     a = clamp((t - DRAG0) / 0.12) * (1 - out)
     if a <= 0.003:
         return
@@ -593,7 +593,7 @@ def drag_stack(c, t):
 
 
 # work flow (ontology) the documents are sorted into: (title, category, documents, x, y, broken record)
-GRAPH0 = 32.40
+GRAPH0 = 34.65
 CAT_COL = {"영업관리": "#4A78E8", "제품설계": "#8A63D2", "생산관리": "#2E9E5B", "품질검사": "#D08A2E",
            "장비관리": "#2AA7C8", "재고물류": "#C8508A", "고객지원": "#5B8DEF", "경영지원": "#7A8699"}
 NODES = [("수주 접수", "영업관리", ["수주 현황"], 230, 290), ("초도 설계 승인", "제품설계", ["제품 도면", "규격서"], 470, 290),
@@ -611,7 +611,7 @@ EDGES = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 5), (6, 2), (7, 2), (2, 8), (8, 3),
 FILE_NODE = [3, 4, 3, 11, 0, 13, 7, 9]           # which node each uploaded file belongs to
 NW, NH = 200, 72
 DIAG_BTN = R(1510, 838, 214, 50)
-CLICK_DIAG = GRAPH0 + 0.80
+CLICK_DIAG = GRAPH0 + 1.85
 
 
 def node_rect(j):
@@ -619,7 +619,7 @@ def node_rect(j):
 
 
 def node_time(j):
-    return GRAPH0 + 0.12 + (NODES[j][3] - 230) / 1300 * 0.35 + (NODES[j][4] - 290) / 340 * 0.08
+    return GRAPH0 + 0.2 + (NODES[j][3] - 230) / 1300 * 0.65 + (NODES[j][4] - 290) / 340 * 0.15
 
 
 def edge_path(a, b):
@@ -676,7 +676,7 @@ def graph(c, t):
             continue
         r = node_rect(j).makeOffset(0, dy)
         broken = j in BROKEN
-        flag = e_io_sine(prog(t, GRAPH0 + 0.85, 0.5)) if broken else 0.0
+        flag = e_io_sine(prog(t, GRAPH0 + 1.2, 0.6)) if broken else 0.0
         blur_layer(c, bl, k)
         rrect(c, r.makeOffset(0, 4), 12, "#3A55B8", 0.06, blur=8)
         rrect(c, r, 12, colint_mix(WHITE, "#FDECEE", flag), 1.0)
@@ -688,12 +688,12 @@ def graph(c, t):
         if broken:
             text(c, "기록 끊김", r.right() - 12, r.top() + 27, 12, "Bold", "#E5484D", flag, "right")
             text(c, "문서 없음", r.left() + 14, r.top() + 55, 11, "Medium", "#E5484D", flag)
-            q = prog(t, GRAPH0 + 0.85, 0.7)
+            q = prog(t, GRAPH0 + 1.2, 0.9)
             if 0 < q < 1:
                 rrect_stroke(c, r.makeOutset(14 * q, 14 * q), 14, "#E5484D", 0.6 * (1 - q), 2.0)
         c.restore()
     # legend, finding, the next step
-    k, dy, _ = blur_in(t, GRAPH0 + 0.7, 0.45)
+    k, dy, _ = blur_in(t, GRAPH0 + 1.05, 0.6)
     if k > 0:
         items = list(CAT_COL.items()) + [("기록 끊김 2곳", "#E5484D")]
         tw = sum(text_w(n, 13, "Medium") + 34 for n, _ in items)
@@ -704,7 +704,7 @@ def graph(c, t):
                            "#E5484D" if colr == "#E5484D" else STEEL, k) + 12
         text(c, "표준 대비 기록 미확인 업무 26건  ·  설비 점검 · 견적 산출 기록이 끊겨 있어요", 960, 816 + dy, 14,
              "Medium", STEEL, k, "center")
-    kb = e_io_sine(prog(t, GRAPH0 + 0.35, 0.45))
+    kb = e_io_sine(prog(t, GRAPH0 + 1.2, 0.5))
     if kb > 0:
         press = math.sin(math.pi * prog(t, CLICK_DIAG - 0.05, 0.22))
         b = DIAG_BTN
@@ -727,7 +727,7 @@ AXES = [("AI 전략", 36.4), ("조직 · 문화", 54.8), ("업무 · 인재", 46
 FLOW = [("수주", None), ("생산 계획", "AI 적용"), ("자재 구매", None), ("가공 · 조립", "수기 기록"),
         ("품질 검사", "병목"), ("출하", None)]
 RC, RR = (760, 520), 230
-MORPH0, POLY0 = 33.62, 33.98
+MORPH0, POLY0 = 37.75, 38.35
 
 
 def ring_path(cx, cy, r, m, n=100):
@@ -751,47 +751,47 @@ def diag(c, t):
     apply_cam(c, CAM_DIAG, t)
     c.drawRect(R(-2000, -2000, W + 4000, H + 4000), paint_fill(BLUE))
     radial(c, RC[0], RC[1], 900, "#2C72FF", 0.55, blend=skia.BlendMode.kSrcOver)
-    m = e_io_cubic(prog(t, MORPH0, 0.42))
-    g = e_io_sine(prog(t, T_DIAG + 0.05, 0.6))
+    m = e_io_cubic(prog(t, MORPH0, 0.7))
+    g = e_io_sine(prog(t, T_DIAG + 0.1, 0.8))
     for ring, al in ((1 / 3, 0.32), (2 / 3, 0.40), (1.0, 0.6)):
         c.drawPath(ring_path(RC[0], RC[1], RR * ring, m), paint_stroke(WHITE, al * g, 1.3))
-    sp = e_io_sine(prog(t, MORPH0 + 0.15, 0.5))
+    sp = e_io_sine(prog(t, MORPH0 + 0.3, 0.6))
     for i in range(5):
         line(c, poly([RC, axis_pt(i, RR)]), WHITE, 0.30, 1.0, (0, sp))
-    lx = lerp(-200, 2200, e_io_sine(prog(t, T_DIAG + 0.15, 0.9)))
+    lx = lerp(-200, 2200, e_io_sine(prog(t, T_DIAG + 0.3, 1.2)))
     c.drawLine(-200, RC[1], lx, RC[1], paint_stroke(WHITE, 0.85, 1.6))
     if t > POLY0 - 0.01:
         vals = []
         for i, (_, v) in enumerate(AXES):
-            k = e_io_cubic(prog(t, POLY0 + i * 0.05, 0.6))
+            k = e_io_cubic(prog(t, POLY0 + i * 0.08, 0.8))
             vals.append(axis_pt(i, RR * v / 70.0 * k))
         pg = poly(vals, True)
         c.drawPath(pg, paint_fill(WHITE, 0.22))
         c.drawPath(pg, paint_stroke(WHITE, 1.0, 3.0))
         for i, (x, y) in enumerate(vals):
-            k = e_io_sine(prog(t, POLY0 + 0.3 + i * 0.05, 0.4))
+            k = e_io_sine(prog(t, POLY0 + 0.45 + i * 0.08, 0.5))
             diamond(c, x, y, 7 * k, WHITE, 1.0)
     diamond(c, RC[0], RC[1], 22, WHITE, 1.0)
     for i, (name, v) in enumerate(AXES):
-        k = e_io_sine(prog(t, T_DIAG + 0.2 + i * 0.05, 0.6))
+        k = e_io_sine(prog(t, T_DIAG + 0.4 + i * 0.1, 0.7))
         x, y = axis_pt(i, RR + 34)
         al = "center" if i == 0 else ("left" if i in (1, 2) else "right")
         y += {0: -8, 1: 6, 2: 22, 3: 22, 4: 6}[i]
-        num = v * clamp(prog(t, POLY0 + i * 0.06, 0.6))
+        num = v * clamp(prog(t, POLY0 + i * 0.08, 0.8))
         text(c, name if t < POLY0 else "%s  %.1f" % (name, num), x, y, 17, "Bold", WHITE, k, al)
-    k, dy, bl = blur_in(t, T_DIAG + 0.35, 0.45)
+    k, dy, bl = blur_in(t, T_DIAG + 0.6, 0.7)
     text(c, "AX 진단 결과", 330, 268 + dy, 16, "SemiBold", WHITE, 0.75 * k)
-    text(c, "%.1f" % max(0.0, 43.1 * e_io_sine(prog(t, POLY0, 0.8))), 328, 330 + dy, 56, "Bold", WHITE, k)
+    text(c, "%.1f" % max(0.0, 43.1 * e_io_sine(prog(t, POLY0, 1.1))), 328, 330 + dy, 56, "Bold", WHITE, k)
     text(c, "AX 지수  ·  2단계 데이터화", 330, 362 + dy, 15, "SemiBold", WHITE, 0.85 * k)
     lo = min(range(5), key=lambda i: AXES[i][1])
-    k, dy, _ = blur_in(t, POLY0 + 0.05, 0.45)
+    k, dy, _ = blur_in(t, POLY0 + 0.2, 0.7)
     text(c, "영역별 진단", 1190, 330 + dy, 16, "SemiBold", WHITE, 0.75 * k)
     for i, (name, v) in enumerate(AXES):
         yy = 378 + i * 44 + dy
         text(c, name, 1190, yy + 6, 16, "SemiBold", WHITE, k)
         bb = R(1330, yy - 4, 200, 7)
         rrect(c, bb, 3.5, WHITE, 0.22 * k)
-        gg = e_io_cubic(prog(t, POLY0 + 0.12 + i * 0.05, 0.7))
+        gg = e_io_cubic(prog(t, POLY0 + 0.3 + i * 0.08, 0.9))
         rrect(c, R(bb.left(), bb.top(), bb.width() * v / 70 * gg, 7), 3.5, ORANGE if i == lo else WHITE, k)
         text(c, "%.1f" % (v * gg), 1592, yy + 6, 16, "Bold", ORANGE if i == lo else WHITE, k, "right")
     c.restore()
@@ -810,7 +810,7 @@ CW, CH, CX0, CY0 = 300, 120, 330, 446
 
 
 def card_time(i):
-    return T_CANDS + 0.36 + i * 0.08
+    return T_CANDS + 0.5 + i * 0.12
 
 
 def clock(c, x, y, r, color, a):
@@ -1080,9 +1080,9 @@ MODS = [("경영관리", "인사 · 급여 · 회계", "user"), ("제품설계",
         ("생산관리", "작업 지시 · 모니터링", "factory"), ("장비관리", "정비 예측 · 노후 설비", "gear"),
         ("품질검사", "불량 분석 · 검수", "scan"), ("재고·물류", "실시간 재고 · 수요 예측", "box"),
         ("영업관리", "수주 · 단가 견적", "chart"), ("고객지원", "AS · VOC 분석", "chat")]
-ON_T = {1: 38.35, 2: 38.75, 3: 39.15, 4: 39.55, 5: 39.95}     # module -> switched on
+ON_T = {1: 44.60, 2: 45.05, 3: 45.50, 4: 45.95, 5: 46.40}     # module -> switched on
 MW, MH, MG = 540.0, 330.0, 36.0
-WS0 = 40.50                                                  # the chosen ones become the workspace
+WS0 = 46.85                                                  # the chosen ones become the workspace
 WS_RECTS = {2: R(0, 190, 740, 230), 4: R(770, 190, 740, 230), 3: R(1540, 190, 740, 230),
             1: R(0, 450, 740, 230), 5: R(770, 450, 740, 230), "chat": R(1540, 450, 740, 230)}
 WS_TITLE = {1: "도면 · BOM", 2: "생산 실적", 3: "설비 가동률", 4: "불량률 추이", 5: "실시간 재고"}
@@ -1139,13 +1139,13 @@ def mod_card(c, i, r, a, on):
 
 def widget(c, key, r, t, a):
     """Workspace widget: the switched-on feature at work."""
-    g = e_out_cubic(prog(t, WS0 + 0.55, 0.9))
+    g = e_io_sine(prog(t, WS0 + 0.8, 1.0))
     if key == "chat":
         text(c, "AI 대화", r.left() + 40, r.top() + 64, 34, "Bold", INK, a)
         b = R(r.left() + 40, r.top() + 92, 440, 52)
         rrect(c, b, 26, "#EEF1F6", a * g)
         text(c, "이번 주 불량 원인 알려줘", b.left() + 24, b.centerY() + 10, 26, "Medium", INK, a * g)
-        g2 = e_out_cubic(prog(t, WS0 + 1.1, 0.6))
+        g2 = e_io_sine(prog(t, WS0 + 1.5, 0.7))
         b2 = R(r.left() + 140, r.top() + 158, 560, 52)
         rrect(c, b2, 26, BLUE, a * g2)
         text(c, "가공 · 조립 공정의 수기 기록이 원인이에요", b2.left() + 24, b2.centerY() + 9, 23, "SemiBold", WHITE, a * g2)
@@ -1185,12 +1185,12 @@ def widget(c, key, r, t, a):
 
 def ceiling_ui(c, t):
     """The UI under the ceiling, in plane units."""
-    w = e_io_cubic(prog(t, WS0, 0.75))         # 0: feature cards with toggles, 1: the workspace
+    w = e_io_cubic(prog(t, WS0, 1.0))          # 0: feature cards with toggles, 1: the workspace
     for i in range(8):
-        k = e_out_cubic(prog(t, T_CEIL + 0.18 + (i % 4) * 0.07 + (i // 4) * 0.12, 0.6))
+        k = e_io_sine(prog(t, T_CEIL + 0.2 + (i % 4) * 0.1 + (i // 4) * 0.18, 0.8))
         if k <= 0:
             continue
-        on = e_io_cubic(prog(t, ON_T[i], 0.4)) if i in ON_T else 0.0
+        on = e_io_cubic(prog(t, ON_T[i], 0.45)) if i in ON_T else 0.0
         r0 = mod_rect(i).makeOffset(0, 160 * (1 - k))
         if i not in ON_T:
             a = k * (1 - w)
@@ -1213,7 +1213,7 @@ def ceiling_ui(c, t):
             ceiling_card(c, r, 1.0, 0.0)
             widget(c, i, r, t, e_out_cubic((w - 0.5) * 2))
     if w > 0:
-        a = e_out_cubic(prog(t, WS0 + 0.35, 0.6))
+        a = e_io_sine(prog(t, WS0 + 0.5, 0.8))
         r = WS_RECTS["chat"].makeOffset(0, 80 * (1 - a))
         blur_layer(c, 8 * (1 - a), a)
         ceiling_card(c, r, 1.0, 0.0)
@@ -1231,7 +1231,7 @@ def ceiling_ui(c, t):
 
 def caption(c, t):
     """Lower-left title over the shot (reference look)."""
-    for t0, t1, small, big in ((37.85, WS0 - 0.1, "필요한 기능만 골라 켜는", "M-AI Works"),
+    for t0, t1, small, big in ((44.00, WS0 - 0.1, "필요한 기능만 골라 켜는", "M-AI Works"),
                                (WS0 + 0.2, 99, "우리 회사에 맞게 구성된", "AI 워크스페이스")):
         k = e_out_cubic(prog(t, t0, 0.5)) * (1 - e_io_cubic(prog(t, t1, 0.3)))
         if k <= 0:

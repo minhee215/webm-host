@@ -44,14 +44,14 @@ CUE = {"EQUIP": 64.40, "MATER": 65.15, "PROC": 65.89, "PROD": 66.58, "PEOPLE": 6
        "L18": 70.57, "ONTO": 71.25}
 PULSE0, PULSE_D = 68.05, 1.85     # "관계를 이해하도록 만듭니다": the work runs from 시작 to 끝
 CORE0 = 69.30
-BUILD0 = 63.35                    # the platform builds (first seen on the panel)
-PUNCH0, PUNCH_D = 70.42, 1.25     # "이것이 AXCORE 온톨로지입니다": the reveal move
+BUILD0 = 63.85                    # the platform builds, once the light clears
+PUNCH0, PUNCH_D = 70.40, 1.30     # "이것이 AXCORE 온톨로지입니다": the reveal move
 
 # transition
-PB0, PB_D = 62.90, 1.20           # pull back from the panel
-SWAP0, SWAP_D = 63.40, 0.55       # the panel turns to the ontology
-DF0, DF_D = 63.95, 0.40           # everything defocuses into light
-RV0, RV_D = 64.20, 0.65           # ... and the ontology comes out of it, full frame
+PB0, PB_D = 62.84, 0.62           # pull back: the frame becomes an oblique panel
+AWAY0, AWAY_D = 63.20, 0.55       # ... which recedes fast into the depth
+DF0, DF_D = 63.48, 0.32           # a soft light blooms where it vanishes
+RV0, RV_D = 63.72, 0.55           # ... and clears onto the ontology stage
 
 
 def ft(f):
@@ -98,8 +98,9 @@ def panel_quad(t):
     """The panel's screen quad: the whole frame at first, then the oblique panel while the camera pulls back."""
     M = panel()
     u = e_io_cubic(prog(t, PB0, PB_D))
-    z = math.exp(lerp(math.log(M["z0"]), 0.0, u)) * (1 - 0.04 * prog(t, PB0 + PB_D, 1.5))
-    q = [((x - W / 2) * z + W / 2, (y - H / 2 + 10) * z + H / 2 - 10) for x, y in M["q"]]
+    z = math.exp(lerp(math.log(M["z0"]), 0.0, u))
+    z *= lerp(1.0, 0.08, e_in_cubic(prog(t, AWAY0, AWAY_D)))      # flies away into the depth
+    q = [((x - W / 2) * z + W / 2, (y - H / 2 + 10) * z + H / 2 - 10 - 40 * (1 - z) * u) for x, y in M["q"]]
     w = e_io_sine(clamp(u / 0.35))
     full = [(0, 0), (W, 0), (W, H), (0, H)]
     return [(lerp(a[0], b[0], w), lerp(a[1], b[1], w)) for a, b in zip(full, q)], u
@@ -131,12 +132,13 @@ def panel_shot(c, t):
         by = max(p[1] for p in quad)
         c.drawOval(R(cx - 520, by + 40, 1040, 90), paint_fill(NAVY_950, 0.45 * u, blur=40))
         E.radial(c, cx, (quad[0][1] + quad[3][1]) / 2, 900, "#7FA8FF", 0.18 * u)
-    rad = 40 * u
-    sw = e_io_sine(prog(t, SWAP0, SWAP_D))
-    if sw < 1:
-        warp(c, A.snap(10, lambda cc: O.render(cc, min(t, O.T0 + (O.NF - 1) / 24.0))), quad, 1.0, rad, u)
-    if sw > 0:
-        warp(c, A.snap(11, lambda cc: onto_full(cc, t)), quad, sw, rad, u)
+    away = prog(t, AWAY0, AWAY_D)
+    a = 1 - e_in_cubic(prog(t, AWAY0 + 0.25, AWAY_D - 0.2))
+    if a <= 0.003:
+        return
+    A.blur_layer(c, 10 * e_in_cubic(away), a)
+    warp(c, A.snap(10, lambda cc: O.render(cc, min(t, O.T0 + (O.NF - 1) / 24.0))), quad, 1.0, 40 * u, u)
+    c.restore()
 
 
 def space(c, t, u):
@@ -163,9 +165,8 @@ FLOW_Z, FLOW_Y = 4.75, -0.55
 
 
 def punch(t):
-    """The reveal move: fast out, a small overshoot, settles."""
-    x = prog(t, PUNCH0, PUNCH_D)
-    return E.settle(x, 0.05)
+    """The reveal move: quick, then a long soft landing."""
+    return e_out_expo(prog(t, PUNCH0, PUNCH_D))
 
 
 def cam(t):
@@ -175,17 +176,12 @@ def cam(t):
     yaw = lerp(-36, -18, a)
     pitch = lerp(21, 27, a)
     dist = lerp(19.5, 17.2, a)
-    yaw = lerp(yaw, 0.5, b) + 2.0 * d
+    yaw = lerp(yaw, 0.0, b) + 1.5 * d                     # to the front, and back a little: the whole of it
     pitch = lerp(pitch, 40, b)
-    dist = lerp(dist, 17.6, b) + 0.4 * d
+    dist = lerp(dist, 23.0, b) + 0.5 * d
     ty = lerp(0.4, 0.0, b)
-    cy = lerp(520, 600, clamp(b))
+    cy = lerp(520, 620, b)
     return S.Proj(math.radians(yaw), math.radians(pitch), dist, (0.0, ty, 0.4), 1200, W / 2, cy)
-
-
-def roll(t):
-    x = prog(t, PUNCH0, PUNCH_D)
-    return -4.0 * math.sin(math.pi * clamp(x / 0.7)) if x < 0.7 else 0.0
 
 
 def stage(c, t, P):
@@ -201,9 +197,6 @@ def stage(c, t, P):
         for a0, a1 in (((i * 2.0, -2.4, -14), (i * 2.0, -2.4, 14)), ((-14, -2.4, i * 2.0), (14, -2.4, i * 2.0))):
             p0, p1 = P(*a0), P(*a1)
             c.drawLine(p0[0], p0[1], p1[0], p1[1], paint_stroke("#7FA6FF", 0.07 * g, 1.0))
-    sh2 = skia.GradientShader.MakeLinear([skia.Point(0, H * 0.35), skia.Point(0, H)], [colint("#081430", 0.85),
-                                                                                       colint("#081430", 0.0)])
-    c.drawRect(R(0, H * 0.35, W, H * 0.3), skia.Paint(Shader=sh2))
 
 
 def disc(P, x, z, r, n=48, y=0.0):
@@ -277,7 +270,7 @@ def flow_lane(c, t, P, lit, pp):
     line(c, pth, CYAN, 1.0, 4.2, (0, pp), glow=1.0, glow_w=12)
     if 0 < pp < 1:
         pulse(c, pth, pp, CYAN, 1.0, 26, 0.08, 4.0)
-    for lab, p, t0 in (("시작", st, BUILD0 + 0.6), ("끝", en, BUILD0 + 1.4)):
+    for lab, p, t0 in (("시작", st, BUILD0 + 0.45), ("끝", en, BUILD0 + 1.6)):
         k, dy, bl = A.blur_in(t, t0, 0.6)
         if k <= 0.003:
             continue
@@ -290,7 +283,7 @@ def flow_lane(c, t, P, lit, pp):
         E.square(c, p[0], p[1], 16, CYAN if on else WHITE, k)
     for i, (lab, ent) in enumerate(FLOW):
         f = (i + 1) / (len(FLOW) + 1)
-        k, dy, bl = A.blur_in(t, BUILD0 + 0.75 + i * 0.1, 0.6)
+        k, dy, bl = A.blur_in(t, BUILD0 + 0.6 + i * 0.16, 0.6)
         if k <= 0.003:
             continue
         sx, sy, _ = stops[i]
@@ -338,7 +331,7 @@ def sources(c, t, P):
         k *= out
         if k <= 0.003:
             continue
-        top = P(x, 3.6, -3.2)
+        top = P(x, 3.0, -3.2)
         base = P(x, 0.0, -3.2)
         g = e_io_cubic(prog(t, t0 + 0.2, 0.9))
         pth = poly([top[:2], base[:2]])
@@ -375,7 +368,7 @@ def core(c, t, P):
 def entities(c, t, P, lit):
     for n in sorted(ENT, key=lambda k_: ENT[k_][0][1]):
         (x, z), key, ic = ENT[n]
-        t0 = ent_time(n) - 0.1
+        t0 = max(ent_time(n) - 0.1, BUILD0 + 0.5)
         k = e_io_sine(prog(t, t0, 0.6))
         if k <= 0.003:
             continue
@@ -450,11 +443,6 @@ def title(c, t):
 def onto_full(c, t):
     P = cam(t)
     stage(c, t, P)
-    rl = roll(t)
-    c.save()
-    c.translate(W / 2, H / 2)
-    c.rotate(rl)
-    c.translate(-W / 2, -H / 2)
     lit, pp = lit_state(t)
     sources(c, t, P)
     platform(c, t, P)
@@ -463,7 +451,6 @@ def onto_full(c, t):
     relations(c, t, P, lit)
     core(c, t, P)
     entities(c, t, P, lit)
-    c.restore()
     title(c, t)
 
 
@@ -472,7 +459,7 @@ def render(c, t):
     r = e_io_sine(prog(t, RV0, RV_D))                    # the ontology comes out of the light
     if r < 1:
         img = A.snap(12, lambda cc: panel_shot(cc, t))
-        A.draw_img(c, img, 1.0, 34 * g, 1.0 + 0.06 * g)
+        A.draw_img(c, img, 1.0, 24 * g)
     if g > 0:
         a = g * (1 - r)
         sh = skia.GradientShader.MakeRadial(skia.Point(W / 2, H / 2 - 20), 900,

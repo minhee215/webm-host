@@ -134,9 +134,17 @@ def dc_zoom(t):
 
 
 def background(c, t):
+    # the corridor clip (5.5 s) is stretched over the whole scene (~11 s) so it never stops: slowed down, with
+    # neighbouring frames blended (it sits well out of focus)
     info = media.clip_info(C.BG) or {}
-    span = info.get("dur", 10.0) / info.get("speed", 1.0) - 0.1
-    img, _ = media.frame(C.BG, min(span, max(0.0, t - DC0) * 0.8))
+    sp = info.get("speed", 1.0)
+    span = (info.get("frames", 121) - 1) / (24 * sp) - 0.6        # usable after the clip's 0.5 s head trim
+    rate = min(1.0, span / (62.15 - DC0))
+    fpos = max(0.0, t - DC0) * rate * 24 * sp
+    i0 = int(fpos)
+    w = fpos - i0
+    img, _ = media.frame(C.BG, i0 / (24 * sp))
+    img1, _ = media.frame(C.BG, (i0 + 1) / (24 * sp)) if w > 0.01 else (img, None)
     iw, ih = img.width(), img.height()
     k = max(W / iw, H / ih)
     z = dc_zoom(t)
@@ -151,6 +159,9 @@ def background(c, t):
     p.setColorFilter(GRADE_LIGHT)
     p.setImageFilter(skia.ImageFilters.Blur(16 / k, 16 / k, skia.TileMode.kClamp))
     c.drawImage(img, 0, 0, E.SAMP, p)
+    if w > 0.01:
+        p.setAlphaf(w)
+        c.drawImage(img1, 0, 0, E.SAMP, p)
     c.restore()
     c.drawRect(R(0, 0, W, H), paint_fill(NAVY_950, 0.04))
     E.radial(c, HUB[0], HUB[1], 1200, "#CFE2FF", 0.26, blend=skia.BlendMode.kScreen)

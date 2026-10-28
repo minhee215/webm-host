@@ -43,7 +43,6 @@ DC0 = GLOW_PEAK                   # the datacenter is under the light from here
 PAN0, PAN_DT, CHIP_DT = 50.10, 0.85, 0.08     # left panels, one at a time, their items one by one
 SAAS0, SAAS_DT = 53.30, 0.42                   # right: SaaS cards one at a time
 SAAS = ["Gmail", "Slack", "Notion", "Microsoft Teams", "Google Drive"]
-SAAS_X, SAAS_W, SAAS_H, SAAS_DY = 1350, 430, 82, 100
 C.PAN_X = 96
 C._LAYOUT.clear()
 
@@ -236,54 +235,85 @@ def logo(c, name, cx, cy, s, a):
     c.drawImageRect(img, R(cx - w / 2, cy - h / 2, w, h), skia.SamplingOptions(skia.CubicResampler.Mitchell()), p)
 
 
+SAAS_P = R(W - C.PAN_X - C.PAN_W, 0, C.PAN_W, 0)        # mirrors the left panels
+SAAS_RH = 52
+
+
+def saas_panel():
+    """Same top and bottom as the two left panels together."""
+    L = C.panel_layout()
+    return R(SAAS_P.left(), L[0][1].top(), SAAS_P.width(), L[-1][1].bottom() - L[0][1].top())
+
+
+def saas_gap():
+    return (saas_panel().height() - C.PAN_HEAD - C.PAN_PAD - len(SAAS) * SAAS_RH) / (len(SAAS) - 1)
+
+
 def saas_rect(i):
-    y0 = HUB[1] - (len(SAAS) * SAAS_DY - (SAAS_DY - SAAS_H)) / 2
-    return R(SAAS_X, y0 + i * SAAS_DY, SAAS_W, SAAS_H)
+    P = saas_panel()
+    return R(P.left() + C.PAN_PAD, P.top() + C.PAN_HEAD + i * (SAAS_RH + saas_gap()), P.width() - 2 * C.PAN_PAD,
+             SAAS_RH)
+
+
+def saas_time(i):
+    return SAAS0 + 0.35 + i * SAAS_DT
 
 
 def right_cards(c, t):
-    if t < SAAS0 - 0.1:
+    """The external SaaS: one glass panel like the left ones, a row per service (logo, name, 연결됨 + check)."""
+    a = e_io_sine(prog(t, SAAS0, 0.9))
+    if a <= 0.003:
         return
-    k, dy, bl = A.blur_in(t, SAAS0 - 0.1, 0.7)
-    E.text(c, "외부 SaaS", SAAS_X + 4, saas_rect(0).top() - 26 + dy, 20, "Bold", WHITE, k)
-    E.text(c, "협업 · 커뮤니케이션", SAAS_X + SAAS_W - 4, saas_rect(0).top() - 27 + dy, 14, "SemiBold", "#DCE7FA", k,
-           "right")
-    for i, name in enumerate(SAAS):
-        t0 = SAAS0 + 0.2 + i * SAAS_DT
-        a = e_io_sine(prog(t, t0, 0.8))
-        if a <= 0.003:
+    dx = 50 * (1 - e_out_cubic(prog(t, SAAS0, 1.1)))
+    P = saas_panel().makeOffset(dx, 0)
+    for i in range(len(SAAS)):                               # a line from the node to each service
+        t0 = saas_time(i)
+        la = e_io_sine(prog(t, t0, 0.5))
+        if la <= 0.003:
             continue
-        r = saas_rect(i).makeOffset(70 * (1 - e_out_cubic(prog(t, t0, 1.0))), 0)
-        pth = E.curve((HUB[0] + 40, HUB[1]), (r.left(), r.centerY()), 0.4)
-        g = e_io_cubic(prog(t, t0 + 0.2, 0.8))
-        E.line(c, pth, "#9FD0FF", 0.95 * a, 1.8, (0, g), glow=0.8)
-        if t > t0 + 1.1:
+        r = saas_rect(i).makeOffset(dx, 0)
+        pth = E.curve((HUB[0] + 40, HUB[1]), (P.left(), r.centerY()), 0.4)
+        g = e_io_cubic(prog(t, t0 + 0.1, 0.8))
+        E.line(c, pth, CYAN, 0.9 * la * a, 1.8, (0, g), glow=0.8)
+        if t > t0 + 1.0:
             for j in range(2):
-                E.pulse(c, pth, ((t - t0 - 1.1) * 0.55 + j * 0.5) % 1.0, WHITE, 0.85 * a, 11, 0.15)
-        on = e_io_sine(prog(t, t0 + 0.9, 0.35))            # connected when the line arrives
-        blur = 9 * (1 - e_io_sine(prog(t, t0, 0.8)))
-        p = skia.Paint()
-        p.setAlphaf(clamp(a))
-        if blur > 0.2:
-            p.setImageFilter(skia.ImageFilters.Blur(blur, blur, skia.TileMode.kDecal))
-        c.saveLayer(None, p)
-        E.rrect(c, r.makeOffset(0, 8), 16, NAVY_950, 0.22, blur=16)
-        E.rrect(c, r, 16, WHITE, 0.97)
-        E.rrect_stroke(c, r, 16, "#B9CDF5", 1.0, 1.6)
-        logo(c, name, r.left() + 44, r.centerY(), 36, 1.0)
-        E.text(c, name, r.left() + 82, r.centerY() + 8, 21, "SemiBold", INK, 1.0)
-        E.text(c, "연결됨", r.right() - 64, r.centerY() + 6, 14, "SemiBold", BLUE, on, "right")
-        cx_, cy_ = r.right() - 34, r.centerY()
-        c.drawCircle(cx_, cy_, 13, paint_stroke("#C9D3E3", 1 - on, 1.6))
-        c.drawCircle(cx_, cy_, 13 * (0.7 + 0.3 * on), paint_fill(BLUE, on))
-        E.icon(c, "check", cx_, cy_, 13, WHITE, on, 2.4)
-        c.restore()
-        q = prog(t, t0 + 0.9, 0.6)
-        if 0 < q < 1:
-            E.rrect_stroke(c, r.makeOutset(10 * q, 10 * q), 18, "#9FD0FF", 0.7 * (1 - q), 2.0)
+                E.pulse(c, pth, ((t - t0 - 1.0) * 0.55 + j * 0.5) % 1.0, CYAN, 0.8 * la * a, 12, 0.15)
+    blur = 10 * (1 - e_io_sine(prog(t, SAAS0, 0.9)))
+    lp = skia.Paint()
+    if blur > 0.2:
+        lp.setImageFilter(skia.ImageFilters.Blur(blur, blur, skia.TileMode.kDecal))
+    c.saveLayer(None, lp)
+    E.glass(c, P, 18, a, tint=NAVY_950, tint_a=0.34, blur=24, border=0.6, shadow=0.25)
+    E.text(c, "외부 SaaS", P.left() + C.PAN_PAD, P.top() + 38, 20, "Bold", WHITE, a)
+    n_on = sum(1 for i in range(len(SAAS)) if t >= saas_time(i) + 0.9)
+    E.text(c, "%d / %d 연결" % (n_on, len(SAAS)), P.right() - C.PAN_PAD, P.top() + 37, 14, "SemiBold",
+           CYAN if n_on == len(SAAS) else "#C9D6EA", a, "right")
+    c.restore()
+    for i, name in enumerate(SAAS):
+        t0 = saas_time(i)
+        ca = a * e_io_sine(prog(t, t0, 0.5))
+        if ca <= 0.003:
+            continue
+        r = saas_rect(i).makeOffset(dx + 16 * (1 - e_out_cubic(prog(t, t0, 0.6))), 0)
+        on = e_io_sine(prog(t, t0 + 0.8, 0.3))               # connected when the line arrives
+        flash = math.sin(math.pi * clamp((t - t0 - 0.8) / 0.7))
+        rr = SAAS_RH / 2
+        E.rrect(c, r, rr, NAVY_950, 0.45 * ca)
+        E.rrect_stroke(c, r, rr, CYAN if on > 0.5 else "#C9D6EA", ca * (0.35 + 0.5 * flash), 1.2)
+        lx, cy_ = r.left() + 27, r.centerY()
+        c.drawCircle(lx, cy_, 17, paint_fill(WHITE, 0.96 * ca))      # the mark on a small white disc
+        logo(c, name, lx, cy_, 21, ca)
+        E.text(c, name, r.left() + 56, cy_ + C.CHIP_SZ * 0.36, C.CHIP_SZ, "Medium", WHITE, ca)
+        cx_ = r.right() - 26
+        E.text(c, "연결됨", cx_ - 20, cy_ + 5, 14, "SemiBold", CYAN, ca * on, "right")
+        c.drawCircle(cx_, cy_, 11, paint_stroke("#C9D6EA", ca * 0.5 * (1 - on), 1.4))
+        c.drawCircle(cx_, cy_, 11 * (0.7 + 0.3 * on), paint_fill(CYAN, ca * on))
+        E.icon(c, "check", cx_, cy_, 11, NAVY_950, ca * on, 2.2)
+        if flash > 0:
+            E.glow_dot(c, cx_, cy_, 10 + 8 * flash, CYAN, ca * flash)
 
 
-BEATS = [PAN0 + pi * PAN_DT + 1.2 for pi in range(2)] + [SAAS0 + 0.2 + i * SAAS_DT + 1.0 for i in range(len(SAAS))]
+BEATS = [PAN0 + pi * PAN_DT + 1.2 for pi in range(2)] + [saas_time(i) + 0.9 for i in range(len(SAAS))]
 
 
 def hub(c, t):

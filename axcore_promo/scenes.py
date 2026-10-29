@@ -763,8 +763,8 @@ def s5_front_flow(c, P, k, T):
     lend = S5_FRONT_END == "line"
     pts = [P(x, 0, ZC + dz) for x, dz in ((xa, 0.0), (xs[1], -0.2), (xs[2], 0.2), (xb, 0.0))]
     if S5_FLOW_LIGHT:
-        # (client re-edit) no rail and no arrows: once the first card is in, the light (white head, line
-        # particles) runs behind the cards from the first to the last, leaving the lit cyan line behind it
+        # (client re-edit) no rail, no arrows, no line particles: once the first card is in, the light (a white
+        # head) runs behind the cards from the first to the last, leaving the lit cyan line behind it
         g = e_io_sine(prog(T, S5_LIGHT_T0, S5_LIGHT_D))
         ha = clamp(prog(T, S5_LIGHT_T0, 0.25)) * (1 - out)
         if g > 0 and ha > 0.003:
@@ -775,8 +775,6 @@ def s5_front_flow(c, P, k, T):
                 hx, hy = P(xf, 0, ZC)
                 radial(c, hx, hy, 70 * ts, CYAN, 0.55 * hk)
                 c.drawCircle(hx, hy, 6 * ts, paint_fill(WHITE, hk))
-        line_flow(c, pts, e_io_sine(prog(T, S5_LIGHT_T0 - 0.05, S5_LIGHT_D + 0.2)) * 1.4, 0.4, n=10,
-                  spread=18 * ts, twist=1.3, width=1.3, color=CYAN, key="s5ff", tsec=T, alpha=1 - out)
     else:
         # pipeline rail through the card centres (behind the cards), lit fill, arrows between steps
         line(c, poly([ra, rb]), "#24438F", 0.9 * (1 - out), 10 * ts)

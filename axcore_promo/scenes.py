@@ -17,7 +17,7 @@ from engine import (W, H, BLUE, CYAN, CYAN_SOFT, INDIGO, INK, NAVY, NAVY_700, NA
                     hand_in_front, icon, jit, lerp, line, logo, paint_fill, paint_stroke, path_at, poly,
                     prog, pulse, radial, rng, rrect, rrect_stroke, settle, square, streak, text, text_w, vgrad,
                     vis, line_flow, flow_pts, resample_poly, brand_icon, path_seg, plate, SAMP,
-                    light_line, light_beam, path_len)
+                    light_line, light_beam, path_len, font)
 
 AUDIO_OFFSET = 0.8
 SAFE_T, SAFE_B = 150, 930     # 21:9 letterbox picture is y 138..942; keep graphics inside this band
@@ -417,6 +417,8 @@ S5_LINE_T0, S5_LINE_D = 26.0, 1.1
 BAR_LINE = (1232.0, 640.0, 542.0)   # diamond x, line start x, y (screen)
 LINE_BLUE = "#3D74FF"
 S5_FRONT_STAGGER = 0.16                         # tiles come in one by one, clockwise from the top left
+S5_BIG_TAGS = False       # (client re-edit) DX / AX shown large over the footage instead of a small pill by the name:
+                          # the tagged cards grow and their footage goes translucent, the untagged cards shrink
 S5_FLOW_INFO = {"Diagnose": ("업무 · 데이터 현황 진단", "디지털 수준 L3"), "Analyze": ("개선 과제 도출", "개선 과제 70개"),
                 "Design": ("우선순위 · 로드맵 설계", "5단계 로드맵"), "Execute": ("AI 적용과 자동화 실행", "현장 적용")}
 S5_KO = {"Planning": "기획", "Production": "생산", "Logistics": "물류", "Sales": "영업", "Quality": "품질",
@@ -554,6 +556,36 @@ def s5_label(c, x, y, lab, a, tag=None, tag_on=0.0):
         text(c, tag, tr.centerX(), tr.top() + 21, 16, "Bold", WHITE if tag == "DX" else NAVY_950, a * clamp(k * 2 - 1), "center")
 
 
+def s5_big_tag(c, tq, tag, sel, a):
+    """DX / AX large over the card's footage: soft blur-in, settling from a touch larger."""
+    k = e_io_sine(clamp(sel))
+    if k <= 0.003:
+        return
+    cx = sum(p[0] for p in tq) / 4
+    cy = sum(p[1] for p in tq) / 4
+    hgt = abs(tq[3][1] - tq[0][1])
+    size = hgt * 0.58
+    s_ = lerp(1.18, 1.0, e_out_cubic(clamp(sel)))
+    col_ = CYAN if tag == "AX" else WHITE
+    lp = skia.Paint()
+    lp.setAlphaf(clamp(a * k))
+    bl = 8.0 * (1 - k)
+    if bl > 0.05:
+        lp.setImageFilter(skia.ImageFilters.Blur(bl, bl, skia.TileMode.kDecal))
+    c.saveLayer(None, lp)
+    c.save()
+    c.translate(cx, cy)
+    c.scale(s_, s_)
+    radial(c, 0, 0, size * 1.4, BLUE if tag == "DX" else CYAN, 0.30)
+    f = font(size, "ExtraBold")
+    tw = f.measureText(tag)
+    glow = paint_fill(BLUE if tag == "DX" else CYAN, 0.55, blur=size * 0.12)
+    c.drawString(tag, -tw / 2, size * 0.36, f, glow)
+    c.drawString(tag, -tw / 2, size * 0.36, f, paint_fill(col_, 1.0))
+    c.restore()
+    c.restore()
+
+
 def sc05(c, T, t, d):
     # deep navy stage with a soft floor glow
     c.clear(col(NAVY_950))
@@ -579,6 +611,7 @@ def sc05(c, T, t, d):
             ring = [P(rr_ * math.cos(a_), 0.02, rr_ * math.sin(a_)) for a_ in np.linspace(0, 2 * math.pi, 64)]
             c.drawPath(poly(ring, True), paint_stroke(CYAN, (1 - q) * 0.7 * (1 - fold), 1.6, blend=skia.BlendMode.kScreen))
     labels = []
+    big_tags = []
     for i, (name, (x, z), lab, tag, foc) in enumerate(S5_TILES):
         if S5_FRONT:
             x *= S5_FRONT_SPREAD
@@ -598,11 +631,19 @@ def sc05(c, T, t, d):
             c.saveLayer(None, lp)
         sel = (dx_on if tag == "DX" else ax_on if tag == "AX" else 0.0) * find
         dim = find * (0.0 if tag else 0.55)
-        tq = s5_slab(c, P, x, z, 2.5, 1.6, y, a, top=0.06, edge=CYAN if tag == "AX" and sel > 0.5 else
+        sc = 1.0
+        if S5_BIG_TAGS:                                   # grow the tagged cards, shrink the others (smoothly)
+            grow = e_io_sine(clamp(dx_on if tag == "DX" else ax_on if tag == "AX" else 0.0))
+            sc = 1.0 + 0.22 * grow if tag else 1.0 - 0.22 * e_io_sine(clamp(dx_on))
+        tq = s5_slab(c, P, x, z, 2.5 * sc, 1.6 * sc, y, a, top=0.06, edge=CYAN if tag == "AX" and sel > 0.5 else
                      ("#7FA6FF" if tag else "#5D7BC4"), glow=sel * (1.0 if tag == "AX" else 0.6))
-        s5_video(c, s5_clip(lab, name), tq, T + i * 0.7, a, (0.5, 0.5) if S5_FRONT else foc, dim)
+        vid_a = a * (1 - 0.5 * e_io_sine(clamp(sel))) if S5_BIG_TAGS and tag else a
+        s5_video(c, s5_clip(lab, name), tq, T + i * 0.7, vid_a, (0.5, 0.5) if S5_FRONT else foc,
+                 dim + (0.25 * e_io_sine(clamp(sel)) if S5_BIG_TAGS and tag else 0.0))
         if soft:
             c.restore()
+        if S5_BIG_TAGS and tag and sel > 0.003:
+            big_tags.append((tq, tag, sel, a))
         # link to the core
         g = e_out_expo(prog(T, t0 + 0.3, 0.9))
         p0, p1 = P(x * 0.62, 0.02, z * 0.62), P(x * 0.3, 0.02, z * 0.3)
@@ -614,16 +655,18 @@ def sc05(c, T, t, d):
             rb = rng("s5b%d" % i)
             for j in range(5):
                 hgt = (0.25 + rb.uniform(0, 0.6)) * bars
-                bx = x + 0.75 + j * 0.12
-                b0, b1 = P(bx, y, z - 0.95), P(bx, y + hgt, z - 0.95)
+                bx = x + (0.75 + j * 0.12) * sc
+                b0, b1 = P(bx, y, z - 0.95 * sc), P(bx, y + hgt, z - 0.95 * sc)
                 c.drawLine(*b0, *b1, paint_stroke(CYAN if sel > 0.5 else "#7FA6FF", 0.9 * bars * (1 - dim), 4))
-        lx, ly = P(x - 1.25, y, z + 0.8)
-        labels.append((lx + 6, ly + 22, s5_lab(lab), a * (1 - dim * 0.6), tag, sel))
+        lx, ly = P(x - 1.25 * sc, y, z + 0.8 * sc)
+        labels.append((lx + 6, ly + 22, s5_lab(lab), a * (1 - dim * 0.6), None if S5_BIG_TAGS else tag, sel))
     core_a = clamp(enter(T, 17.3, 0.8)) * ((1 - fold) if S5_FRONT else 1.0)   # frontally it would sit between cards
     if core_a > 0.003:
         s5_core(c, P, T, core_a, pulse_=find * 0.3)
     for (lx, ly, lab, a, tag, sel) in labels:
         s5_label(c, lx, ly, lab, a, tag, sel * 1.05)
+    for tq, tag, sel, a in big_tags:
+        s5_big_tag(c, tq, tag, sel, a)
     if T < 22.2:
         return
     if S5_FRONT:

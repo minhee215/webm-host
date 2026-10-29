@@ -4,7 +4,7 @@ translucent like the others, the untagged cards shrink - all eased. The flow has
 23:05): once the first flow card is in, a light runs behind the cards from the first to the last, leaving the lit cyan
 line (no line particles). The shot with all four cards holds longer (the cards coming in and the line end run a little
 quicker). As the cards go and the line runs right the camera eases in on its head, then back out to the original
-framing once the line is drawn. Everything else is seg_insight's own render,
+framing once the line is drawn. The graphics on the flow cards play over and over while the cards show. Everything else is seg_insight's own render,
 so the first and the last frame join the delivered file.
 Usage: python3 seg_dxax.py <out.mp4> [height=480]
 """
@@ -54,8 +54,14 @@ def line_head(T):
     return S.lerp(px, S.BAR_LINE[0], u), py
 
 
+def real_of(Ts):
+    """Patch (real) time at which the scene clock reads Ts."""
+    return float(np.interp(Ts, _HG, _HT)) if 22.75 < Ts < 27.30 else Ts
+
+
 def sc05_held(c, T, t, *a):
     T0 = T
+    S.S5_ART_NOW = T0                # the card graphics loop on the real clock (not slowed by the hold)
     if 22.75 < T < 27.30:
         T2 = float(np.interp(T, _HT, _HG))
         t, T = t + (T2 - T), T2
@@ -79,6 +85,8 @@ def sc05_held(c, T, t, *a):
 if __name__ == "__main__":
     S.S5_BIG_TAGS = True
     S.S5_FLOW_LIGHT = True
+    S.S5_ART_LOOP = True
+    S.S5_ART_INV = real_of
     S.sc05 = sc05_held
     out = sys.argv[1]
     height = sys.argv[2] if len(sys.argv) > 2 else "480"

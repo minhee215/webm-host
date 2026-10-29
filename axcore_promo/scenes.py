@@ -559,6 +559,10 @@ def s5_label(c, x, y, lab, a, tag=None, tag_on=0.0):
 S5_FLOW_LIGHT = False      # (client re-edit) no flow rail: a light runs behind the cards once the first is in,
                            # leaving the lit cyan line
 S5_LIGHT_T0, S5_LIGHT_D = 23.30, 1.75
+S5_ART_LOOP = False        # (client re-edit) the graphics on the flow cards repeat while the cards show
+S5_ART_PERIOD = 1.8
+S5_ART_NOW = 0.0           # real clock (set by the caller when the scene clock is remapped) ...
+S5_ART_INV = lambda x: x      # ... and scene time -> real time
 S5_TAG_SCALE = 2.0         # (big tags) the pill drawn over the footage, this much larger than by the name
 
 
@@ -899,6 +903,12 @@ def s5_step_art(c, i, tq, T, a, lit, ts):
     radial(c, r.centerX(), r.centerY(), r.width() * 0.6, BLUE, 0.25 * a * (0.5 + 0.5 * lit))
     cx, cy, u = r.centerX(), r.centerY(), r.width() / 300.0
     on = lambda d: e_out_expo(prog(T, 22.75 + i * 0.55 + 0.25 + d, 0.5))
+    if S5_ART_LOOP:     # (client re-edit) the graphic plays over and over while the card shows, on the real clock
+        tau = S5_ART_NOW - S5_ART_INV(22.75 + i * 0.55 + 0.25)
+        if tau > 0:
+            uc = tau % S5_ART_PERIOD
+            keep = 1 - e_io_sine(prog(uc, S5_ART_PERIOD - 0.42, 0.36))
+            on = lambda d: e_out_expo(prog(uc, d, 0.5)) * keep
     hot, cold = CYAN, "#33508F"
     if i == 0:      # digital level: five rising bars, three reached
         for j in range(5):
@@ -927,6 +937,13 @@ def s5_step_art(c, i, tq, T, a, lit, ts):
         c.drawLine(x0, cy + 8 * u, lerp(x0, x1, g), cy + 8 * u, paint_stroke(hot, a, 3 * u))
         for j in range(5):
             x_ = lerp(x0, x1, j / 4)
+            if S5_ART_LOOP:                     # lights as the line reaches it (and goes out as it draws back)
+                dn = clamp((g - j / 4) / 0.05 + 1) if j else clamp(g / 0.04)
+                c.drawCircle(x_, cy + 8 * u, 9 * u, paint_fill(cold, a))
+                c.drawCircle(x_, cy + 8 * u, 9 * u, paint_fill(hot, a * dn))
+                text(c, "%d" % (j + 1), x_, cy - 14 * u, 13 * u, "Bold", "#8EA6D6", a * (1 - dn), "center")
+                text(c, "%d" % (j + 1), x_, cy - 14 * u, 13 * u, "Bold", WHITE, a * dn, "center")
+                continue
             done = g >= j / 4 - 1e-3
             c.drawCircle(x_, cy + 8 * u, 9 * u, paint_fill(hot if done else cold, a))
             text(c, "%d" % (j + 1), x_, cy - 14 * u, 13 * u, "Bold", WHITE if done else "#8EA6D6", a, "center")

@@ -41,6 +41,7 @@ SPH0, SPH_D = 1.60, 0.80
 BG0, BG_D = 1.60, 0.70
 BURST = 3.10
 RUSH0 = 7.20
+FAC_RATE = 0.55                                  # the factory clip runs on a little slower so it never stops (freezes)
 CX, CY = W / 2, H / 2 - 10
 FOC, DIST = 1400.0, 1400.0
 RS = 250.0
@@ -144,12 +145,23 @@ def saas_mark(c, name, x, y, s, a):
     if name not in _LOGOS:
         _LOGOS[name] = skia.Image.open(os.path.join(E.HERE, "assets", "logos", SAAS[name] + ".png"))
     img = _LOGOS[name]
-    c.drawCircle(x, y, s * 0.62, paint_fill(WHITE, 0.95 * a))
     k = s * 0.78 / max(img.width(), img.height())
     w, h = img.width() * k, img.height() * k
     p = skia.Paint(AntiAlias=True)
     p.setAlphaf(clamp(a))
     c.drawImageRect(img, R(x - w / 2, y - h / 2, w, h), skia.SamplingOptions(skia.CubicResampler.Mitchell()), p)
+
+
+def glow_text(c, s_, x, y, size, w, align):
+    """White text with a soft blue-white glow round it (the marks light up the space)."""
+    f = E.font(size, w)
+    tw = f.measureText(s_)
+    x0 = x - tw / 2 if align == "center" else x
+    for col, bl, al in (("#6FB8FF", size * 0.45, 0.55), ("#FFFFFF", size * 0.12, 0.55)):
+        p = skia.Paint(AntiAlias=True, Color4f=E.col(col, al))
+        p.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, bl))
+        c.drawString(s_, x0, y, f, p)
+    c.drawString(s_, x0, y, f, skia.Paint(AntiAlias=True, Color4f=E.col("#FFFFFF", 1.0)))
 
 
 def item_pos(o, s):
@@ -175,19 +187,19 @@ def draw_items(c, s, front):
         sz = o["size"] * k
         if sz < 6 or sz > 900:
             continue
-        a = clamp(b * 1.6) * (0.55 if z > 0 else 1.0) * clamp((1.6 - k) / 0.3 + 1) if k < 3 else 0.0
+        a = clamp(b * 1.6) * (0.85 if z > 0 else 1.0) * clamp((1.6 - k) / 0.3 + 1) if k < 3 else 0.0
         if a <= 0.01:
             continue
-        bl = 2.5 * clamp((0.75 - k) / 0.35) + 6 * clamp((k - 1.5) / 0.8) + 4 * (1 - clamp(b * 1.5))
+        bl = 1.5 * clamp((0.75 - k) / 0.35) + 6 * clamp((k - 1.5) / 0.8) + 4 * (1 - clamp(b * 1.5))
         A.blur_layer(c, bl, a)
         name = o["name"]
         if name in SAAS:
             tw = text_w(name, sz, "Bold")
             x0 = x - (tw + sz * 1.5) / 2
-            saas_mark(c, name, x0 + sz * 0.6, y - sz * 0.33, sz, 1.0)
-            text(c, name, x0 + sz * 1.5, y, sz, "Bold", WHITE, 1.0)
+            glow_text(c, name, x0 + sz * 1.5, y, sz, "Bold", "left")
+            saas_mark(c, name, x0 + sz * 0.6, y - sz * 0.33, sz * 1.15, 1.0)
         else:
-            text(c, name, x, y, sz, o["weight"], WHITE, 1.0, "center")
+            glow_text(c, name, x, y, sz, o["weight"], "center")
         c.restore()
 
 
@@ -201,6 +213,14 @@ def space(c, s):
     c.drawPaint(skia.Paint(Shader=sh))
 
 
+TRIS = []                                         # membranes: faint films between neighbouring nodes
+for i, p in enumerate(NET):
+    nb = np.argsort(np.linalg.norm(NET - p, axis=1))[1:3]
+    t_ = tuple(sorted((i, int(nb[0]), int(nb[1]))))
+    if t_ not in TRIS:
+        TRIS.append(t_)
+
+
 def network(c, s):
     g = prog(s, BURST - 0.1, 1.6)
     if g <= 0:
@@ -209,36 +229,55 @@ def network(c, s):
     sp = rot(SV * RS, s)
     x, y, k = project(pts, s)
     sx, sy, sk = project(sp, s)
+    qn = [clamp((g * 2000 - np.linalg.norm(NET[i]) * 0.8) / 400) for i in range(len(NET))]
+    for (i, j, l) in TRIS:
+        q = min(qn[i], qn[j], qn[l])
+        if q <= 0 or max(k[i], k[j], k[l]) > 3:
+            continue
+        pth = E.poly([(x[i], y[i]), (x[j], y[j]), (x[l], y[l])], True)
+        sh = skia.GradientShader.MakeLinear([skia.Point(x[i], y[i]), skia.Point((x[j] + x[l]) / 2, (y[j] + y[l]) / 2)],
+                                            [colint("#6B98FF", 0.26 * q), colint("#2A4FB0", 0.05 * q)])
+        c.drawPath(pth, skia.Paint(AntiAlias=True, Shader=sh))
     for i, j in NET_E:
         pa = (x[i], y[i])
         pb = (x[j], y[j]) if j >= 0 else (sx[-1 - j], sy[-1 - j])
-        dist = np.linalg.norm(NET[i])
-        q = clamp((g * 2000 - dist * 0.8) / 400)
-        if q <= 0:
-            continue
-        kk = min(k[i], 2.2)
-        c.drawLine(pa[0], pa[1], lerp(pa[0], pb[0], q), lerp(pa[1], pb[1], q),
-                   paint_stroke("#6E9BFF", 0.30 * q * clamp(kk), 1.1))
-    for i in range(len(NET)):
-        q = clamp((g * 2000 - np.linalg.norm(NET[i]) * 0.8) / 400)
+        q = qn[i]
         if q <= 0 or k[i] > 3:
             continue
-        c.drawCircle(x[i], y[i], 7 * k[i], paint_stroke("#7FB6FF", 0.45 * q, 1.2))
-        c.drawCircle(x[i], y[i], 2.2 * k[i], paint_fill("#BFE0FF", 0.7 * q))
+        kk = clamp(min(k[i], 2.2))
+        xb, yb = lerp(pa[0], pb[0], q), lerp(pa[1], pb[1], q)
+        c.drawLine(pa[0], pa[1], xb, yb, paint_stroke("#4F86FF", 0.35 * q * kk, 4.0, blur=4,
+                                                      blend=skia.BlendMode.kScreen))
+        c.drawLine(pa[0], pa[1], xb, yb, paint_stroke("#8CB6FF", 0.55 * q * kk, 1.2))
+    for i in range(len(NET)):
+        q = qn[i]
+        if q <= 0 or k[i] > 3:
+            continue
+        c.drawCircle(x[i], y[i], 12 * k[i], paint_fill("#4FA8FF", 0.25 * q, blur=6))
+        c.drawCircle(x[i], y[i], 7 * k[i], paint_stroke("#8FD0FF", 0.8 * q, 1.4))
+        c.drawCircle(x[i], y[i], 2.4 * k[i], paint_fill("#DFF2FF", 0.95 * q))
 
 
 def sphere(c, s):
-    g = e_out_cubic(prog(s, SPH0, SPH_D))
+    q = prog(s, SPH0, SPH_D)
+    g = e_io_sine(clamp(q * 3))
     if g <= 0.003:
         return
-    sc = lerp(0.35, 1.0, g)
+    sc = 0.30 + 0.70 * (1 + 2.2 * (q - 1) ** 3 + 1.2 * (q - 1) ** 2) if q < 1 else 1.0   # overshoot (back-out)
+    hot = math.exp(-max(0.0, s - SPH0) * 2.6)          # it arrives glowing, then calms
     p = rot(SV * RS * sc, s)
     x, y, k = project(p, s)
     zf = (p[:, 2] / RS + 1) / 2                     # 0 front .. 1 back
-    A.blur_layer(c, 8 * (1 - g), g)
+    A.blur_layer(c, 0, g)
+    if hot > 0.02:
+        E.radial(c, CX, CY, RS * sc * 1.5 * zoom(s), "#3CC8FF", 0.45 * hot, blend=skia.BlendMode.kScreen)
     for a_, b_ in SE:
         fr = 1 - (zf[a_] + zf[b_]) / 2
-        c.drawLine(x[a_], y[a_], x[b_], y[b_], paint_stroke("#38B8FF", 0.25 + 0.5 * fr, 1.3 + 0.5 * fr))
+        if hot > 0.02:
+            c.drawLine(x[a_], y[a_], x[b_], y[b_], paint_stroke("#7FE8FF", 0.6 * hot * fr, 5, blur=4,
+                                                                 blend=skia.BlendMode.kScreen))
+        c.drawLine(x[a_], y[a_], x[b_], y[b_], paint_stroke(A.colint_mix("#38B8FF", "#BDF4FF", hot),
+                                                             0.25 + 0.5 * fr, 1.3 + 0.5 * fr))
     for i in range(len(SV)):
         fr = 1 - zf[i]
         r = (2.4 + 2.2 * fr) * k[i] / (FOC / DIST)
@@ -255,36 +294,80 @@ def core(c, s):
     z = zoom(s)
     E.radial(c, CX, CY, (300 + 900 * kr) * min(z, 3), "#FF8A3D", 0.42 * kb * (1 - 0.4 * kr), blend=skia.BlendMode.kScreen)
     E.radial(c, CX, CY, (130 + 1400 * kr) * min(z, 3), "#FFD9AE", (0.55 + 0.45 * kr) * kb, blend=skia.BlendMode.kScreen)
-    fl = 0.6 + 0.4 * math.sin(s * 5.0)
-    c.drawRect(R(CX - 700, CY - 3, 1400, 6), paint_fill("#FFC58A", 0.35 * kb * fl, blur=6))
-    c.drawRect(R(CX - 420, CY - 1.2, 840, 2.4), paint_fill(WHITE, 0.45 * kb * fl, blur=1.5))
+
+
+_LOGO_IMG = {}
+
+
+def logo_images():
+    """The AXCORE logo (light, for the dark) as one image, and a mosaic (pixelated) copy of it."""
+    if not _LOGO_IMG:
+        import cv2
+        L = E.logo()
+        w = 500
+        h = int(round(L.h * w / L.w))
+        sf = skia.Surface.MakeRaster(skia.ImageInfo.Make(w, h, skia.ColorType.kRGBA_8888_ColorType,
+                                                         skia.AlphaType.kPremul_AlphaType))
+        cc = sf.getCanvas()
+        cc.clear(skia.Color4f(0, 0, 0, 0))
+        L.draw(cc, w / 2, h / 2, w, 1.0, 1.0, (1.0, 1.0, 1.0), True, 1.0)
+        img = sf.makeImageSnapshot()
+        a = img.toarray()
+        n = 16                                    # bright pixel blocks wherever the logo has ink (reference)
+        gh, gw = max(1, h // n), max(1, w // n)
+        cov = cv2.resize((a[..., 3] > 20).astype(np.float32), (gw, gh), interpolation=cv2.INTER_AREA)
+        rr = np.random.default_rng(5)
+        blk = np.zeros((gh, gw, 4), np.float32)
+        on = cov > 0.08
+        lum = rr.uniform(0.55, 1.0, (gh, gw))
+        for ch, v in enumerate((205, 225, 250)):
+            blk[..., ch] = v * lum
+        blk[..., 3] = 255 * np.clip(cov * 2.2, 0, 1) * on
+        blk[..., :3] *= blk[..., 3:4] / 255.0         # premultiplied
+        mos = cv2.resize(blk, (w, h), interpolation=cv2.INTER_NEAREST).astype(np.uint8)
+        _LOGO_IMG["img"] = img
+        _LOGO_IMG["mos"] = skia.Image.fromarray(np.ascontiguousarray(mos), colorType=skia.ColorType.kRGBA_8888_ColorType)
+        _LOGO_IMG["w"], _LOGO_IMG["h"] = w, h
+    return _LOGO_IMG
 
 
 def logo_button(c, s, on_sphere):
-    k = e_out_cubic(prog(s, LOGO0, LOGO_D))
-    a = e_io_sine(prog(s, LOGO0, LOGO_D * 0.8)) * (1 - e_io_sine(prog(s, CLICK + 0.10, 0.55)))   # gone as the sphere opens
+    """Reference entrance: a thin outline box comes in, then the logo fills it with a mosaic wipe (left to right)
+    while the box turns to glass; clicked, it presses and gives way to the sphere."""
+    k = e_out_cubic(prog(s, LOGO0, 0.45))
+    a = e_io_sine(prog(s, LOGO0, 0.35)) * (1 - e_io_sine(prog(s, CLICK + 0.10, 0.55)))
     if a <= 0.003:
         return
     press = math.sin(math.pi * clamp(prog(s, CLICK, 0.22)))
-    z = zoom(s)
-    sc = lerp(0.72, 1.0, k) * (1 - 0.06 * press) * z
-    bw, bh = 340, 92
+    sc = lerp(0.92, 1.0, k) * (1 - 0.05 * press) * zoom(s)
+    bw, bh = 360, 96
     c.save()
     c.translate(CX, CY)
     c.scale(sc, sc)
-    A.blur_layer(c, 10 * (1 - k), a)
+    A.blur_layer(c, 0, a)
     r = R(-bw / 2, -bh / 2, bw, bh)
-    solid = e_io_sine(prog(s, CLICK, 0.5))
-    E.glass(c, r, 10, 1.0, tint="#0A1A3C", tint_a=0.55 + 0.25 * solid, blur=18, border=0.0, shadow=0.3)
-    E.rrect(c, r, 10, "#1D4FB0", 0.85 * solid)
-    E.rrect_stroke(c, r, 10, "#7FC8FF", 0.85 - 0.35 * solid, 1.4)
-    if not on_sphere:                                 # corner brackets round the button (reference)
-        m = 0.5 * (1 - solid)
-        for (x0, y0, dx, dy) in ((-bw / 2 - 26, -bh / 2 - 22, 1, 1), (bw / 2 + 26, -bh / 2 - 22, -1, 1),
-                                 (bw / 2 + 26, bh / 2 + 22, -1, -1), (-bw / 2 - 26, bh / 2 + 22, 1, -1)):
-            c.drawLine(x0, y0, x0 + 16 * dx, y0, paint_stroke("#9FD2FF", m, 1.6))
-            c.drawLine(x0, y0, x0, y0 + 16 * dy, paint_stroke("#9FD2FF", m, 1.6))
-    E.logo().draw(c, 0, 2, 250, 1.0, 1.0, (1.0, 1.0, 1.0), True, 1.0)
+    fill = e_io_sine(prog(s, LOGO0 + 0.30, 0.45))
+    if fill > 0:
+        E.glass(c, r, 10, fill, tint="#0A1A3C", tint_a=0.6, blur=18, border=0.0, shadow=0.3)
+        E.rrect(c, r, 10, "#1D4FB0", 0.75 * fill * e_io_sine(prog(s, CLICK, 0.4)))
+    E.rrect_stroke(c, r, 10, "#BFE4FF", 0.9, 1.4)
+    li = logo_images()
+    lw = 270
+    lh = lw * li["h"] / li["w"]
+    dst = R(-lw / 2, -lh / 2 + 2, lw, lh)
+    wipe = e_io_sine(prog(s, LOGO0 + 0.35, 0.60))      # mosaic front sweeps left to right, the crisp logo after it
+    if wipe > 0:
+        band = 0.30
+        xe = lerp(dst.left() - band * lw, dst.right(), wipe)
+        smp = skia.SamplingOptions(skia.CubicResampler.Mitchell())
+        c.save()
+        c.clipRect(R(dst.left() - 4, dst.top() - 20, max(0.0, xe - dst.left() + 4), lh + 40))
+        c.drawImageRect(li["img"], dst, smp, skia.Paint(AntiAlias=True))
+        c.restore()
+        c.save()
+        c.clipRect(R(xe, dst.top() - 20, band * lw, lh + 40))
+        c.drawImageRect(li["mos"], dst, skia.SamplingOptions(skia.FilterMode.kNearest), skia.Paint(AntiAlias=True))
+        c.restore()
     c.restore()
     c.restore()
 
@@ -316,7 +399,7 @@ def render(c, t):
         space(c, s)
     if bgx < 1:                                       # the previous shot under the logo, sinking back
         X.SWITCH_ALPHA = 1 - e_io_sine(prog(s, LOGO0 - 0.05, 0.45))
-        img = A.snap(32, lambda cc: Q.render(cc, t))
+        img = A.snap(32, lambda cc: Q.render(cc, T0 + s * FAC_RATE))
         sink = e_io_sine(prog(s, LOGO0, 0.8))
         A.draw_img(c, img, 1 - bgx, 6 * sink, 1.0 + 0.03 * sink)
         c.drawRect(R(0, 0, W, H), paint_fill("#050B1C", 0.30 * sink * (1 - bgx)))

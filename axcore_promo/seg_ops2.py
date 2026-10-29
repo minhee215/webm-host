@@ -1,6 +1,7 @@
 """Patch 00:01:25:12-00:01:36:17 (270 frames) over the seg_ask -> seg_ops join and seg_ops (client re-edit):
   - the first shot (영업팀 · 다음 달 수요는?) is a team meeting in a conference room instead of the retail aisle
-  - into the production shot the card itself travels from the upper left to where the production card sits
+  - the sales card's content runs a little quicker and holds complete before, into the production shot (88.75),
+    the card itself travels from the upper left to where the production card sits
     (lower right) and turns into it - glass white -> navy, the sales content giving way to the production card's,
     which goes on as that card does; the footage cross-fades underneath (no line-particle cut)
   - the link to the robot cell runs from the start of the shot, and its marker opens on the robot arm's shoulder
@@ -33,7 +34,7 @@ MEET = os.environ.get("AXP_MEET", "m1_meeting")
 O.SHOTS[0] = (MEET, 86.50, 2.80, dict(s=(1.03, 1.10), grade=S.GRADE_DAY))
 O.SHOTS[2] = ("17_robot", 92.10, 4.80, dict(s=(1.05, 1.14), x=(-20, 20), grade=S.GRADE_COOL))
 LINK0 = O.L_AUTO + 0.40                       # the link to the robot draws as the shot's card comes in
-MV0, MV_D = 88.25, 0.80                       # the card travels to the production card's place
+MV0, MV_D = 88.75, 0.80                       # the card travels to the production card's place
 R1, R2 = R(96, 186, 760, 430), R(1110, 470, 720, 420)
 END = TL1 / 24.0
 JOINT = json.load(open(os.path.join(E.HERE, "assets", "tracks", "17_robot_joint.json")))["points"]["joint"]
@@ -56,7 +57,22 @@ def into(c, src, dst):
     c.translate(-src.left(), -src.top())
 
 
-# ---------------------------------------------------------------- 1 sales content (as seg_ops.sales, without its card)
+# ---------------------------------------------------------------- 1 sales (as seg_ops.sales, a little quicker so the
+# card is complete and holds before it travels on)
+def sales(c, t):
+    k, dy, bl = O.card_in(t, 86.45)
+    if k <= 0.003:
+        return
+    A.blur_layer(c, bl, k)
+    c.save()
+    c.translate(0, dy)
+    O.ncard(c, R1, 1.0, light=True)
+    sales_content(c, t, R1)
+    c.restore()
+    c.restore()
+
+
+
 def sales_content(c, t, r):
     O.team_head(c, r.left() + 44, r.top() + 64, "영업팀", "다음 달 수요는?", 1.0, True)
     gx, gy, gw, gh = r.left() + 44, r.top() + 150, r.width() - 88, 210
@@ -66,12 +82,12 @@ def sales_content(c, t, r):
     n = len(hist) + len(fut) - 2
     pts = [(gx + i * gw / n, gy + gh * (1 - v)) for i, v in enumerate(hist)]
     fp = [(gx + (len(hist) - 1 + i) * gw / n, gy + gh * (1 - v)) for i, v in enumerate(fut)]
-    E.line(c, poly(pts), INK, 1.0, 3.0, (0, e_io_sine(prog(t, O.L_SALES + 0.35, 0.8))))
-    tk = e_io_sine(prog(t, O.L_SALES + 1.0, 0.3))
+    E.line(c, poly(pts), INK, 1.0, 3.0, (0, e_io_sine(prog(t, O.L_SALES + 0.25, 0.6))))
+    tk = e_io_sine(prog(t, O.L_SALES + 0.75, 0.3))
     ox = pts[-1][0]
     c.drawLine(ox, gy - 18, ox, gy + gh, paint_stroke(STEEL_200, tk, 1.6))
     text(c, "오늘", ox + 10, gy - 4, 19, "SemiBold", STEEL, tk)
-    g2 = e_io_sine(prog(t, O.L_SALES + 1.1, 0.8))
+    g2 = e_io_sine(prog(t, O.L_SALES + 0.80, 0.6))
     if g2 > 0:
         band = poly([(x, y - 10 - i * 5) for i, (x, y) in enumerate(fp)] +
                     [(x, y + 10 + i * 5) for i, (x, y) in reversed(list(enumerate(fp)))], True)
@@ -80,7 +96,7 @@ def sales_content(c, t, r):
         c.drawPath(band, paint_fill(CYAN, 0.22))
         c.restore()
         E.line(c, poly(fp), BLUE, 1.0, 3.2, (0, g2), dash=[12, 8])
-    dk = e_out_expo(prog(t, O.L_SALES + 1.8, 0.35))
+    dk = e_out_expo(prog(t, O.L_SALES + 1.35, 0.35))
     if dk > 0:
         x, y = fp[-1]
         O.diamond(c, x, y, 14 * dk, BLUE, 1.0)
@@ -271,7 +287,7 @@ def shot(c, i, t, card=True):
     if not card:
         return cam
     if i == 0:
-        O.sales(c, t)
+        sales(c, t)
     elif i == 1:
         production(c, t, cam)
     else:

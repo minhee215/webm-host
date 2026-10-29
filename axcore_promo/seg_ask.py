@@ -78,6 +78,13 @@ APPS = [("ERP", "db", 330, 300, 1.10), ("MES", "factory", 780, 280, 0.85), ("메
         ("일정", "calendar", 520, 500, 0.8)]
 HOPS = [0, 2, 6, 3, 5, 1]
 
+# (client re-edit, seg_ask2.py) one hop fewer and slower; the systems are not swept away into the search card:
+# they shrink a little, go soft and stay behind it as its background until the answer cards come in
+V2 = False
+V2_HOP0, V2_HOP_DT, V2_HOPS = 75.25, 0.28, [0, 2, 6, 3, 5]
+V2_SHRINK, V2_BLUR, V2_DIM = 0.86, 9.0, 0.55      # the systems behind the search card
+V2_OUT0, V2_OUT_D = 79.10, 0.70                   # and their fade as the answer cards come in
+
 SEARCH = R(530, 370, 860, 300)
 PILL0 = R(574, 470, 772, 92)
 QPILL = R(560, 168, 800, 72)
@@ -223,6 +230,12 @@ def app_state(i, t):
     y = y0 - 22 * (1 - e_out_cubic(prog(t, t0, 0.9)))
     s = z * lerp(1.12, 1.0, e_out_cubic(prog(t, t0, 0.9)))
     blur = 12 * (1 - k) + 5 * max(0.0, 1.0 - z)
+    if V2:
+        m2 = e_io_cubic(prog(t, MERGE0, 0.75))
+        sc = lerp(1.0, V2_SHRINK, m2)
+        x, y, s = W / 2 + (x - W / 2) * sc, H / 2 + (y - H / 2) * sc, s * sc
+        blur += V2_BLUR * m2
+        return x, y, s, k * lerp(1.0, V2_DIM, m2) * (1 - e_io_sine(prog(t, V2_OUT0, V2_OUT_D))), blur
     m = e_in_cubic(prog(t, MERGE0 + 0.015 * ((i * 3) % len(APPS)), 0.40))
     if m > 0:
         x, y = lerp(x, W / 2, m), lerp(y, H / 2, m)
@@ -233,8 +246,10 @@ def app_state(i, t):
 
 
 def systems(c, t):
-    if t > MERGE0 + 0.75:
+    if t > (V2_OUT0 + V2_OUT_D if V2 else MERGE0 + 0.75):
         return
+    HOP0, HOP_DT, HOPS = (V2_HOP0, V2_HOP_DT, V2_HOPS) if V2 else (globals()["HOP0"], globals()["HOP_DT"],
+                                                                     globals()["HOPS"])
     st = [app_state(i, t) for i in range(len(APPS))]
     # the hops: a dashed trail between the windows the highlight visits
     hi = [0.0] * len(APPS)
@@ -266,7 +281,7 @@ def systems(c, t):
         A.cursor(c, lerp(p0[0], p1[0], q) + 40, lerp(p0[1], p1[1], q) + 20,
                  clamp(prog(t, HOP0 - 0.1, 0.12)) * (1 - m))
     # the rush: a flash where they meet
-    fl = math.sin(math.pi * clamp(prog(t, MERGE0 + 0.25, 0.5)))
+    fl = 0.0 if V2 else math.sin(math.pi * clamp(prog(t, MERGE0 + 0.25, 0.5)))
     if fl > 0:
         E.radial(c, W / 2, H / 2, 420, "#7FB2FF", 0.5 * fl)
 

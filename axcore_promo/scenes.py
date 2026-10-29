@@ -417,7 +417,7 @@ S5_LINE_T0, S5_LINE_D = 26.0, 1.1
 BAR_LINE = (1232.0, 640.0, 542.0)   # diamond x, line start x, y (screen)
 LINE_BLUE = "#3D74FF"
 S5_FRONT_STAGGER = 0.16                         # tiles come in one by one, clockwise from the top left
-S5_BIG_TAGS = False       # (client re-edit) DX / AX shown large over the footage instead of a small pill by the name:
+S5_BIG_TAGS = False       # (client re-edit) the DX / AX pill shown larger over the footage instead of by the name:
                           # the tagged cards grow and their footage goes translucent, the untagged cards shrink
 S5_FLOW_INFO = {"Diagnose": ("업무 · 데이터 현황 진단", "디지털 수준 L3"), "Analyze": ("개선 과제 도출", "개선 과제 70개"),
                 "Design": ("우선순위 · 로드맵 설계", "5단계 로드맵"), "Execute": ("AI 적용과 자동화 실행", "현장 적용")}
@@ -556,34 +556,32 @@ def s5_label(c, x, y, lab, a, tag=None, tag_on=0.0):
         text(c, tag, tr.centerX(), tr.top() + 21, 16, "Bold", WHITE if tag == "DX" else NAVY_950, a * clamp(k * 2 - 1), "center")
 
 
+S5_TAG_SCALE = 2.0         # (big tags) the pill drawn over the footage, this much larger than by the name
+
+
 def s5_big_tag(c, tq, tag, sel, a):
-    """DX / AX large over the card's footage: soft blur-in, settling from a touch larger."""
-    k = e_io_sine(clamp(sel))
+    """The DX / AX pill (the same design as by the name), larger, over the card's footage; it opens out the same way."""
+    k = clamp(sel)
     if k <= 0.003:
         return
     cx = sum(p[0] for p in tq) / 4
     cy = sum(p[1] for p in tq) / 4
-    hgt = abs(tq[3][1] - tq[0][1])
-    size = hgt * 0.58
-    s_ = lerp(1.18, 1.0, e_out_cubic(clamp(sel)))
-    col_ = CYAN if tag == "AX" else WHITE
-    lp = skia.Paint()
-    lp.setAlphaf(clamp(a * k))
-    bl = 8.0 * (1 - k)
-    if bl > 0.05:
-        lp.setImageFilter(skia.ImageFilters.Blur(bl, bl, skia.TileMode.kDecal))
-    c.saveLayer(None, lp)
+    s_ = S5_TAG_SCALE
     c.save()
     c.translate(cx, cy)
     c.scale(s_, s_)
-    radial(c, 0, 0, size * 1.4, BLUE if tag == "DX" else CYAN, 0.30)
-    f = font(size, "ExtraBold")
-    tw = f.measureText(tag)
-    glow = paint_fill(BLUE if tag == "DX" else CYAN, 0.55, blur=size * 0.12)
-    c.drawString(tag, -tw / 2, size * 0.36, f, glow)
-    c.drawString(tag, -tw / 2, size * 0.36, f, paint_fill(col_, 1.0))
+    tr = R(-22 * k, -15, 44 * k, 30)
+    rrect(c, tr, 15, BLUE if tag == "DX" else CYAN, a * k)
+    text(c, tag, 0, 6, 16, "Bold", WHITE if tag == "DX" else NAVY_950, a * clamp(k * 2 - 1), "center")
     c.restore()
-    c.restore()
+
+
+def s5_tag_on(T, tag, i):
+    """(big tags) slow, staggered timing: the DX cards first, then the AX cards, each over about a second."""
+    order = {"DX": [0, 5, 7], "AX": [1, 3, 4]}
+    j = order[tag].index(i) if i in order.get(tag, []) else 0
+    t0 = (CUE["L07"] + 0.15 if tag == "DX" else CUE["L07"] + 0.85) + 0.22 * j
+    return e_io_sine(prog(T, t0, 1.1))
 
 
 def sc05(c, T, t, d):
@@ -633,13 +631,16 @@ def sc05(c, T, t, d):
         dim = find * (0.0 if tag else 0.55)
         sc = 1.0
         if S5_BIG_TAGS:                                   # grow the tagged cards, shrink the others (smoothly)
-            grow = e_io_sine(clamp(dx_on if tag == "DX" else ax_on if tag == "AX" else 0.0))
-            sc = 1.0 + 0.22 * grow if tag else 1.0 - 0.22 * e_io_sine(clamp(dx_on))
+            if tag:
+                sel = s5_tag_on(T, tag, i) * find
+                sc = 1.0 + 0.22 * sel
+            else:
+                sc = 1.0 - 0.22 * e_io_sine(prog(T, CUE["L07"] + 0.15, 1.6))
         tq = s5_slab(c, P, x, z, 2.5 * sc, 1.6 * sc, y, a, top=0.06, edge=CYAN if tag == "AX" and sel > 0.5 else
                      ("#7FA6FF" if tag else "#5D7BC4"), glow=sel * (1.0 if tag == "AX" else 0.6))
-        vid_a = a * (1 - 0.5 * e_io_sine(clamp(sel))) if S5_BIG_TAGS and tag else a
+        vid_a = a * (1 - 0.5 * clamp(sel)) if S5_BIG_TAGS and tag else a
         s5_video(c, s5_clip(lab, name), tq, T + i * 0.7, vid_a, (0.5, 0.5) if S5_FRONT else foc,
-                 dim + (0.25 * e_io_sine(clamp(sel)) if S5_BIG_TAGS and tag else 0.0))
+                 dim + (0.25 * clamp(sel) if S5_BIG_TAGS and tag else 0.0))
         if soft:
             c.restore()
         if S5_BIG_TAGS and tag and sel > 0.003:

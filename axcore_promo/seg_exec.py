@@ -32,6 +32,7 @@ GRAIN0 = O.GRAIN0 + (F_TL - O.F_TL)   # the same grain as seg_ops on the frames 
 OPS_END = O.T0 + (O.NF - 1) / 24.0
 SCV = 1.0
 
+SWITCH_ALPHA = 1.0               # (seg_sphere) the switch fades out as the AXCORE logo comes in
 SWITCH_CENTER = False            # (client re-edit, seg_exec2.py) the switch settles to its size in the centre, not the corner
 OUT, OUT_D = 96.22, 1.0          # "실행" (voice 96.26): the shot snaps open
 NET0 = 95.85                     # the network grows (after seg_ops' last frame)
@@ -103,6 +104,10 @@ def factory(c, t):
     cy = H / 2 - 30 if SWITCH_CENTER else lerp(H / 2 - 30, fin.centerY(), zo)
     sw = e_out_expo(prog(t, OUT - 0.04, 0.42))
     hit = e_out_cubic(prog(t, OUT - 0.02, 0.16)) * math.exp(-max(0.0, t - (OUT + 0.14)) * 3.0)
+    if SWITCH_ALPHA <= 0.003:
+        return
+    if SWITCH_ALPHA < 1:
+        A.blur_layer(c, 6 * (1 - SWITCH_ALPHA), SWITCH_ALPHA)
     c.save()
     c.translate(cx, cy)
     c.scale(sc, sc)
@@ -125,6 +130,8 @@ def factory(c, t):
     text(c, "실행", 0, 8, 22, "Bold" if on else "SemiBold", S.NAVY_900 if on else WHITE, 1.0, "center")
     c.restore()
     c.restore()
+    if SWITCH_ALPHA < 1:
+        c.restore()
 
 
 def render(c, t):

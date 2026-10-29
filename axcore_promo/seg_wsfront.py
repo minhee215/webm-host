@@ -1,12 +1,11 @@
-"""Patch 00:00:47:09-00:00:50:04 (68 frames) across the seg_axpoint -> seg_connect2 join: as the ceiling cards
-shuffle into the AI workspace, the UI comes down off the ceiling to face the lens (the move of the old 49:06-49:18
-turn) and settles above the lower-left title with a margin; the room behind it goes soft. The later turn is
-dropped - the UI already faces the lens - and only the light swells out of it, fills the frame and draws back into
-the datacenter node (seg_connect2's own light, so from the peak on the frames are seg_connect2's).
-In the client's edit seg_connect2 starts one frame late (its 48:23 frame, the same picture as seg_axpoint's last one,
-sits at 48:24), so at 50:04 the picture is seg_connect2's frame for 50:03: the clock here runs from 47:09 to that
-50:03 evenly (one frame of slack spread over the patch), the grain follows each file's own numbering.
-23.976 fps, 21:9 letterbox.
+"""Patch 00:00:47:09-00:00:57:23 (255 frames) over the seg_axpoint -> seg_connect2 join and the connect scene: as the
+ceiling cards shuffle into the AI workspace, the UI comes down off the ceiling to face the lens (the move of the old
+49:06-49:18 turn) and settles above the lower-left title with a margin; the room behind it goes soft. No light
+transition: the soft room and the title fade out while the workspace UI blurs and fades back to become the
+background of the connect scene, whose graphics (company systems on the left, the AXCORE node, the external SaaS
+on the right) are seg_connect2's own, at their own times.
+Film time = timeline frame / 24 (seg_connect2's one-frame late placement in the client's edit is not kept: the
+patch runs on one clock). 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_wsfront.py <out.mp4> [height=480] [first last]
 """
 import subprocess
@@ -23,72 +22,107 @@ import seg_connect as C
 import seg_connect2 as K
 from engine import W, H, R, lerp, prog, e_io_cubic, e_io_sine, paint_fill
 
-TL0, TL1 = 47 * 24 + 9, 50 * 24 + 4          # timeline 00:00:47:09 .. 00:00:50:04
+TL0, TL1 = 47 * 24 + 9, 57 * 24 + 23         # timeline 00:00:47:09 .. 00:00:57:23
 NF = TL1 - TL0 + 1
 DOWN0, DOWN_D = TL0 / 24.0 + 0.02, 1.10      # the UI comes down to face the lens (from the first frame on)
 UI_L, UI_B, UI_W = 96.0, 728.0, 1728.0       # where it settles: aligned with the title, a margin above it
 UI_H = UI_W * A.UH / A.UW
+X0, X_D = 49.35, 0.85                        # the room and the title fade out, the UI goes soft: the background
+BG_BLUR, BG_ALPHA = 14.0, 0.55
 SCV = 1.0
-JOIN = 48 * 24 + 23                          # seg_axpoint's last frame; seg_connect2 follows from the next one
 
 
 def clock(tl):
-    """Film time shown at timeline frame tl (47:09 -> 47:09, 50:04 -> 50:03)."""
-    return (TL0 + (tl - TL0) * (TL1 - 1 - TL0) / (TL1 - TL0)) / 24.0
+    return tl / 24.0
 
 
 def grain(tl):
-    return tl if tl <= JOIN else tl - 1
+    return tl
 
 
 def front_quad():
     return [(UI_L, UI_B - UI_H), (UI_L + UI_W, UI_B - UI_H), (UI_L + UI_W, UI_B), (UI_L, UI_B)]
 
 
-def ui_down(c, t):
+def base(c):
+    """What is left under the soft UI once the room has gone: a light, cool field."""
+    sh = skia.GradientShader.MakeLinear([skia.Point(0, 138), skia.Point(0, 942)],
+                                        [E.colint("#EEF2FA", 1.0), E.colint("#DCE4F3", 1.0)])
+    c.drawRect(R(-W, -H, 3 * W, 3 * H), skia.Paint(Shader=sh))
+
+
+def grade(c, k):
+    """The connect scene's look over its background (as seg_connect2.background), faded in with k."""
+    if k <= 0.003:
+        return
+    c.drawRect(R(0, 0, W, H), paint_fill(E.NAVY_950, 0.06 * k))
+    E.radial(c, K.HUB[0], K.HUB[1], 1200, "#CFE2FF", 0.26 * k, blend=skia.BlendMode.kScreen)
+    sh = skia.GradientShader.MakeRadial(skia.Point(*K.HUB), 1300,
+                                        [E.colint(E.NAVY_950, 0.0), E.colint(E.NAVY_950, 0.24 * k)], [0.45, 1.0])
+    c.drawPaint(skia.Paint(Shader=sh))
+
+
+def render(c, t):
     u = e_io_cubic(prog(t, DOWN0, DOWN_D))
+    x = e_io_sine(prog(t, X0, X_D))
     q0 = K.ui_quad_ceiling()
     q = [(lerp(a[0], b[0], u), lerp(a[1], b[1], u)) for a, b in zip(q0, front_quad())]
-    # the room: a touch closer, out of focus behind the UI
-    img = A.plate("ceiling", t)
-    if img is not None:
-        fx, fy = sum(p[0] for p in q0) / 4, sum(p[1] for p in q0) / 4
-        z = 1.0 + 0.10 * u
-        p = skia.Paint(AntiAlias=True)
-        bl = 14 * u
-        if bl > 0.05:
-            p.setImageFilter(skia.ImageFilters.Blur(bl, bl, skia.TileMode.kClamp))
-        c.save()
-        c.translate(fx, fy)
-        c.scale(z, z)
-        c.translate(-fx, -fy)
-        c.drawImageRect(img, R(0, 0, W, H), E.SAMP, p)
-        c.restore()
-        c.drawRect(R(0, 0, W, H), paint_fill("#EAF2FF", 0.22 * u))
+    if x > 0:
+        base(c)
+    # the room: a touch closer, out of focus behind the UI, then gone
+    if x < 1:
+        img = A.plate("ceiling", t)
+        if img is not None:
+            fx, fy = sum(p[0] for p in q0) / 4, sum(p[1] for p in q0) / 4
+            z = 1.0 + 0.10 * u
+            p = skia.Paint(AntiAlias=True)
+            p.setAlphaf(1 - x)
+            bl = 14 * u
+            if bl > 0.05:
+                p.setImageFilter(skia.ImageFilters.Blur(bl, bl, skia.TileMode.kClamp))
+            c.save()
+            c.translate(fx, fy)
+            c.scale(z, z)
+            c.translate(-fx, -fy)
+            c.drawImageRect(img, R(0, 0, W, H), E.SAMP, p)
+            c.restore()
+            c.drawRect(R(0, 0, W, H), paint_fill("#EAF2FF", 0.22 * u * (1 - x)))
+    # the workspace UI: facing the lens, then soft and faded back as the background (slow push from there on)
+    zb = 1.0 + 0.05 * x + 0.05 * prog(t, X0 + X_D, K.T_END - X0 - X_D)
     M = cv2.getPerspectiveTransform(np.float32([[0, 0], [A.UW, 0], [A.UW, A.UH], [0, A.UH]]), np.float32(q))
     c.save()
+    c.translate(*K.HUB)
+    c.scale(zb, zb)
+    c.translate(-K.HUB[0], -K.HUB[1])
     c.concat(skia.Matrix.MakeAll(*(M / M[2, 2]).flatten().tolist()))
     lp = skia.Paint()
-    lp.setAlphaf(0.92)
+    lp.setAlphaf(0.92 * lerp(1.0, BG_ALPHA, x))
+    if x > 0.002:
+        sg = BG_BLUR * x / (UI_W / A.UW)          # in plane units (the plane is scaled down onto the screen)
+        lp.setImageFilter(skia.ImageFilters.Blur(sg, sg, skia.TileMode.kDecal))
     c.saveLayer(None, lp)
     A.ceiling_ui(c, t)
     c.restore()
     c.restore()
-    k = 1 - e_io_sine(prog(t, K.GLOW0, K.GLOW_PEAK - K.GLOW0))    # the title stays until the light takes over
+    k = 1 - x                                    # the lower-left title fades out with the room
     if k > 0:
         lp = skia.Paint()
         lp.setAlphaf(k)
         c.saveLayer(None, lp)
         A.caption(c, t)
         c.restore()
-
-
-def render(c, t):
-    if t < K.GLOW_PEAK:
-        ui_down(c, t)
-    else:
-        K.datacenter(c, t)
-    K.light(c, t)
+    grade(c, x)
+    # the connect scene's graphics (seg_connect2.datacenter without its corridor)
+    if t > K.PAN0 - 0.2:
+        c.save()
+        zg = 1.0 + 0.03 * prog(t, K.PAN0 - 0.5, K.T_END - K.PAN0 + 0.5)
+        c.translate(*K.HUB)
+        c.scale(zg, zg)
+        c.translate(-K.HUB[0], -K.HUB[1])
+        K.left_panels(c, t)
+        K.right_cards(c, t)
+        K.hub(c, t)
+        c.restore()
 
 
 def setup(height):

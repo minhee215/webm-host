@@ -41,9 +41,9 @@ _HT, _HG = _hold_map()
 _sc05 = S.sc05
 
 
-ZIN0, ZIN_D = 26.18, 0.65       # (patch clock) as the cards go and the line runs right, the camera eases in on its head
-ZOUT0, ZOUT_D = 26.95, 0.50     # once the line is drawn, back out to the original framing (identical from 27.45)
-ZIN_K, ZIN_FOLLOW = 1.15, 0.5
+ZIN0, ZIN_D = 26.10, 0.75       # (patch clock) as the cards go and the line runs right, the camera closes in on its
+ZOUT0, ZOUT_D = 26.92, 0.57      # head and rides along with it; once the line is drawn, back out to the original
+ZIN_K, ZIN_LEAD = 2.0, 0.18      # framing (identical on the last frame, 28:12); the head sits a little right of centre
 
 
 def line_head(T):
@@ -63,8 +63,8 @@ def sc05_held(c, T, t, *a):
     if k <= 1e-4:
         return _sc05(c, T, t, *a)
     hx, hy = line_head(T)
-    z = S.lerp(1.0, ZIN_K, k)
-    fx, fy = S.W / 2 + ZIN_FOLLOW * k * (hx - S.W / 2), S.H / 2 + ZIN_FOLLOW * k * (hy - S.H / 2)
+    z = math.exp(k * math.log(ZIN_K))
+    fx, fy = S.lerp(S.W / 2, hx - ZIN_LEAD * S.W / z, k), S.lerp(S.H / 2, hy, k)
     mx, my = S.W / 2 / z, S.H / 2 / z                 # keep the scene's own background covering the frame
     fx, fy = S.clamp(fx, mx, S.W - mx), S.clamp(fy, my, S.H - my)
     c.save()

@@ -556,6 +556,7 @@ def s5_label(c, x, y, lab, a, tag=None, tag_on=0.0):
         text(c, tag, tr.centerX(), tr.top() + 21, 16, "Bold", WHITE if tag == "DX" else NAVY_950, a * clamp(k * 2 - 1), "center")
 
 
+S5_RAIL_GROW = False       # (client re-edit) the flow rail runs out from behind the first card instead of popping on
 S5_TAG_SCALE = 2.0         # (big tags) the pill drawn over the footage, this much larger than by the name
 
 
@@ -749,16 +750,21 @@ def s5_front_flow(c, P, k, T):
     xa, xb = xs[0], xs[-1]                          # the line runs between the outer cards, never past them
     out = e_io_cubic(prog(T, 26.2, 0.75))
     fill = e_io_sine(prog(T, 22.75, 3.0))           # pipeline progress (reaches each step as it lights)
+    dots_in, rail_g = 1.0, 1.0
+    if S5_RAIL_GROW:                                # the rail is not there at once: it runs out from behind the
+        dots_in = e_io_sine(prog(T, 22.2, 0.8))     # first card as that card arrives; the dots ease in
+        rail_g = e_io_cubic(prog(T, 22.80, 0.36))
     # faint dot field
     for gx in range(-14, 15):
         for gz in range(-6, 7):
             px, py = P(gx * 1.0, 0, gz * 1.0)
             if -20 < px < W + 20 and BAR_TOP - 10 < py < BAR_BOT + 10:
-                c.drawCircle(px, py, 1.3, paint_fill("#5C86E0", 0.22 * (1 - out)))
+                c.drawCircle(px, py, 1.3, paint_fill("#5C86E0", 0.22 * (1 - out) * dots_in))
     # pipeline rail through the card centres (behind the cards), lit fill, arrows between steps
     ra, rb = P(xa, 0, ZC), P(xb, 0, ZC)
-    rail = poly([ra, rb])
-    line(c, rail, "#24438F", 0.9 * (1 - out), 10 * ts)
+    rail = poly([ra, P(lerp(xa, xb, rail_g), 0, ZC)])
+    if rail_g > 0:
+        line(c, rail, "#24438F", 0.9 * (1 - out), 10 * ts)
     xf = lerp(xa, xb, fill)
     lend = S5_FRONT_END == "line"
     if fill > 0:
@@ -771,10 +777,13 @@ def s5_front_flow(c, P, k, T):
         mx = (xs[i] + xs[i + 1]) / 2
         on = 1.0 if xf > mx else 0.0
         ax, ay = P(mx, 0, ZC)
+        shown = clamp((lerp(xa, xb, rail_g) - mx) / 0.6 + 1) if rail_g < 1 else 1.0
+        if shown <= 0:
+            continue
         for j in (-1, 0, 1):
             ox = j * 16 * ts
             c.drawPath(poly([(ax + ox - 7 * ts, ay - 11 * ts), (ax + ox + 5 * ts, ay), (ax + ox - 7 * ts, ay + 11 * ts)]),
-                       paint_stroke(CYAN if on else "#4E6FB8", (0.9 if on else 0.5) * (1 - out), 3 * ts))
+                       paint_stroke(CYAN if on else "#4E6FB8", (0.9 if on else 0.5) * (1 - out) * shown, 3 * ts))
     pts = [P(x, 0, ZC + dz) for x, dz in ((xa, 0.0), (xs[1], -0.2), (xs[2], 0.2), (xb, 0.0))]
     line_flow(c, pts, e_io_sine(prog(T, 22.7, 3.0)) * 1.4, 0.4, n=10, spread=18 * ts, twist=1.3, width=1.3,
               color=CYAN, key="s5ff", tsec=T)

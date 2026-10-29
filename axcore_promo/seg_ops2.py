@@ -3,9 +3,8 @@
   - into the production shot the card itself travels from the upper left to where the production card sits
     (lower right) and turns into it - glass white -> navy, the sales content giving way to the production card's,
     which goes on as that card does; the footage cross-fades underneath (no line-particle cut)
-  - 구매팀 · 새 도면, 자재 발주까지 돼?: every step gets its diamond in turn, 'AUTO' set tighter
-  - the robot cell marker sits on the robot arm's shoulder joint (tracked) and is there from the start of the shot;
-    '· 연결됨' joins its label when the link from the card arrives
+  - the link to the robot cell runs from the start of the shot, and its marker opens on the robot arm's shoulder
+    joint (tracked) as it arrives; one diamond moves down the steps as they come in, 'AUTO' set tighter
   - 설비팀 · 오래된 설비도 연결돼? holds to 01:36:17 (no exit here: the next scene is being reworked)
 Before 01:25:20 the frames are seg_ask's; the grain runs on as both files' (seg_ask's numbering).
 Film time = timeline frame / 24. 23.976 fps, 21:9 letterbox.
@@ -33,6 +32,7 @@ NF = TL1 - TL0 + 1
 MEET = os.environ.get("AXP_MEET", "m1_meeting")
 O.SHOTS[0] = (MEET, 86.50, 2.80, dict(s=(1.03, 1.10), grade=S.GRADE_DAY))
 O.SHOTS[2] = ("17_robot", 92.10, 4.80, dict(s=(1.05, 1.14), x=(-20, 20), grade=S.GRADE_COOL))
+LINK0 = O.L_AUTO + 0.40                       # the link to the robot draws as the shot's card comes in
 MV0, MV_D = 88.25, 0.80                       # the card travels to the production card's place
 R1, R2 = R(96, 186, 760, 430), R(1110, 470, 720, 420)
 END = TL1 / 24.0
@@ -179,9 +179,6 @@ def checklist(c, t, r):
             continue
         y = r.top() + 160 + i * 74 + dy
         on = e_out_expo(prog(t, t0 + 0.3, 0.3))
-        dk = e_out_expo(prog(t, t0 + 0.3, 0.35))          # each step's diamond, in turn as it checks
-        if dk > 0:
-            O.diamond(c, r.left() + 26, y, 9 * dk, O.ACC, k)
         b = R(r.left() + 44, y - 22, 42, 42)
         c.drawPath(O.shape(b, 8), paint_fill(O.ACC if on > 0.5 else O.CARD_BG, k))
         c.drawPath(O.shape(b, 8), paint_stroke(O.ACC, k, 1.8))
@@ -194,6 +191,14 @@ def checklist(c, t, r):
         x0 = b.right() + 40 + text_w(s, 30, "SemiBold")
         c.drawLine(x0, y, x1 - 16, y, p)
         O.spaced(c, "AUTO", x1, y + 8, 20, O.ACC, k * on, 0.6)       # tighter tracking
+    # one diamond marking the step at work: it moves down to each step as that step comes in
+    t_0 = O.L_AUTO + 0.15
+    if t > t_0:
+        j = 0.0
+        for i in range(1, len(O.STEPS)):
+            j += e_io_cubic(prog(t, t_0 + i * 0.28, 0.22))
+        da = e_io_sine(prog(t, t_0, 0.3))
+        O.diamond(c, r.left() + 26, r.top() + 160 + j * 74, 9, O.ACC, da)
 
 
 def joint(cam, t):
@@ -231,18 +236,19 @@ def robots(c, t, cam):
         c.restore()
         c.restore()
         c.restore()
-    # the robot cell: on the arm's shoulder joint from the start of the shot; the link arrives later
+    # the robot cell: the link runs out from the card to the arm's shoulder joint (tracked) from the start of the
+    # shot, and the marker opens there as it arrives (as before, only earlier)
     gx, gy = joint(cam, t)
-    rk = e_io_sine(prog(t, O.CUTS[2][0] + 0.15, 0.5))
-    g = e_io_cubic(prog(t, O.L_LINK + 0.55, 0.8))
+    L0 = LINK0
+    g = e_io_cubic(prog(t, L0, 0.8))
     if g > 0:
         p0 = (O.CARD3.right(), O.CARD3.centerY() + 40)
         pth = E.curve(p0, (gx - 74, gy), 0.4)
         E.line(c, pth, O.ACC, 0.95, 2.4, (0, g), glow=0.9)
-        if t > O.L_LINK + 1.3:
-            E.pulse(c, pth, ((t - O.L_LINK - 1.3) * 0.8) % 1.0, WHITE, 0.9, 14)
+        if t > L0 + 0.75:
+            E.pulse(c, pth, ((t - L0 - 0.75) * 0.8) % 1.0, WHITE, 0.9, 14)
+    rk = e_io_sine(prog(t, L0 + 0.55, 0.5))
     if rk > 0.003:
-        on = e_io_sine(prog(t, O.L_LINK + 1.25, 0.4))
         c.save()
         c.translate(gx, gy)
         c.rotate(t * 30)
@@ -250,20 +256,13 @@ def robots(c, t, cam):
             c.drawArc(R(-74, -74, 148, 148), j * 90 + 10, 60, False, paint_stroke(O.ACC, rk, 2.6))
         c.restore()
         c.drawCircle(gx, gy, 50, paint_stroke(WHITE, rk * 0.7, 1.4))
-        if on > 0:
-            q = prog(t, O.L_LINK + 1.25, 0.8)
-            if q < 1:
-                c.drawCircle(gx, gy, 50 + 60 * e_out_cubic(q), paint_stroke(O.ACC, (1 - q) * 0.8, 2.0))
-        lab0, lab1 = "로봇 셀 R-02", "  ·  연결됨"
-        w0, w1 = text_w(lab0, 20, "Bold"), text_w(lab1, 20, "Bold")
-        tw = w0 + w1 * on + 60
+        lab = "로봇 셀 R-02 · 연결됨"
+        tw = text_w(lab, 20, "Bold") + 60
         lr = R(min(gx + 90, W - 60 - tw), gy - 108, tw, 44)
         c.drawPath(O.shape(lr, 12), paint_fill("#0A1630", 0.88 * rk))
-        c.drawPath(O.shape(lr, 12), paint_stroke(O.ACC if on > 0.5 else "#5C78B8", 0.9 * rk, 1.4))
+        c.drawPath(O.shape(lr, 12), paint_stroke("#5C78B8", 0.9 * rk, 1.4))
         icon(c, "robot", lr.left() + 26, lr.centerY(), 20, O.ACC, rk)
-        text(c, lab0, lr.left() + 46, lr.centerY() + 7, 20, "Bold", WHITE, rk)
-        if on > 0:
-            text(c, lab1, lr.left() + 46 + w0, lr.centerY() + 7, 20, "Bold", O.ACC, rk * on)
+        text(c, lab, lr.left() + 46, lr.centerY() + 7, 20, "Bold", WHITE, rk)
 
 
 def shot(c, i, t, card=True):

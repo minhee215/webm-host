@@ -32,6 +32,7 @@ GRAIN0 = O.GRAIN0 + (F_TL - O.F_TL)   # the same grain as seg_ops on the frames 
 OPS_END = O.T0 + (O.NF - 1) / 24.0
 SCV = 1.0
 
+SWITCH_CENTER = False            # (client re-edit, seg_exec2.py) the switch settles to its size in the centre, not the corner
 OUT, OUT_D = 96.22, 1.0          # "실행" (voice 96.26): the shot snaps open
 NET0 = 95.85                     # the network grows (after seg_ops' last frame)
 
@@ -98,8 +99,8 @@ def factory(c, t):
     # the switch: large in the centre (where seg_ops left it), flips hard on "실행", then glides to its corner
     fin = R(110, 176, 470, 100)
     sc = lerp(1.8, 1.0, zo)
-    cx = lerp(W / 2, fin.centerX(), zo)
-    cy = lerp(H / 2 - 30, fin.centerY(), zo)
+    cx = W / 2 if SWITCH_CENTER else lerp(W / 2, fin.centerX(), zo)
+    cy = H / 2 - 30 if SWITCH_CENTER else lerp(H / 2 - 30, fin.centerY(), zo)
     sw = e_out_expo(prog(t, OUT - 0.04, 0.42))
     hit = e_out_cubic(prog(t, OUT - 0.02, 0.16)) * math.exp(-max(0.0, t - (OUT + 0.14)) * 3.0)
     c.save()

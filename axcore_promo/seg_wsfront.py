@@ -130,6 +130,22 @@ def sys_icon(c, kind, x, y, col, a):
         E.icon(c, kind, x, y, 18, col, a, 1.6)
 
 
+def connector(c, t, p0, p1, t0, rev=False):
+    """One connection line from a panel's port p0 to the node p1 (drawn out from the node side when rev), with a
+    dot on the port and pulses running along it once it is drawn."""
+    la = e_io_sine(prog(t, t0 - 0.3, 0.6))
+    if la <= 0.003:
+        return
+    pth = E.curve(p0, p1, 0.4)
+    g = e_io_cubic(prog(t, t0, 0.9))
+    E.line(c, pth, CYAN, 0.9 * la, 1.8, (1 - g, 1) if rev else (0, g), glow=0.8)
+    if t > t0 + 0.9:
+        for j in range(2):
+            f = ((t - t0 - 0.9) * 0.55 + j * 0.5) % 1.0
+            E.pulse(c, pth, 1 - f if rev else f, CYAN, 0.8 * la, 12, 0.15)
+    E.glow_dot(c, p0[0], p0[1], 8, CYAN, la)
+
+
 def systems_panel(c, t):
     """One glass panel '사내 시스템': a row per system kind (icon, name, products, count), each joined to the node
     from a port on its right; the panel comes in as the old left panels did, the rows one by one."""
@@ -138,20 +154,7 @@ def systems_panel(c, t):
         return
     dx = -50 * (1 - E.e_out_cubic(prog(t, K.PAN0, 1.1)))
     P = SP.makeOffset(dx, 0)
-    for i in range(len(SYS)):                                  # the connectors (behind the panel)
-        t0 = row_time(i)
-        la = e_io_sine(prog(t, t0, 0.5))
-        if la <= 0.003:
-            continue
-        r = row_rect(i).makeOffset(dx, 0)
-        px, py = P.right() + 26, r.centerY()
-        pth = E.curve((px, py), (K.HUB[0] - 40, K.HUB[1]), 0.45)
-        g = e_io_cubic(prog(t, t0 + 0.1, 0.8))
-        E.line(c, pth, CYAN, 0.75 * la * a, 1.5, (0, g), glow=0.7)
-        if t > t0 + 1.0:
-            E.pulse(c, pth, ((t - t0 - 1.0) * 0.5 + i * 0.13) % 1.0, CYAN, 0.7 * la * a, 10, 0.15)
-        c.drawLine(P.right() - 2, py, px, py, paint_stroke(CYAN, 0.6 * la * a, 1.4))
-        E.glow_dot(c, px, py, 9, CYAN, la * a)
+    connector(c, t, (P.right(), P.centerY()), (K.HUB[0] - 40, K.HUB[1]), K.PAN0 + 0.3)
     blur = 10 * (1 - e_io_sine(prog(t, K.PAN0, 0.9)))
     lp = skia.Paint()
     if blur > 0.2:
@@ -160,7 +163,7 @@ def systems_panel(c, t):
     E.glass(c, P, 22, a, tint=E.NAVY_950, tint_a=0.55, blur=24, border=0.5, shadow=0.3)
     E.text(c, "사내 시스템", P.left() + SP_PAD + 2, P.top() + 46, 26, "Bold", WHITE, a)
     n_on = sum(SYS[i][4] for i in range(len(SYS)) if t >= row_time(i) + 0.9)
-    E.text(c, "%d연결%s" % (n_on, "+" if n_on == 24 else ""), P.right() - SP_PAD, P.top() + 45, 19, "Bold",
+    E.text(c, "%d연결+" % n_on, P.right() - SP_PAD, P.top() + 45, 19, "Bold",
            "#5FB4E8", a, "right")
     c.restore()
     for i, (name, ic, own, prods, n) in enumerate(SYS):
@@ -203,6 +206,24 @@ def saas_panel():
     """The external SaaS panel mirrors the systems panel (same width and margin), sized to its five rows and centred
     on the node like it."""
     return R(W - SP_X - SP_W, K.HUB[1] - SAAS_H / 2, SP_W, SAAS_H)
+
+
+def right_cards(c, t):
+    """seg_connect2.right_cards with one line from the node to the panel instead of one per service."""
+    a = e_io_sine(prog(t, K.SAAS0, 0.9))
+    if a <= 0.003:
+        return
+    dx = 50 * (1 - E.e_out_cubic(prog(t, K.SAAS0, 1.1)))
+    P = saas_panel().makeOffset(dx, 0)
+    connector(c, t, (P.left(), P.centerY()), (K.HUB[0] + 40, K.HUB[1]), K.SAAS0 + 0.3, rev=True)
+    lines = K.E.line
+    K.E.line = lambda *a_, **k_: None            # its own per-service lines and pulses are left out
+    pulse = K.E.pulse
+    K.E.pulse = lambda *a_, **k_: None
+    try:
+        K.right_cards(c, t)
+    finally:
+        K.E.line, K.E.pulse = lines, pulse
 
 
 K.saas_panel = saas_panel
@@ -268,7 +289,7 @@ def render(c, t):
         c.scale(zg, zg)
         c.translate(-K.HUB[0], -K.HUB[1])
         systems_panel(c, t)
-        K.right_cards(c, t)
+        right_cards(c, t)
         K.hub(c, t)
         c.restore()
 

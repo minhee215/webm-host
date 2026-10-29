@@ -556,7 +556,8 @@ def s5_label(c, x, y, lab, a, tag=None, tag_on=0.0):
         text(c, tag, tr.centerX(), tr.top() + 21, 16, "Bold", WHITE if tag == "DX" else NAVY_950, a * clamp(k * 2 - 1), "center")
 
 
-S5_FLOW_LIGHT = False      # (client re-edit) no flow rail: a light runs behind the cards once the first is in
+S5_FLOW_LIGHT = False      # (client re-edit) no flow rail: a light runs behind the cards once the first is in,
+                           # leaving the lit cyan line
 S5_LIGHT_T0, S5_LIGHT_D = 23.30, 1.75
 S5_TAG_SCALE = 2.0         # (big tags) the pill drawn over the footage, this much larger than by the name
 
@@ -762,21 +763,18 @@ def s5_front_flow(c, P, k, T):
     lend = S5_FRONT_END == "line"
     pts = [P(x, 0, ZC + dz) for x, dz in ((xa, 0.0), (xs[1], -0.2), (xs[2], 0.2), (xb, 0.0))]
     if S5_FLOW_LIGHT:
-        # (client re-edit) no rail and no arrows: once the first card is in, a light (white head, short cyan
-        # tail, line particles) runs behind the cards from the first to the last and is gone
+        # (client re-edit) no rail and no arrows: once the first card is in, the light (white head, line
+        # particles) runs behind the cards from the first to the last, leaving the lit cyan line behind it
         g = e_io_sine(prog(T, S5_LIGHT_T0, S5_LIGHT_D))
-        ha = clamp(prog(T, S5_LIGHT_T0, 0.25)) * (1 - clamp((g - 0.9) / 0.1)) * (1 - out)
-        if 0 < g < 1 and ha > 0.003:
+        ha = clamp(prog(T, S5_LIGHT_T0, 0.25)) * (1 - out)
+        if g > 0 and ha > 0.003:
             xf = lerp(xa, xb, g)
-            for j in range(10):
-                u0, u1 = xf - 1.6 * (j + 1) / 10, xf - 1.6 * j / 10
-                if u1 <= xa:
-                    break
-                line(c, poly([P(max(xa, u0), 0, ZC), P(u1, 0, ZC)]), CYAN, ha * (1 - j / 10) ** 1.5, 4 * ts,
-                     glow=1.0, glow_w=16 * ts)
-            hx, hy = P(xf, 0, ZC)
-            radial(c, hx, hy, 70 * ts, CYAN, 0.55 * ha)
-            c.drawCircle(hx, hy, 6 * ts, paint_fill(WHITE, ha))
+            line(c, poly([ra, P(xf, 0, ZC)]), CYAN, ha, 4 * ts, glow=1.0, glow_w=16 * ts)
+            if g < 0.999:
+                hk = ha * (1 - clamp((g - 0.9) / 0.1))
+                hx, hy = P(xf, 0, ZC)
+                radial(c, hx, hy, 70 * ts, CYAN, 0.55 * hk)
+                c.drawCircle(hx, hy, 6 * ts, paint_fill(WHITE, hk))
         line_flow(c, pts, e_io_sine(prog(T, S5_LIGHT_T0 - 0.05, S5_LIGHT_D + 0.2)) * 1.4, 0.4, n=10,
                   spread=18 * ts, twist=1.3, width=1.3, color=CYAN, key="s5ff", tsec=T, alpha=1 - out)
     else:

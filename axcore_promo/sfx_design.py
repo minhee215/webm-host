@@ -1,8 +1,8 @@
 """AXCORE promo - motion sound effects only (no music), designed to the client's 118.66 s cut.
 
-Every sound is synthesised here (no library samples): whooshes and swishes for camera moves and transitions,
-glassy pops for UI cards, ticks for small items, mouse clicks, typing, toggles, a scan sweep, data sparkles,
-swirls, risers, soft impacts and light flashes. The cue list was built from the edit itself: frame differences
+Every sound is synthesised here (no library samples). Kept sparse and soft, after the client's notes (no
+transition sounds, far fewer cues, nothing "pew"-like): mouse clicks, soft typing, toggle switches, a few soft taps
+as cards settle or items are checked, the OCR scan as air only, one airy glint on the logo. The cue list was built from the edit itself: frame differences
 (and where in the frame they happen) located each motion, the scene scripts said what it is.
 The narration stays on top: the effects dip a little under the voice, the big transitions sit in its pauses.
 
@@ -256,178 +256,96 @@ def glitch(g=1.0, dur=0.35):
     return (x * g).astype(np.float32)
 
 
+def tap(g=1.0, bright=1.0):
+    """Soft UI tap (no pitch): a short airy noise touch with a little body - for a card settling."""
+    n = S(0.09)
+    t = tt(n)
+    air = bp(noise(n), 1500 * bright, 6500 * bright) * np.exp(-t * 140)
+    body = lpf(noise(n), 500) * np.exp(-t * 90) * 0.6
+    return ((air + body) * np.clip(t / 0.001, 0, 1) * g).astype(np.float32)
+
+
+def key(g=1.0):
+    """One soft key press (noise only, no tone)."""
+    n = S(0.05)
+    t = tt(n)
+    x = bp(noise(n), RNG.uniform(1400, 2200), RNG.uniform(4500, 6500)) * np.exp(-t * RNG.uniform(220, 320))
+    x += lpf(noise(n), 400) * np.exp(-t * 160) * 0.4
+    return (x * g).astype(np.float32)
+
+
+def keys(dur, rate=13, g=1.0):
+    n = S(dur + 0.1)
+    out = np.zeros(n, np.float32)
+    t = 0.0
+    while t < dur:
+        k = key(RNG.uniform(0.55, 1.0))
+        i = S(t)
+        out[i:i + len(k)] += k[:max(0, min(len(k), n - i))]
+        t += 1 / rate * RNG.uniform(0.7, 1.4)
+    return out * g
+
+
+def switch(g=1.0):
+    """A toggle switch: a soft mechanical double click, no blip."""
+    n = S(0.12)
+    out = np.zeros(n, np.float32)
+    for o, a_ in ((0.0, 1.0), (0.028, 0.6)):
+        i = S(o)
+        m = n - i
+        s_ = tt(m)
+        out[i:] += (bp(noise(m), 1800, 5200) * np.exp(-s_ * 420) + lpf(noise(m), 600) * np.exp(-s_ * 200) * 0.5) * a_
+    return out * g
+
+
+def scan_soft(dur, g=1.0):
+    """A scan passing: only air, a gentle band moving down, no tone."""
+    n = S(dur)
+    q = tt(n) / dur
+    env = (np.clip(q / 0.15, 0, 1) * np.clip((1 - q) / 0.25, 0, 1)).astype(np.float32)
+    st = sweep_filter(noise(n) * env, lambda u: 6000 - 3500 * u, "BPF12", res=0.2)
+    return st[:, 0] * g
+
+
+def air_glint(dur=1.8, g=1.0):
+    """Soft airy glint for the logo: filtered noise with a very faint high shimmer."""
+    n = S(dur)
+    t = tt(n)
+    x = bp(noise(n), 4000, 12000) * np.exp(-t * 2.2) * np.clip(t / 0.05, 0, 1)
+    x += shimmer(dur, 0.25, 2637)[:n]
+    return x.astype(np.float32) * g
+
+
 # ---------------------------------------------------------------- the cue list (edit time, s)
 def cues():
+    """Only what the viewer sees being done: clicks, typing, toggles, a few cards settling, the scan, the logo.
+    No transition sounds."""
     C = []
 
     def a(t, kind, **kw):
         C.append((t, kind, kw))
-    # intro: live action cuts, tile grid
-    for t in (2.0, 4.0, 6.0):
-        a(t - 0.18, "swish", g=0.45)
-    a(8.25, "whoosh", dur=0.75, g=0.65, pan0=-0.3, pan1=0.6)
-    a(9.8, "swish", g=0.4)
-    a(10.45, "whoosh", dur=0.6, g=0.45)
-    a(12.47, "pop", f=1500, g=0.5)
-    a(14.05, "swish", g=0.4, pan0=0.4, pan1=-0.4)
-    a(15.10, "click", g=0.55)
-    a(15.12, "pop", f=1250, g=0.55)
-    a(15.95, "reverse", dur=0.65, g=0.30)
-    a(16.0, "whoosh", dur=1.0, g=0.85, peak=0.6, pan0=-0.6, pan1=0.6)
-    a(16.60, "impact", g=0.32)
-    # the navy map: tiles land one by one, links light
-    for i, t in enumerate((17.43, 17.60, 17.93, 18.23, 18.48, 18.73, 19.23, 19.81)):
-        a(t, "pop", f=1400 + 90 * i, g=0.32, pan=-0.6 + 0.17 * i)
-    a(20.9, "sparkle", dur=1.5, g=0.45)
-    a(23.0, "whoosh", dur=0.7, g=0.45)
-    a(24.11, "swish", g=0.4)
-    for i, t in enumerate((24.69, 25.28, 25.78)):
-        a(t, "pop", f=1700 + 150 * i, g=0.4)
-    a(26.95, "swish", g=0.35, dur=0.45)
-    a(27.4, "sparkle", dur=1.1, g=0.3)
-    a(28.6, "whoosh", dur=0.75, g=0.6, peak=0.7, pan0=-0.5, pan1=0.0)
-    a(29.25, "shimmer", g=0.35, base=2093)
-    # AXpoint: landing, search, upload, flow graph, diagnosis, candidates
-    a(30.13, "typing", dur=0.55, g=0.45)
-    a(30.98, "click", g=0.6)
-    a(31.0, "whoosh", dur=0.7, g=0.5, pan0=0.5, pan1=-0.5)
-    a(31.88, "swish", g=0.35, dur=0.8, pan0=0.6, pan1=0.1)
-    a(32.73, "pop", f=900, g=0.55)
-    for i in range(4):
-        a(32.80 + 0.12 * i, "tick", f=3600 + 200 * i, g=0.35, pan=-0.5 + 0.3 * i)
-    a(33.18, "typing", dur=0.80, g=0.40)
-    a(34.18, "click", g=0.6)
-    a(34.22, "swish", g=0.45, pan0=0.0, pan1=0.0)
-    for i in range(10):
-        a(34.45 + 0.11 * i, "tick", f=3000 + 120 * i, g=0.3, pan=-0.7 + 0.15 * i)
-    a(34.6, "sparkle", dur=1.6, g=0.35)
-    a(36.68, "click", g=0.55)
-    a(36.72, "whoosh", dur=0.6, g=0.55)
-    a(37.88, "shimmer", g=0.35, base=1568)
-    a(38.48, "pop", f=1050, g=0.6)
-    a(39.45, "whoosh", dur=0.55, g=0.45, pan0=0.0, pan1=0.0)
-    for i in range(6):
-        a(40.08 + 0.12 * i, "pop", f=1600 + 80 * i, g=0.28, pan=-0.5 + 0.2 * i)
-    a(41.85, "whoosh", dur=0.8, g=0.4, pan0=0.3, pan1=-0.2)
-    a(43.5, "whoosh", dur=0.75, g=0.5, pan0=-0.2, pan1=0.3)
+    a(15.10, "click", g=0.45)                                  # 업무 분석 touched
+    a(30.13, "keys", dur=0.55, g=0.45)                         # 우리 회사
+    a(30.98, "click", g=0.5)                                   # 기업 찾기
+    a(32.73, "tap", g=0.5)                                     # files dropped on the box
+    a(33.18, "keys", dur=0.80, g=0.42)                         # the request
+    a(34.18, "click", g=0.5)                                   # send
+    a(36.68, "click", g=0.5)                                   # 진단 결과 보기
     for i, t in enumerate((44.89, 45.34, 45.80, 46.25, 46.71)):
-        a(t, "toggle", g=0.5, pan=-0.6 + 0.3 * i)
-    a(46.92, "shimmer", g=0.35, base=1760)
-    a(46.95, "swish", g=0.35)
-    # connect: push into the UI, light, datacenter, panels and SaaS cards
-    a(49.10, "whoosh", dur=0.9, g=0.55, peak=0.75, pan0=0.0, pan1=0.0)
-    a(49.45, "reverse", dur=0.75, g=0.35)
-    a(50.18, "impact", g=0.25, low=0.6)
-    a(50.20, "shimmer", g=0.45, base=2349)
-    for i, t in enumerate((50.32, 51.17)):
-        a(t, "swish", g=0.4, pan0=-0.8, pan1=-0.4)
-    for i in range(6):
-        a(50.70 + 0.08 * i, "tick", f=3400 + 150 * i, g=0.25, pan=-0.6)
-        a(51.55 + 0.08 * i, "tick", f=3400 + 150 * i, g=0.25, pan=-0.6)
+        a(t, "switch", g=0.5, pan=-0.6 + 0.3 * i)              # M-AI Works toggles
     for i in range(5):
-        t = 53.70 + 0.42 * i
-        a(t, "pop", f=1500 + 120 * i, g=0.38, pan=0.6)
-        a(t + 0.8, "tick", f=4800, g=0.3, pan=0.6)
-    # OCR: work files, data table, handwriting scanned
-    a(57.85, "whoosh", dur=0.7, g=0.4, peak=0.3, lo=200, hi=2500)
-    a(58.0, "swish", g=0.4, dur=0.5, pan0=0.0, pan1=0.0)
-    a(58.68, "click", g=0.6)
-    a(58.75, "pop", f=1100, g=0.5)
-    a(58.80, "whoosh", dur=0.8, g=0.55, peak=0.25, pan0=0.0, pan1=0.0)
-    a(58.85, "sparkle", dur=0.7, density=30, g=0.4, rise=False)
-    a(59.40, "swirl", dur=1.0, g=0.55, turns=1.0)
-    a(59.83, "pop", f=1300, g=0.5)
-    for i in range(12):
-        a(60.03 + 0.035 * i, "tick", f=3000 + 90 * i, g=0.25, pan=0.2 * math.sin(i))
-    a(60.35, "swish", g=0.4, pan0=0.3, pan1=-0.4)
-    a(60.50, "swish", g=0.35, pan0=0.5, pan1=0.5)
-    a(60.88, "scan", dur=0.70, g=0.45, pan=0.4)
-    a(61.55, "success", g=0.40, pan=0.4)
-    a(61.55, "swish", g=0.4, dur=0.8, pan0=0.4, pan1=-0.4)
-    a(62.35, "pop", f=1600, g=0.4, pan=-0.4)
-    # ontology: zoom-out match cut, entities, flow pulse, AI core, title
-    a(63.45, "whoosh", dur=0.55, g=0.6, peak=0.85, lo=300, hi=6000)
-    a(63.96, "whoosh", dur=0.9, g=0.5, peak=0.1, lo=200, hi=4000)
-    for i in range(8):
-        a(64.30 + 0.16 * i, "tick", f=2600 + 150 * i, g=0.3, pan=-0.8 + 0.22 * i)
-    for i, t in enumerate((64.53, 65.28, 66.02, 66.71, 67.44, 67.93)):
-        a(t, "pop", f=1100 + 110 * i, g=0.45, pan=-0.6 + 0.24 * i)
-    a(68.18, "sparkle", dur=1.8, g=0.35)
-    a(68.2, "swish", g=0.3, dur=1.8, pan0=-0.8, pan1=0.8)
-    a(69.43, "shimmer", g=0.35, base=1318)
-    a(70.40, "whoosh", dur=0.9, g=0.55, peak=0.4, pan0=-0.4, pan1=0.3)
-    a(71.28, "impact", g=0.20, low=0.5)
-    a(71.30, "shimmer", g=0.45, base=1760)
-    # AI question: systems scatter and merge, the question, reasoning, answer, actions
-    a(74.55, "whoosh", dur=0.8, g=0.4, peak=0.3, lo=200, hi=2500)
-    for i in range(10):
-        a(74.85 + 0.07 * i, "tick", f=2200 + 100 * i, g=0.18, pan=-0.8 + 0.17 * i)
-    for i in range(5):
-        a(75.58 + 0.22 * i, "tick", f=3800, g=0.28, pan=-0.5 + 0.25 * i)
-    a(76.10, "reverse", dur=0.6, g=0.35)
-    a(76.62, "whoosh", dur=0.5, g=0.45, peak=0.8, pan0=0.0, pan1=0.0)
-    a(77.05, "pop", f=1250, g=0.5)
-    a(78.18, "typing", dur=0.75, g=0.42)
-    a(79.05, "click", g=0.6)
-    a(79.12, "swish", g=0.45, pan0=0.0, pan1=0.0)
-    a(79.35, "swish", g=0.35, pan0=-0.4, pan1=0.4)
-    for i, t in enumerate((79.53, 79.71, 80.25, 80.61)):
-        a(t, "tick", f=3200 + 300 * i, g=0.32, pan=-0.5)
-    for i, t in enumerate((81.10, 81.68)):
-        a(t, "swish", g=0.35, dur=0.7, pan0=0.0, pan1=0.7, hi=11000)
-    a(81.68, "sparkle", dur=1.0, g=0.25)
-    a(82.20, "pop", f=1700, g=0.45, pan=0.3)
-    for i in range(3):
-        a(82.58 + 0.25 * i, "tick", f=3600 + 200 * i, g=0.3, pan=0.3 + 0.2 * i)
-    a(83.43, "swish", g=0.4, pan0=-0.5, pan1=-0.5, dur=0.5)
-    for i, t in enumerate((83.98, 84.20)):
-        a(t, "tick", f=4200, g=0.35, pan=-0.5)
-    a(85.00, "click", g=0.6, pan=-0.5)
-    a(85.02, "success", g=0.3, pan=-0.5)
-    # sales / production / automation
-    a(85.55, "reverse", dur=0.45, g=0.4)
-    a(85.62, "whoosh", dur=0.9, g=0.55, peak=0.35, lo=500, hi=9000)
-    a(86.6, "swish", g=0.35, pan0=-0.7, pan1=-0.4)
-    a(87.3, "sparkle", dur=0.9, g=0.25, rise=False)
-    a(88.30, "pop", f=1500, g=0.4, pan=-0.4)
-    a(87.95, "whoosh", dur=0.8, g=0.55, pan0=-0.6, pan1=0.6)
-    a(89.0, "swish", g=0.35, pan0=0.7, pan1=0.4)
-    a(90.40, "glitch", g=0.35, pan=0.5)
-    a(90.42, "pop", f=1100, g=0.4, pan=0.5)
-    a(91.75, "whoosh", dur=0.6, g=0.4, pan0=0.3, pan1=-0.3)
-    a(91.95, "swish", g=0.35, pan0=-0.7, pan1=-0.4)
+        a(53.70 + 0.42 * i + 0.8, "tap", g=0.3, pan=0.6)        # SaaS cards connected
+    a(58.68, "click", g=0.5)                                   # the folder
+    a(60.88, "scan", dur=0.70, g=0.4, pan=0.4)                 # OCR scan
+    a(78.18, "keys", dur=0.75, g=0.42)                         # the question
+    a(79.05, "click", g=0.5)                                   # ENTER
+    for t in (83.98, 84.20):
+        a(t, "tap", g=0.3, pan=-0.5)                           # next actions checked
+    a(85.00, "click", g=0.5, pan=-0.5)                         # 실행
     for i in range(4):
-        a(92.32 + 0.28 * i, "tick", f=3600 + 250 * i, g=0.35, pan=-0.6)
-    a(93.45, "swish", g=0.4, pan0=-0.6, pan1=-0.6, dur=0.5)
-    for i in range(4):
-        a(93.70 + 0.16 * i, "pop", f=1400 + 100 * i, g=0.3, pan=-0.6 + 0.1 * i)
-    a(94.05, "sparkle", dur=0.8, g=0.3)
-    a(94.9, "whoosh", dur=0.7, g=0.4, peak=0.3, lo=200, hi=2200)
-    a(95.25, "swish", g=0.45, dur=0.55, pan0=0.0, pan1=0.0, hi=7000)
-    # analysis -> execution
-    a(96.20, "toggle", g=0.7)
-    a(96.24, "impact", g=0.28, low=0.7)
-    a(96.26, "whoosh", dur=0.9, g=0.6, peak=0.15, lo=300, hi=7000)
-    a(96.5, "sparkle", dur=1.5, g=0.3, rise=False)
-    # the vortex, the structure, the rush into the core
-    a(99.35, "swirl", dur=2.2, g=0.65, turns=1.4)
-    a(101.3, "swirl", dur=2.6, g=0.35, turns=1.8)
-    a(103.5, "shimmer", g=0.3, base=2093, dur=1.5)
-    a(104.4, "riser", dur=2.1, g=0.45)
-    a(106.0, "reverse", dur=0.55, g=0.45)
-    a(106.52, "impact", g=0.3, low=0.6)
-    a(106.55, "shimmer", g=0.5, base=2637)
-    # finale: AX pieces, logo
-    a(106.95, "swish", g=0.4, pan0=0.5, pan1=-0.2)
-    a(107.55, "whoosh", dur=0.7, g=0.45, pan0=-0.5, pan1=0.4)
-    a(108.53, "pop", f=1300, g=0.35)
-    a(109.30, "whoosh", dur=0.7, g=0.45, pan0=0.5, pan1=-0.4)
-    a(111.30, "whoosh", dur=0.8, g=0.5, pan0=-0.4, pan1=0.4)
-    a(113.20, "pop", f=1600, g=0.4, pan=0.3)
-    a(114.20, "swish", g=0.4, dur=0.5)
-    a(114.55, "reverse", dur=0.5, g=0.35)
-    a(115.03, "impact", g=0.32, low=0.8)
-    a(115.05, "shimmer", g=0.55, base=1760, dur=2.2)
+        a(92.32 + 0.28 * i, "tap", g=0.28, pan=-0.6)            # automation steps checked
+    a(96.20, "switch", g=0.6)                                  # 분석 -> 실행
+    a(115.05, "glint", g=0.35)                                 # the logo
     return C
 
 
@@ -451,8 +369,6 @@ def render_cue(kind, kw):
         return pan_st(toggle(g), pan)
     if kind == "success":
         return pan_st(success(g), pan)
-    if kind == "scan":
-        return pan_st(scan(kw["dur"], g), pan)
     if kind == "sparkle":
         return sparkle(kw["dur"], kw.get("density", 18), g, kw.get("rise", True))
     if kind == "riser":
@@ -465,6 +381,16 @@ def render_cue(kind, kw):
         return reverse_swell(kw["dur"], g)
     if kind == "swirl":
         return swirl(kw["dur"], g, kw.get("turns", 1.6))
+    if kind == "tap":
+        return pan_st(tap(g), pan)
+    if kind == "keys":
+        return pan_st(keys(kw["dur"], g=g), pan)
+    if kind == "switch":
+        return pan_st(switch(g), pan)
+    if kind == "scan":
+        return pan_st(scan_soft(kw["dur"], g), pan)
+    if kind == "glint":
+        return pan_st(air_glint(kw.get("dur", 1.8), g), pan)
     if kind == "glitch":
         return pan_st(glitch(g), pan)
     raise ValueError(kind)
@@ -532,8 +458,8 @@ def main():
     v = load(src)
     env = voice_env(v)
     hi = fx - np.stack([sosfilt(butter(2, 300, "low", fs=SR, output="sos"), fx[:, c]) for c in range(2)], 1)
-    duck = 10 ** (-5.0 * env / 20)                 # the effects step back a little while someone speaks
-    fxd = (fx - hi + hi * (10 ** (-7.0 * env / 20))[:, None]) * duck[:, None]
+    duck = 10 ** (-2.0 * env / 20)                 # the effects step back a little while someone speaks
+    fxd = (fx - hi + hi * (10 ** (-3.0 * env / 20))[:, None]) * duck[:, None]
     mix = v + fxd
     # where a sound lands on a voice peak, pull the sound (never the voice) under 0.89
     over = np.abs(mix).max(1)
@@ -552,12 +478,13 @@ def main():
                                                                               (np.mean(fxd[speech] ** 2) + 1e-12))), 1)}))
 
 
-PEAK_CAP = 0.30
-TRIM = -3.0                      # overall effects level (dB)
+PEAK_CAP = 0.40
+TRIM = 2.0                       # overall effects level (dB)
 # short-term loudness of each kind of sound (LUFS), against the narration's -18 or so
-LEVEL = {"whoosh": -25.0, "swish": -29.0, "pop": -28.0, "tick": -32.0, "click": -27.0, "typing": -30.0,
-         "toggle": -27.0, "success": -29.0, "scan": -29.0, "sparkle": -32.0, "shimmer": -29.0, "impact": -24.0,
-         "reverse": -27.0, "swirl": -25.0, "riser": -27.0, "glitch": -29.0}
+LEVEL = {"whoosh": -25.0, "swish": -29.0, "pop": -28.0, "tick": -32.0, "click": -28.0, "typing": -30.0,
+         "toggle": -27.0, "success": -29.0, "scan": -31.0, "sparkle": -32.0, "shimmer": -29.0, "impact": -24.0,
+         "reverse": -27.0, "swirl": -25.0, "riser": -27.0, "glitch": -29.0,
+         "tap": -31.0, "keys": -31.0, "switch": -28.0, "glint": -31.0}
 
 if __name__ == "__main__":
     main()

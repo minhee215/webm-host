@@ -82,7 +82,7 @@ HOPS = [0, 2, 6, 3, 5, 1]
 # they shrink a little, go soft and stay behind it as its background until the answer cards come in
 V2 = False
 V2_HOP0, V2_HOP_DT, V2_HOPS = 75.25, 0.28, [0, 2, 6, 3, 5]
-V2_SHRINK, V2_BLUR, V2_DIM = 0.86, 9.0, 0.55      # the systems behind the search card
+V2_SHRINK, V2_BLUR, V2_DIM = 0.86, 4.5, 0.55      # the systems behind the search card
 V2_OUT0, V2_OUT_D = 79.10, 0.70                   # and their fade as the answer cards come in
 
 SEARCH = R(530, 370, 860, 300)

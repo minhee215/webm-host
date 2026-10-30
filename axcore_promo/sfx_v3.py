@@ -1,6 +1,8 @@
 """AXCORE promo - motion sound effects on the client's re-edited cut (AXCORE_수정본, 119.79 s), after the client's
 reference 4: the client's own sound files (assets/sfx: click, pling, pop, whoosh, air, typing, chimes, rise) placed
-on the motions, kept sparse (the big moves, the clicks / typing / toggles, a few pop-ins and the logo).
+on the motions, kept sparse (the big moves, the clicks / typing / toggles, a few pop-ins). Client notes: no
+transition swishes from 01:25:12 to 01:43:06 except the one on "실행으로", no rise on "더 정확하게 판단합니다", no
+effects in the outro (from 01:49:02).
 
 Cue times are the scenes' own beat times (the segment scripts' constants, film time = timeline frame / 24) moved to
 the edit: each delivered segment file was matched frame by frame against the cut, which gave how many frames the
@@ -23,6 +25,7 @@ SR = 48000
 DUR = 119.786
 N = int(round(DUR * SR))
 FPS = 24000 / 1001
+END_FX = 2618 / FPS                  # 01:49:02: the outro has no effects (client)
 
 # the sound files: (file, anchor = where in the file the motion lands, level dB, keep seconds)
 KINDS = {
@@ -99,27 +102,22 @@ def cues():
     a((E(80.97, o), "pling", -2, 0.3))   # the answer
     a((E(84.85, o), "click", 0, -0.3))   # 실행
     # ---- ops (+2)
-    a((E(85.90, o), "whoosh", 0, 0.0))   # the button's light fills the frame
     a((E(86.45, o), "pop", -2, -0.4))    # 영업팀
     a((E(87.93, o), "pling", -2, -0.2))  # +12.4%
-    a((E(88.80, o), "air", -2, 0.4))     # the card travels to the production shot
     a((E(90.36, o), "pop", 0, 0.4))      # anomaly detected
-    a((E(91.92, o), "air", -3, -0.3))    # to the robot cell
     a((E(93.16, o), "pling", -4, -0.4))  # the steps checked
     a((E(92.85, o), "chime_b", -4, 0.4))  # the robot cell connected
     # ---- exec (+2)
-    a((E(96.85, o), "air", -1, 0.0))     # the shot goes soft, the switch rises
     a((E(98.14, o), "click", 2, 0.0))    # 실행 (the flip lands a little before the narration beat)
     a((E(98.30, o), "whoosh", -1, 0.0))  # the shot snaps open
     # ---- sphere (+3)
     o = 3
     t0 = 100.917
-    a((E(t0 + 0.25, o), "air", -2, 0.0))   # the AXCORE logo comes in
     a((E(t0 + 1.55, o), "click", 0, 0.1))  # clicked
     a((E(t0 + 1.60, o), "pling", 0, 0.0))  # the sphere opens
     a((E(t0 + 3.10, o), "whoosh", 0, 0.0))  # the network bursts out
-    a((E(t0 + 6.10, o), "rise", 2, 0.0))   # the build into the rush
     a((E(t0 + 7.75, o), "whoosh", 1, 0.0))  # the rush into the core
+    return c                             # (client: no effects in the outro, from 01:49:02)
     # ---- outro (+4)
     o = 4
     t0 = 109.042
@@ -177,6 +175,10 @@ def main():
     for cue in cl:
         t, kind, g, pan = cue[:4]
         place(fx, t, kind, g, pan, cue[4] if len(cue) > 4 else None)
+    cut = int(round(END_FX * SR))                 # nothing runs on into the outro
+    fl = int(0.25 * SR)
+    fx[cut - fl:cut] *= np.linspace(1, 0, fl)[:, None] ** 2
+    fx[cut:] = 0
     pk = np.abs(fx).max()
     if pk > 0.89:
         fx *= 0.89 / pk

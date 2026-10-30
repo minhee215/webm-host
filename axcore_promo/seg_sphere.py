@@ -77,7 +77,7 @@ def geodesic():
 SV, SE = geodesic()
 _rng = np.random.default_rng(1406)
 NET = []                                          # the spreading network: points in a shell round the sphere
-while len(NET) < 64:
+while len(NET) < 40:
     d = _rng.normal(size=3)
     d /= np.linalg.norm(d)
     NET.append(d * _rng.uniform(430, 1800) * np.array([1.0, 0.55, 1.0]))
@@ -118,26 +118,99 @@ def project(p, s):
 
 
 # ---------------------------------------------------------------- the items (the connect scene's systems and SaaS)
-SAAS = {"Gmail": "gmail", "Slack": "slack", "Notion": "notion", "Microsoft Teams": "teams", "Google Drive": "gdrive"}
+SAAS = {"Gmail": "gmail", "Slack": "slack", "Notion": "notion_cube", "Microsoft Teams": "teams",
+        "Google Drive": "gdrive"}
 ITEMS = [("SAP", 66), ("Oracle", 60), ("Microsoft Dynamics", 46), ("Workday", 54), ("Slack", 54), ("Notion", 50),
-         ("더존", 50), ("Siemens Teamcenter", 38), ("Gmail", 44), ("Microsoft Teams", 42), ("Google Drive", 42),
-         ("flex", 46), ("네이버웍스", 40), ("영림원", 36), ("하이웍스", 34), ("3DEXPERIENCE", 34)]
+         ("Douzone", 50), ("Siemens Teamcenter", 38), ("Gmail", 44), ("Microsoft Teams", 42), ("Google Drive", 42),
+         ("flex", 46), ("NAVER WORKS", 40), ("Younglimwon", 36), ("Hiworks", 34), ("3DEXPERIENCE", 34)]
+# every mark rides on a node of the network, joined to the sphere by a line, so it turns with the network.
+# Their nodes are placed (once, deterministically) so the marks keep clear of each other and of the frame edges
+# all the way through the turn.
 _r2 = np.random.default_rng(77)
-ORB = []
-ROWS = np.linspace(-470, 470, 9)                  # height rows, so the marks keep clear of each other
-order = sorted(range(len(ITEMS)), key=lambda i: -ITEMS[i][1])
-per_row = {}
-for n, i in enumerate(order):
-    row = (n * 4) % len(ROWS)                     # big ones spread over the rows first
-    per_row.setdefault(row, []).append(i)
-for row, idx in per_row.items():
-    off = _r2.uniform(0, 2 * math.pi)
-    for j, i in enumerate(idx):
-        name, size = ITEMS[i]
-        big = size >= 44
-        ORB.append(dict(name=name, size=size * 1.35, r=_r2.uniform(620, 900) if big else _r2.uniform(700, 1100),
-                        y=ROWS[row] + _r2.uniform(-20, 20), ph=off + 2 * math.pi * j / len(idx),
-                        w=1.0, t0=BURST + 0.05 + _r2.uniform(0, 0.5), weight="ExtraBold" if big else "Bold"))
+ANCH, ORB = [], []
+_PLACE_T = list(np.arange(3.5, 7.3, 0.3))
+
+
+def _wrot0(p, s):
+    a = 0.6 + 0.10 * s + 1.05 * e_io_sine(prog(s, 5.0, 1.8))
+    ca, sa = math.cos(a), math.sin(a)
+    x, y, z = p[..., 0], p[..., 1], p[..., 2]
+    x, z = x * ca + z * sa, -x * sa + z * ca
+    cb, sb = math.cos(0.22), math.sin(0.22)
+    y, z = y * cb - z * sb, y * sb + z * cb
+    return np.stack([x, y, z], -1)
+
+
+def _boxes(p, name, size):
+    out = []
+    for s_ in _PLACE_T:
+        q = _wrot0(p, s_)
+        zf = 1.0 + 0.14 * e_io_sine(prog(s_, SPH0, RUSH0 - SPH0))
+        k = FOC / max(q[2] + DIST, 60.0) * zf
+        w = (text_w(name, size, "Bold") + (size * 1.5 if name in SAAS else 0)) * k + 24
+        h = size * k * 1.15 + 16
+        x, y = CX + q[0] * k, CY + q[1] * k
+        out.append((x - w / 2, y - h / 2, x + w / 2, y + h / 2, k))
+    return out
+
+
+def _cost(bx, placed):
+    c_ = 0.0
+    for ti, (x0, y0, x1, y1, k) in enumerate(bx):
+        for other in placed:
+            u0, v0, u1, v1, _ = other[ti]
+            ow, oh = min(x1, u1) - max(x0, u0), min(y1, v1) - max(y0, v0)
+            if ow > 0 and oh > 0:
+                c_ += ow * oh * 3
+        ix = max(0.0, min(x1, W - 50) - max(x0, 50)) * max(0.0, min(y1, 900) - max(y0, 180))
+        c_ += ((x1 - x0) * (y1 - y0) - ix) * 0.6                      # off the frame
+        if k > 2.0:
+            c_ += (k - 2.0) * 40000
+        cx_, cy_ = (x0 + x1) / 2, (y0 + y1) / 2         # keep off the sphere itself
+        if abs(cx_ - CX) < 240 and abs(cy_ - CY) < 220:
+            c_ += (x1 - x0) * (y1 - y0) * 0.5
+    return c_
+
+
+_placed = []
+for i, (name, size) in enumerate(sorted(ITEMS, key=lambda it: -it[1])):
+    big = size >= 44
+    best = None
+    ph0 = i * 2.39996                                  # each mark its own side of the ring (golden angle)
+    for _ in range(700):
+        ph = ph0 + _r2.uniform(-0.35, 0.35)
+        r = _r2.uniform(520, 760) if big else _r2.uniform(600, 900)
+        p = np.array([r * math.cos(ph), _r2.uniform(-470, 470), r * math.sin(ph)])
+        bx = _boxes(p, name, size * 1.05)
+        cst = _cost(bx, _placed)
+        if best is None or cst < best[0]:
+            best = (cst, p, bx)
+    _placed.append(best[2])
+    ANCH.append(best[1])
+    ORB.append(dict(name=name, size=size * 1.05, t0=BURST + 0.12 + _r2.uniform(0, 0.28),
+                    weight="ExtraBold" if big else "Bold"))
+ANCH = np.array(ANCH)
+ANCH_SV = [int(np.argmin(np.linalg.norm(SV * RS - p, axis=1))) for p in ANCH]          # its line from the sphere
+ANCH_NB = [int(np.argmin(np.linalg.norm(NET - p, axis=1))) for p in ANCH]              # and into the mesh
+
+
+def wrot(p, s):
+    """The network's (and the marks') turn: a slow drift with one wider swing (reference), always smooth."""
+    a = 0.6 + 0.10 * s + 1.05 * e_io_sine(prog(s, 5.0, 1.8))
+    ca, sa = math.cos(a), math.sin(a)
+    x, y, z = p[..., 0], p[..., 1], p[..., 2]
+    x, z = x * ca + z * sa, -x * sa + z * ca
+    b = 0.22
+    cb, sb = math.cos(b), math.sin(b)
+    y, z = y * cb - z * sb, y * sb + z * cb
+    return np.stack([x, y, z], -1)
+
+
+def burst(s):
+    """The mesh bursts out of the sphere (reference): from sphere size to full in about half a second."""
+    return lerp(0.22, 1.0, e_out_cubic(prog(s, BURST, 0.55)))
+
+
 _LOGOS = {}
 
 
@@ -164,42 +237,38 @@ def glow_text(c, s_, x, y, size, w, align):
     c.drawString(s_, x0, y, f, skia.Paint(AntiAlias=True, Color4f=E.col("#FFFFFF", 1.0)))
 
 
-def item_pos(o, s):
-    b = e_out_cubic(prog(s, o["t0"], 1.1))
-    a = o["ph"] + 0.65 * o["w"] * (s - BURST)
-    p = np.array([o["r"] * math.cos(a), o["y"], o["r"] * math.sin(a)]) * b
-    return rot(p, 0.0, 0.0), b
+def anchors(s):
+    return wrot(ANCH * burst(s), s)
 
 
 def draw_items(c, s, front):
     if s < BURST:
         return
+    P_ = anchors(s)
+    x, y, k = project(P_, s)
     rows = []
-    for o in ORB:
-        p, b = item_pos(o, s)
-        if b <= 0:
+    for i, o in enumerate(ORB):
+        if (P_[i, 2] < 0) != front:
             continue
-        if (p[2] < 0) != front:
+        rows.append((P_[i, 2], i))
+    for z, i in sorted(rows, key=lambda r_: -r_[0]):
+        o = ORB[i]
+        q = e_io_sine(prog(s, o["t0"], 0.45))         # comes in from a blur and settles (reference)
+        if q <= 0.003 or k[i] > 4.0:
             continue
-        x, y, k = project(p, s)
-        rows.append((p[2], o, x, y, k, b))
-    for z, o, x, y, k, b in sorted(rows, key=lambda r_: -r_[0]):
-        sz = o["size"] * k
-        if sz < 6 or sz > 900:
-            continue
-        a = clamp(b * 1.6) * (0.85 if z > 0 else 1.0) * clamp((1.6 - k) / 0.3 + 1) if k < 3 else 0.0
-        if a <= 0.01:
-            continue
-        bl = 1.5 * clamp((0.75 - k) / 0.35) + 6 * clamp((k - 1.5) / 0.8) + 4 * (1 - clamp(b * 1.5))
+        sz = o["size"] * k[i] * lerp(1.25, 1.0, e_out_cubic(q))
+        a = q * (0.85 if z > 0 else 1.0) * clamp((4.0 - k[i]) / 0.8)
+        bl = 12 * (1 - q) + 1.5 * clamp((0.75 - k[i]) / 0.35) + 5 * clamp((k[i] - 1.8) / 1.0)
         A.blur_layer(c, bl, a)
         name = o["name"]
+        yy = y[i] + sz * 0.34                         # the text centred on its node
         if name in SAAS:
             tw = text_w(name, sz, "Bold")
-            x0 = x - (tw + sz * 1.5) / 2
-            glow_text(c, name, x0 + sz * 1.5, y, sz, "Bold", "left")
-            saas_mark(c, name, x0 + sz * 0.6, y - sz * 0.33, sz * 1.15, 1.0)
+            x0 = x[i] - (tw + sz * 1.5) / 2
+            glow_text(c, name, x0 + sz * 1.5, yy, sz, "Bold", "left")
+            saas_mark(c, name, x0 + sz * 0.6, y[i], sz * 1.15, 1.0)
         else:
-            glow_text(c, name, x, y, sz, o["weight"], "center")
+            glow_text(c, name, x[i], yy, sz, o["weight"], "center")
         c.restore()
 
 
@@ -222,40 +291,46 @@ for i, p in enumerate(NET):
 
 
 def network(c, s):
-    g = prog(s, BURST - 0.1, 1.6)
-    if g <= 0:
+    if s < BURST:
         return
-    pts = rot(NET, s, 0.5)
+    g = e_io_sine(prog(s, BURST, 0.30))
+    bs = burst(s)
+    pts = wrot(NET * bs, s)
     sp = rot(SV * RS, s)
+    an = anchors(s)
     x, y, k = project(pts, s)
     sx, sy, sk = project(sp, s)
-    qn = [clamp((g * 2000 - np.linalg.norm(NET[i]) * 0.8) / 400) for i in range(len(NET))]
+    ax, ay, ak = project(an, s)
     for (i, j, l) in TRIS:
-        q = min(qn[i], qn[j], qn[l])
-        if q <= 0 or max(k[i], k[j], k[l]) > 3:
+        if max(k[i], k[j], k[l]) > 3:
             continue
         pth = E.poly([(x[i], y[i]), (x[j], y[j]), (x[l], y[l])], True)
         sh = skia.GradientShader.MakeLinear([skia.Point(x[i], y[i]), skia.Point((x[j] + x[l]) / 2, (y[j] + y[l]) / 2)],
-                                            [colint("#6B98FF", 0.26 * q), colint("#2A4FB0", 0.05 * q)])
+                                            [colint("#6B98FF", 0.17 * g), colint("#2A4FB0", 0.02 * g)])
         c.drawPath(pth, skia.Paint(AntiAlias=True, Shader=sh))
+
+    def seg(pa, pb, kk, hot=1.0):
+        kk = clamp(min(kk, 2.2))
+        c.drawLine(pa[0], pa[1], pb[0], pb[1], paint_stroke("#4F86FF", 0.35 * g * kk * hot, 4.0, blur=4,
+                                                            blend=skia.BlendMode.kScreen))
+        c.drawLine(pa[0], pa[1], pb[0], pb[1], paint_stroke("#8CB6FF", 0.55 * g * kk * hot, 1.2))
     for i, j in NET_E:
-        pa = (x[i], y[i])
+        if k[i] > 3:
+            continue
         pb = (x[j], y[j]) if j >= 0 else (sx[-1 - j], sy[-1 - j])
-        q = qn[i]
-        if q <= 0 or k[i] > 3:
+        seg((x[i], y[i]), pb, k[i])
+    for n in range(len(ANCH)):                        # the marks' lines: from the sphere, and on into the mesh
+        if ak[n] > 4:
             continue
-        kk = clamp(min(k[i], 2.2))
-        xb, yb = lerp(pa[0], pb[0], q), lerp(pa[1], pb[1], q)
-        c.drawLine(pa[0], pa[1], xb, yb, paint_stroke("#4F86FF", 0.35 * q * kk, 4.0, blur=4,
-                                                      blend=skia.BlendMode.kScreen))
-        c.drawLine(pa[0], pa[1], xb, yb, paint_stroke("#8CB6FF", 0.55 * q * kk, 1.2))
+        v, m = ANCH_SV[n], ANCH_NB[n]
+        seg((sx[v], sy[v]), (ax[n], ay[n]), ak[n], 1.3)
+        seg((ax[n], ay[n]), (x[m], y[m]), ak[n])
     for i in range(len(NET)):
-        q = qn[i]
-        if q <= 0 or k[i] > 3:
+        if k[i] > 3:
             continue
-        c.drawCircle(x[i], y[i], 12 * k[i], paint_fill("#4FA8FF", 0.25 * q, blur=6))
-        c.drawCircle(x[i], y[i], 7 * k[i], paint_stroke("#8FD0FF", 0.8 * q, 1.4))
-        c.drawCircle(x[i], y[i], 2.4 * k[i], paint_fill("#DFF2FF", 0.95 * q))
+        c.drawCircle(x[i], y[i], 12 * k[i], paint_fill("#4FA8FF", 0.25 * g, blur=6))
+        c.drawCircle(x[i], y[i], 7 * k[i], paint_stroke("#8FD0FF", 0.8 * g, 1.4))
+        c.drawCircle(x[i], y[i], 2.4 * k[i], paint_fill("#DFF2FF", 0.95 * g))
 
 
 def sphere(c, s):
@@ -355,18 +430,15 @@ def logo_button(c, s, on_sphere):
     lw = 270
     lh = lw * li["h"] / li["w"]
     dst = R(-lw / 2, -lh / 2 + 2, lw, lh)
-    wipe = e_io_sine(prog(s, LOGO0 + 0.35, 0.60))      # mosaic front sweeps left to right, the crisp logo after it
+    wipe = e_io_sine(prog(s, LOGO0 + 0.30, 0.70))      # a soft gradient front sweeps it in, left to right
     if wipe > 0:
-        band = 0.30
-        xe = lerp(dst.left() - band * lw, dst.right(), wipe)
-        smp = skia.SamplingOptions(skia.CubicResampler.Mitchell())
-        c.save()
-        c.clipRect(R(dst.left() - 4, dst.top() - 20, max(0.0, xe - dst.left() + 4), lh + 40))
-        c.drawImageRect(li["img"], dst, smp, skia.Paint(AntiAlias=True))
-        c.restore()
-        c.save()
-        c.clipRect(R(xe, dst.top() - 20, band * lw, lh + 40))
-        c.drawImageRect(li["mos"], dst, skia.SamplingOptions(skia.FilterMode.kNearest), skia.Paint(AntiAlias=True))
+        soft = 0.45 * lw
+        xe = lerp(dst.left() - soft, dst.right() + 4, wipe)
+        c.saveLayer(None, None)
+        c.drawImageRect(li["img"], dst, skia.SamplingOptions(skia.CubicResampler.Mitchell()), skia.Paint(AntiAlias=True))
+        sh = skia.GradientShader.MakeLinear([skia.Point(xe, 0), skia.Point(xe + soft, 0)],
+                                            [colint(WHITE, 1.0), colint(WHITE, 0.0)])
+        c.drawRect(R(dst.left() - 20, dst.top() - 30, lw + 40, lh + 60), skia.Paint(Shader=sh, BlendMode=skia.BlendMode.kDstIn))
         c.restore()
     c.restore()
     c.restore()

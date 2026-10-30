@@ -2,9 +2,10 @@
 AI 전환의 가장 쉬운 시작. / AXCORE" - after the client's reference: one live-action shot full frame, then the frame
 splits again and again (each new panel pushes in from its side) into a collage of the film's own footage round the
 main shot in the centre, on which the AXCORE logo (the client's SVG; grey parts white, the blue kept) builds up.
-  0.00  seg_sphere's last frame (FIN under the white flash); the white gives way to the main shot
+  0.00  seg_sphere's last frame (plain white); the white clears onto the main shot
   0.90  the first split; then a new panel about every 0.45 s
   3.50  the AXCORE logo builds on the main shot, piece by piece
+  7.75  the logo draws back, the collage (the main shot with it) narrows to the left and a column comes in on the right
   8.90  "AXCORE": a light runs over the logo
 Local clock s = (timeline frame - 2617) / 24. 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_outro.py <out.mp4> [height=480] [first last]
@@ -36,15 +37,18 @@ FPS_NUM, FPS_DEN = 24000, 1001
 SCV = 1.0
 HD = False
 
-MAIN = "l3_present"
+MAIN = "o0_present"                              # a presenter at a data wall (after the client's sample)
 SPLIT_D = 0.55
 # (time, panel split, side the new panel comes in from, its share, the new panel's clip)
-OPS = [(0.90, "A", "L", 0.30, "n4_office"), (1.45, "B", "B", 0.50, "17_robot"), (2.00, "A", "R", 0.40, "m1_meeting"),
-       (2.50, "D", "B", 0.42, "06_line"), (2.95, "B", "R", 0.50, "14_monitors"), (3.40, "C", "R", 0.45, "n3_evline"),
-       (3.85, "D", "R", 0.45, "10_datacenter"), (4.25, "E", "R", 0.50, "s04_inspect"), (4.65, "F", "B", 0.50, "n8_sales"),
-       (5.05, "H", "B", 0.55, "18_factory"), (5.45, "G", "T", 0.45, "n2_warehouse"), (5.85, "I", "T", 0.50, "04_table"),
-       (6.25, "B", "T", 0.50, "n6_server"), (6.65, "K", "R", 0.45, "p2_carline"), (7.05, "C", "B", 0.45, "09_handraise"),
-       (7.45, "E", "T", 0.45, "n1_pharma")]
+OPS = [(0.90, "A", "L", 0.30, "o1_chip"), (1.45, "B", "B", 0.50, "17_robot"), (2.00, "A", "R", 0.40, "o2_warehouse"),
+       (2.50, "D", "B", 0.42, "o4_wafer"), (2.95, "B", "R", 0.50, "10_datacenter"), (3.40, "C", "R", 0.45, "o3_drones"),
+       (3.85, "D", "R", 0.45, "18_factory"), (4.25, "E", "R", 0.50, "o5_cobots"), (4.65, "F", "B", 0.50, "r5_robot"),
+       (5.05, "H", "B", 0.55, "05_warehouse"), (5.45, "G", "T", 0.45, "22_city"), (5.85, "I", "T", 0.50, "s03_robot"),
+       (6.25, "B", "T", 0.50, "n6_server"), (6.65, "K", "R", 0.45, "19_aerial"), (7.05, "C", "B", 0.45, "06_line"),
+       (7.45, "E", "T", 0.45, "q3_silos")]
+END0, END_D = 7.75, 0.75                         # the collage draws back to the left, a column comes in on the right
+END_K = 0.80
+END_COL = [(END0 + 0.05, 0.0, 0.36, "o1_chip"), (END0 + 0.17, 0.36, 0.30, "o3_drones"), (END0 + 0.29, 0.66, 0.34, "q1_refinery")]
 LOGO0 = 3.50
 GLINT = 8.90
 
@@ -74,13 +78,31 @@ def build_layout():
         panels[tgt]["keys"].append((t, kept))
         n = next(names)
         panels[n] = dict(clip=clip, t0=t, keys=[(t - 1.0, start), (t, new)], scale_rect=new, side=side)
+    x0 = W * END_K
+    for j, (t, fy, fh, clip) in enumerate(END_COL):
+        y, h = Y0 + (Y1 - Y0) * fy, (Y1 - Y0) * fh
+        new = (x0, y, W - x0, h)
+        panels["Z%d" % j] = dict(clip=clip, t0=t, keys=[(t - 1.0, (W, y, 0.0, h)), (t, new)], scale_rect=new,
+                                 side="R", end=True, loop=True)
     return panels
 
 
 PANELS = build_layout()
 
 
+def squeeze(s):
+    return lerp(1.0, END_K, e_io_cubic(prog(s, END0, END_D)))
+
+
 def rect_at(p, s):
+    r = _rect_at(p, s)
+    if p.get("end"):
+        return r
+    k = squeeze(s)
+    return (r[0] * k, r[1], r[2] * k, r[3])
+
+
+def _rect_at(p, s):
     keys = p["keys"]
     cur = keys[0][1]
     for (t, r) in keys[1:]:
@@ -327,38 +349,15 @@ def render(c, t):
         c.drawRect(R(ax, ay, aw, ah), paint_fill("#061026", 0.32 * la))
         E.radial(c, ax + aw / 2, ay + ah / 2, aw * 0.6, "#061026", 0.35 * la, blend=skia.BlendMode.kSrcOver)
         c.restore()
-    logo(c, s, ax + aw / 2, ay + ah / 2, min(620.0, aw * 0.78))
+    logo(c, s, ax + aw / 2, ay + ah / 2, min(620.0, aw * 0.78) * lerp(1.0, 0.92, e_io_cubic(prog(s, END0, END_D))))
     c.restore()
     # in: from seg_sphere's last frame (FIN under the fading white) to the main shot
     m = e_io_sine(prog(s, 0.0, 0.55))
-    if m < 1:
-        to = t - SHIFT
-        img = snap_fin(to)
-        p = skia.Paint(AntiAlias=True)
-        p.setAlphaf(1 - m)
-        c.drawImageRect(img, R(0, 0, W, H), skia.SamplingOptions(skia.FilterMode.kLinear), p)
+    if m < 1:                                         # in: seg_sphere's white flash clears onto the main shot
+        c.drawRect(R(0, 0, W, H), paint_fill("#FFFFFF", 1 - m))
 
 
 _FS = []
-
-
-def snap_fin(to):
-    if not _FS:
-        _FS.append(skia.Surface.MakeRaster(skia.ImageInfo.Make(int(W * SCV), int(H * SCV),
-                                                               skia.ColorType.kRGBA_8888_ColorType,
-                                                               skia.AlphaType.kPremul_AlphaType)))
-    sf = _FS[0]
-    cc = sf.getCanvas()
-    cc.clear(skia.Color4f(0, 0, 0, 1))
-    cc.save()
-    cc.scale(SCV, SCV)
-    _, t0, t1, fn = AI.FIN
-    fn(cc, to, to - t0, t1 - t0)
-    wf = 1 - e_out_cubic(prog(to, AI.FLASH_PEAK, AI.FLASH_OUT))
-    if wf > 0:
-        cc.drawRect(R(0, 0, W, H), paint_fill("#FFFFFF", wf))
-    cc.restore()
-    return sf.makeImageSnapshot()
 
 
 if __name__ == "__main__":

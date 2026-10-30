@@ -7,8 +7,7 @@ marks fly out and orbit it in depth), with the film's own content.
   1.60  the wireframe sphere opens round the logo, which fades away, and the background fades into the navy space
   3.10  the core flares, the network spreads out, and the connected systems and SaaS (the connect scene's items)
         burst out of the centre and orbit it in depth, in various sizes; slow push in
-  7.20  the camera rushes into the core, white flood; from the flash peak the frames are seg_ai's (FIN under the
-        white), so the next file carries on
+  7.20  the camera rushes into the core, white flood; from the flash peak plain white, which seg_outro clears
 Local clock s = film time - 100.917 (01:40:22); the old seg_ai passage sat 2 s earlier. 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_sphere.py <out.mp4> [height=480] [first last]
 """
@@ -458,13 +457,8 @@ def cursor(c, s):
 
 def render(c, t):
     s = t - T0
-    if t >= PEAK:                                     # seg_ai's own frames from the flash peak on (FIN under white)
-        to = t - SHIFT
-        _, t0, t1, fn = AI.FIN
-        fn(c, to, to - t0, t1 - t0)
-        wf = 1 - e_out_cubic(prog(to, AI.FLASH_PEAK, AI.FLASH_OUT))
-        if wf > 0:
-            c.drawRect(R(0, 0, W, H), paint_fill("#FFFFFF", wf))
+    if t >= PEAK:                                     # the flash peak: plain white (seg_outro clears it onto its shot)
+        c.drawRect(R(0, 0, W, H), paint_fill("#FFFFFF", 1.0))
         return
     bgx = e_io_sine(prog(s, BG0, BG_D))
     if bgx > 0:

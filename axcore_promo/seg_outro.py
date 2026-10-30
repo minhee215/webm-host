@@ -5,7 +5,7 @@ main shot in the centre, on which the AXCORE logo (the client's SVG; grey parts 
   0.00  seg_sphere's last frame (plain white); the white clears onto the main shot
   0.90  the first split; then a new panel about every 0.45 s
   3.50  the AXCORE logo builds on the main shot, piece by piece
-  7.75  the logo draws back, the collage (the main shot with it) narrows to the left and a column comes in on the right
+  8.00  all built: the collage fades out to white, the logo stays and settles in the centre in its own colours
   8.90  "AXCORE": a light runs over the logo
 Local clock s = (timeline frame - 2617) / 24. 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_outro.py <out.mp4> [height=480] [first last]
@@ -48,7 +48,8 @@ OPS = [(0.90, "A", "L", 0.30, "o1_chip"), (1.45, "B", "B", 0.50, "17_robot"), (2
        (7.45, "E", "T", 0.45, "o9_weld")]
 END0, END_D = 7.75, 0.75                         # the collage draws back to the left, a column comes in on the right
 END_K = 0.80
-END_COL = [(END0 + 0.05, 0.0, 0.36, "o10_chip2"), (END0 + 0.17, 0.36, 0.30, "o7_hologram"), (END0 + 0.29, 0.66, 0.34, "o8_servers")]
+END_COL = []                                     # (the closing column on the right: taken out again)
+FADE0, FADE_D = 8.00, 0.70                       # all built: the collage fades to white, the logo stays (own colours)
 LOGO0 = 3.50
 GLINT = 8.90
 
@@ -91,7 +92,7 @@ PANELS = build_layout()
 
 
 def squeeze(s):
-    return lerp(1.0, END_K, e_io_cubic(prog(s, END0, END_D)))
+    return 1.0
 
 
 def rect_at(p, s):
@@ -217,8 +218,15 @@ def draw_panel(c, name, s):
         cy = y + sh / 2
     else:
         cy = y + h / 2
-    fx_, fy_ = p.get("focus", (0.5, 0.5))           # keep the subject of the shot in the panel
-    cx += (0.5 - fx_) * iw * clamp((sw - w) / max(sw * 0.4, 1.0))
+    if name == "A":                                  # the main shot: always just covers its panel, so as the
+        k = max(w / img.width(), h / img.height()) * 1.04   # panel narrows the shot draws back (the presenter
+        iw, ih = img.width() * k, img.height() * k          # gets smaller instead of being cropped to his face)
+        fx_ = p.get("focus", (0.5, 0.5))[0]
+        cx = x + w / 2 + clamp((0.5 - fx_) * iw, -(iw - w) / 2, (iw - w) / 2)
+        cy = y + h / 2
+    else:
+        fx_, fy_ = p.get("focus", (0.5, 0.5))       # keep the subject of the shot in the panel
+        cx += (0.5 - fx_) * iw * clamp((sw - w) / max(sw * 0.4, 1.0))
     c.save()
     c.clipRect(R(x + 1.5, y + 1.5, w - 3, h - 3))
     pt = skia.Paint(AntiAlias=True)
@@ -276,8 +284,10 @@ def load_logo():
         else:
             grp = "R"
         col = BLUE if cls == "st0" else "#FFFFFF"
+        orig = {"st0": "#0053fc", "st1": "#77787b", "st2": "#5e5f64"}[cls]
         attrs = re.sub(r'class="st\d"', "", attrs)
         groups.setdefault(grp, []).append('<%s fill="%s" %s/>' % (tag, col, attrs))
+        groups.setdefault(grp + "@o", []).append('<%s fill="%s" %s/>' % (tag, orig, attrs))
     out = {}
     vw, vh = LOGO_VB
     for grp, els in groups.items():
@@ -305,6 +315,7 @@ ORDER = [("s1", 0.00), ("s2", 0.07), ("X", 0.14), ("C", 0.21), ("O", 0.28), ("R"
 
 
 LOGO = {}
+ORIG = 0.0
 
 
 def logo(c, s, cx, cy, width):
@@ -316,11 +327,14 @@ def logo(c, s, cx, cy, width):
     c.scale(k, k)
     full = R(0, 0, LOGO_VB[0], LOGO_VB[1])
     smp = skia.SamplingOptions(skia.CubicResampler.Mitchell())
+    global ORIG
+    ORIG = e_io_sine(prog(s, FADE0 + 0.15, FADE_D))
     for grp, t0 in ORDER:
         q = prog(s, LOGO0 + t0, 0.5)
         if q <= 0 or grp not in LOGO:
             continue
         img, b = LOGO[grp]
+        img_o = LOGO[grp + "@o"][0]
         a = e_io_sine(clamp(q * 1.6))
         c.save()
         if grp == "bars":                             # the E's bars slide in from the left
@@ -333,23 +347,30 @@ def logo(c, s, cx, cy, width):
         else:                                         # the glyphs rise in out of a blur
             c.translate(0, 28 * (1 - e_out_cubic(q)))
         gp = skia.Paint(AntiAlias=True)
-        gp.setAlphaf(0.55 * a)
+        gp.setAlphaf(0.55 * a * (1 - ORIG))
         gp.setImageFilter(skia.ImageFilters.Blur(10 + 6 * (1 - q), 10 + 6 * (1 - q)))
         c.drawImageRect(img, full, smp, gp)           # soft glow round the pieces
         p = skia.Paint(AntiAlias=True)
-        p.setAlphaf(a)
+        p.setAlphaf(a * (1 - ORIG))
         if q < 1:
             p.setImageFilter(skia.ImageFilters.Blur(6 * (1 - q), 6 * (1 - q)))
-        c.drawImageRect(img, full, smp, p)
+        if ORIG < 1:
+            c.drawImageRect(img, full, smp, p)
+        if ORIG > 0:                                  # its own colours on the white end card
+            po = skia.Paint(AntiAlias=True)
+            po.setAlphaf(a * ORIG)
+            c.drawImageRect(img_o, full, smp, po)
         c.restore()
     glint = prog(s, GLINT, 0.9)
     if 0 < glint < 1:                                 # "AXCORE": a light runs over it
         gx = lerp(-200, LOGO_VB[0] + 200, e_io_sine(glint))
         sh = skia.GradientShader.MakeLinear([skia.Point(gx - 140, 0), skia.Point(gx + 140, LOGO_VB[1])],
-                                            [colint(WHITE, 0), colint(WHITE, 0.85), colint(WHITE, 0)])
+                                            [colint("#9FD2FF", 0), colint("#CFE8FF" if ORIG > 0.5 else WHITE, 0.85),
+                                             colint("#9FD2FF", 0)])
         c.saveLayer(None, None)
         for grp in LOGO:
-            c.drawImageRect(LOGO[grp][0], full, smp, skia.Paint(AntiAlias=True))
+            if not grp.endswith("@o"):
+                c.drawImageRect(LOGO[grp][0], full, smp, skia.Paint(AntiAlias=True))
         c.drawPaint(skia.Paint(Shader=sh, BlendMode=skia.BlendMode.kSrcIn))
         c.restore()
     c.restore()
@@ -376,8 +397,14 @@ def render(c, t):
         c.drawRect(R(ax, ay, aw, ah), paint_fill("#061026", 0.32 * la))
         E.radial(c, ax + aw / 2, ay + ah / 2, aw * 0.6, "#061026", 0.35 * la, blend=skia.BlendMode.kSrcOver)
         c.restore()
-    logo(c, s, ax + aw / 2, ay + ah / 2, min(620.0, aw * 0.78) * lerp(1.0, 0.92, e_io_cubic(prog(s, END0, END_D))))
     c.restore()
+    f = e_io_sine(prog(s, FADE0, FADE_D))            # everything fades out to white ...
+    if f > 0:
+        c.drawRect(R(0, 0, W, H), paint_fill("#FFFFFF", f))
+    mv = e_io_cubic(prog(s, FADE0, FADE_D + 0.2))     # ... the logo stays, settles in the centre in its own colours
+    lx = lerp(W / 2 + (ax + aw / 2 - W / 2) * push, W / 2, mv)
+    ly = lerp(H / 2 + (ay + ah / 2 - H / 2) * push, H / 2, mv)
+    logo(c, s, lx, ly, lerp(min(620.0, aw * 0.78) * push, 640.0, mv))
     # in: from seg_sphere's last frame (FIN under the fading white) to the main shot
     m = e_io_sine(prog(s, 0.0, 0.55))
     if m < 1:                                         # in: seg_sphere's white flash clears onto the main shot

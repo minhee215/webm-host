@@ -1,4 +1,4 @@
-"""Outro 00:01:49:01-00:01:58:13 (229 frames) - "더 빠른 판단, / 더 효율적인 실행. / 더 높은 업무 생산성으로. /
+"""Outro 00:01:49:01-00:01:59:13 (253 frames) - "더 빠른 판단, / 더 효율적인 실행. / 더 높은 업무 생산성으로. /
 AI 전환의 가장 쉬운 시작. / AXCORE" - after the client's reference: one live-action shot full frame, then the frame
 splits again and again (each new panel pushes in from its side) into a collage of the film's own footage round the
 main shot in the centre, on which the AXCORE logo (the client's SVG; grey parts white, the blue kept) builds up.
@@ -28,7 +28,7 @@ from engine import W, H, R, WHITE, lerp, prog, clamp, e_io_cubic, e_io_sine, e_o
 def e_out_back(x, k=1.70158):
     return 1 + (k + 1) * (x - 1) ** 3 + k * (x - 1) ** 2
 
-TL0, TL1 = 109 * 24 + 1, 118 * 24 + 13          # timeline 01:49:01 .. 01:58:13
+TL0, TL1 = 109 * 24 + 1, 119 * 24 + 13          # timeline 01:49:01 .. 01:59:13 (1 s longer: the logo's light finishes)
 NF = TL1 - TL0 + 1
 SHIFT = 2.0                                      # the old FIN passage sat 2 s earlier (seg_sphere hands over from it)
 BAR = 138
@@ -39,13 +39,14 @@ HD = False
 
 MAIN = "o0_present"                              # a presenter at a data wall (after the client's sample)
 SPLIT_D = 0.55
+SNAP_D, DRIFT_D = 0.24, 1.40
 # (time, panel split, side the new panel comes in from, its share, the new panel's clip)
 OPS = [(0.90, "A", "L", 0.30, "o1_chip"), (1.45, "B", "B", 0.50, "17_robot"), (2.00, "A", "R", 0.40, "o2_warehouse"),
        (2.50, "D", "B", 0.42, "o4_wafer"), (2.95, "B", "R", 0.50, "10_datacenter"), (3.40, "C", "R", 0.45, "o3_drones"),
        (3.85, "D", "R", 0.45, "18_factory"), (4.25, "E", "R", 0.50, "o5_cobots"), (4.65, "F", "B", 0.50, "o6_amr"),
        (5.05, "H", "B", 0.55, "05_warehouse"), (5.45, "G", "T", 0.45, "22_city"), (5.85, "I", "T", 0.50, "s03_robot"),
        (6.25, "B", "T", 0.50, "n6_server"), (6.65, "K", "R", 0.45, "19_aerial"), (7.05, "C", "B", 0.45, "06_line"),
-       (7.45, "E", "T", 0.45, "o9_weld")]
+       (7.45, "E", "T", 0.45, "o5_cobots")]
 END0, END_D = 7.75, 0.75                         # the collage draws back to the left, a column comes in on the right
 END_K = 0.80
 END_COL = []                                     # (the closing column on the right: taken out again)
@@ -89,6 +90,11 @@ def build_layout():
 
 
 PANELS = build_layout()
+CUTS2 = {"B": (2.25, "o10_chip2"), "C": (3.05, "o8_servers"), "D": (3.30, "o7_hologram"), "E": (4.95, "17_robot"),
+         "F": (4.10, "o2_warehouse"), "G": (5.15, "o9_weld"), "H": (6.05, "o1_chip"), "I": (6.45, "10_datacenter"),
+         "J": (6.85, "o3_drones"), "K": (7.25, "o4_wafer")}
+for _n, (_t, _c) in CUTS2.items():
+    PANELS[_n]["cut"], PANELS[_n]["clip2"] = _t, _c
 
 
 def squeeze(s):
@@ -103,17 +109,24 @@ def rect_at(p, s):
     return (r[0] * k, r[1], r[2] * k, r[3])
 
 
+def snap(dt):
+    """A split's move (reference): most of the way in a few frames, the rest a slow drift after it."""
+    if dt <= 0:
+        return 0.0
+    return 0.84 * (1 - (1 - clamp(dt / SNAP_D)) ** 4) + 0.16 * e_io_sine(clamp(dt / DRIFT_D))
+
+
 def _rect_at(p, s):
+    """The rect as the sum of each split's move, so a move still drifting when the next one comes stays smooth."""
     keys = p["keys"]
-    cur = keys[0][1]
+    cur = list(keys[0][1])
+    prev = keys[0][1]
     for (t, r) in keys[1:]:
-        if s <= t:
-            break
-        q = e_io_cubic(clamp((s - t) / SPLIT_D))
-        cur = tuple(lerp(a, b, q) for a, b in zip(cur, r)) if q < 1 else r
-        if q < 1:
-            return cur
-    return cur
+        q = snap(s - t)
+        for i in range(4):
+            cur[i] += (r[i] - prev[i]) * q
+        prev = r
+    return tuple(cur)
 
 
 # ---------------------------------------------------------------- footage (own light readers: scaled-down tiles)
@@ -198,11 +211,15 @@ def draw_panel(c, name, s):
     x, y, w, h = rect_at(p, s)
     if w < 1 or h < 1:
         return
-    img = clip_frame(p["clip"], p, s)
+    clip, cut_t = p["clip"], p.get("cut")
+    if cut_t is not None and s >= cut_t:
+        clip = p["clip2"]
+    img = clip_frame(clip, dict(p, t0=cut_t) if clip != p["clip"] else p, s)
     if img is None:
         return
     sx, sy, sw, sh = p["scale_rect"]
     k = max(sw / img.width(), sh / img.height()) * 1.02       # cover the panel's settled size; crop as it narrows
+    k *= 1.0 + 0.06 * prog(s, max(0.0, p["t0"]), 6.0)    # every panel keeps pushing in a little
     iw, ih = img.width() * k, img.height() * k
     side = p.get("side")
     # the picture rides with the edge it comes in from (it is pushed in), otherwise stays centred on the panel
@@ -230,7 +247,7 @@ def draw_panel(c, name, s):
     c.save()
     c.clipRect(R(x + 1.5, y + 1.5, w - 3, h - 3))
     pt = skia.Paint(AntiAlias=True)
-    pt.setColorFilter(grade(p["clip"]))
+    pt.setColorFilter(grade(clip))
     c.drawImageRect(img, R(cx - iw / 2, cy - ih / 2, iw, ih), skia.SamplingOptions(skia.FilterMode.kLinear), pt)
     c.restore()
 
@@ -310,8 +327,8 @@ def load_logo():
 
 
 LOGO = []
-ORDER = [("s1", 0.00), ("s2", 0.07), ("X", 0.14), ("C", 0.21), ("O", 0.28), ("R", 0.35), ("bars", 0.45),
-         ("dia", 0.70), ("kor", 0.80)]
+ORDER = [("s1", 0.00), ("s2", 0.05), ("X", 0.10), ("C", 0.15), ("O", 0.20), ("R", 0.25), ("bars", 0.33),
+         ("dia", 0.48), ("kor", 0.56)]
 
 
 LOGO = {}
@@ -330,7 +347,7 @@ def logo(c, s, cx, cy, width):
     global ORIG
     ORIG = e_io_sine(prog(s, FADE0 + 0.15, FADE_D))
     for grp, t0 in ORDER:
-        q = prog(s, LOGO0 + t0, 0.5)
+        q = prog(s, LOGO0 + t0, 0.28)
         if q <= 0 or grp not in LOGO:
             continue
         img, b = LOGO[grp]
@@ -345,7 +362,7 @@ def logo(c, s, cx, cy, width):
             c.scale(sc, sc)
             c.translate(-b.centerX(), -b.centerY())
         else:                                         # the glyphs rise in out of a blur
-            c.translate(0, 28 * (1 - e_out_cubic(q)))
+            c.translate(0, 18 * (1 - e_out_cubic(q)))
         gp = skia.Paint(AntiAlias=True)
         gp.setAlphaf(0.55 * a * (1 - ORIG))
         gp.setImageFilter(skia.ImageFilters.Blur(10 + 6 * (1 - q), 10 + 6 * (1 - q)))

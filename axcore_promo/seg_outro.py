@@ -42,13 +42,13 @@ SPLIT_D = 0.55
 # (time, panel split, side the new panel comes in from, its share, the new panel's clip)
 OPS = [(0.90, "A", "L", 0.30, "o1_chip"), (1.45, "B", "B", 0.50, "17_robot"), (2.00, "A", "R", 0.40, "o2_warehouse"),
        (2.50, "D", "B", 0.42, "o4_wafer"), (2.95, "B", "R", 0.50, "10_datacenter"), (3.40, "C", "R", 0.45, "o3_drones"),
-       (3.85, "D", "R", 0.45, "18_factory"), (4.25, "E", "R", 0.50, "o5_cobots"), (4.65, "F", "B", 0.50, "r5_robot"),
+       (3.85, "D", "R", 0.45, "18_factory"), (4.25, "E", "R", 0.50, "o5_cobots"), (4.65, "F", "B", 0.50, "o6_amr"),
        (5.05, "H", "B", 0.55, "05_warehouse"), (5.45, "G", "T", 0.45, "22_city"), (5.85, "I", "T", 0.50, "s03_robot"),
        (6.25, "B", "T", 0.50, "n6_server"), (6.65, "K", "R", 0.45, "19_aerial"), (7.05, "C", "B", 0.45, "06_line"),
-       (7.45, "E", "T", 0.45, "q3_silos")]
+       (7.45, "E", "T", 0.45, "o9_weld")]
 END0, END_D = 7.75, 0.75                         # the collage draws back to the left, a column comes in on the right
 END_K = 0.80
-END_COL = [(END0 + 0.05, 0.0, 0.36, "o1_chip"), (END0 + 0.17, 0.36, 0.30, "o3_drones"), (END0 + 0.29, 0.66, 0.34, "q1_refinery")]
+END_COL = [(END0 + 0.05, 0.0, 0.36, "o10_chip2"), (END0 + 0.17, 0.36, 0.30, "o7_hologram"), (END0 + 0.29, 0.66, 0.34, "o8_servers")]
 LOGO0 = 3.50
 GLINT = 8.90
 
@@ -61,7 +61,7 @@ def ft(tl):
 def build_layout():
     """Each panel: its clip, when it appears, and its rect keyframes [(time, rect)]."""
     full = (0.0, Y0, float(W), Y1 - Y0)
-    panels = {"A": dict(clip=MAIN, t0=-1.0, keys=[(-1.0, full)], scale_rect=full)}
+    panels = {"A": dict(clip=MAIN, t0=-1.0, keys=[(-1.0, full)], scale_rect=full, focus=(0.40, 0.5))}
     names = iter("BCDEFGHIJKLMNOPQRSTU")
     for (t, tgt, side, share, clip) in OPS:
         x, y, w, h = panels[tgt]["keys"][-1][1]
@@ -164,7 +164,32 @@ def clip_frame(name, p, s):
     return _READERS[name].get(int(ct * 24))
 
 
-GRADE = E.grade_filter(bright=1.04, contrast=1.03, sat=0.92, tint=(-0.004, 0.0, 0.010))
+TARGET, TARGET_SD = np.array([0.50, 0.56, 0.65]), 0.22     # one cool blue-white look for every panel
+_GRADES = {}
+
+
+def grade(name):
+    """Per-clip match to the common look: each clip's mean colour and contrast (from its proxy) are pulled most
+    of the way to the target, with a little less saturation, so the collage reads as one film."""
+    if name not in _GRADES:
+        a = np.load(os.path.join(media.CLIP_DIR, name + "_proxy.npy"), mmap_mode="r")
+        sm = np.asarray(a[::12, ::4, ::4]).astype(np.float32) / 255.0
+        m = sm.reshape(-1, 3).mean(0)
+        sd = float((sm @ np.array([0.2126, 0.7152, 0.0722], np.float32)).std())
+        k = lerp(1.0, float(np.clip(TARGET_SD / max(sd, 1e-3), 0.85, 1.25)), 0.6)
+        tgt = m + (TARGET - m) * 0.70
+        sat = 0.88
+        lr, lg, lb = 0.2126, 0.7152, 0.0722
+        S = np.array([[lr * (1 - sat) + sat, lg * (1 - sat), lb * (1 - sat)],
+                      [lr * (1 - sat), lg * (1 - sat) + sat, lb * (1 - sat)],
+                      [lr * (1 - sat), lg * (1 - sat), lb * (1 - sat) + sat]]) * k
+        off = tgt - S @ m
+        rows = []
+        for i in range(3):
+            rows += list(S[i]) + [0.0, float(off[i])]
+        rows += [0, 0, 0, 1, 0]
+        _GRADES[name] = skia.ColorFilters.Matrix([float(v) for v in rows])
+    return _GRADES[name]
 
 
 def draw_panel(c, name, s):
@@ -192,10 +217,12 @@ def draw_panel(c, name, s):
         cy = y + sh / 2
     else:
         cy = y + h / 2
+    fx_, fy_ = p.get("focus", (0.5, 0.5))           # keep the subject of the shot in the panel
+    cx += (0.5 - fx_) * iw * clamp((sw - w) / max(sw * 0.4, 1.0))
     c.save()
     c.clipRect(R(x + 1.5, y + 1.5, w - 3, h - 3))
     pt = skia.Paint(AntiAlias=True)
-    pt.setColorFilter(GRADE)
+    pt.setColorFilter(grade(p["clip"]))
     c.drawImageRect(img, R(cx - iw / 2, cy - ih / 2, iw, ih), skia.SamplingOptions(skia.FilterMode.kLinear), pt)
     c.restore()
 

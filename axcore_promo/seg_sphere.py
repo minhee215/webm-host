@@ -118,8 +118,8 @@ def project(p, s):
 
 
 # ---------------------------------------------------------------- the items (the connect scene's systems and SaaS)
-SAAS = {"Gmail": "gmail", "Slack": "slack", "Notion": "notion_cube", "Microsoft Teams": "teams",
-        "Google Drive": "gdrive"}
+SAAS = {"Gmail": "gmail", "Slack": "slack_mark", "Notion": "notion_cube", "Microsoft Teams": "teams",
+        "Google Drive": "gdrive_mark"}                   # the client's marks for Slack, Notion, Google Drive
 ITEMS = [("SAP", 66), ("Oracle", 60), ("Microsoft Dynamics", 46), ("Workday", 54), ("Slack", 54), ("Notion", 50),
          ("Douzone", 50), ("Siemens Teamcenter", 38), ("Gmail", 44), ("Microsoft Teams", 42), ("Google Drive", 42),
          ("flex", 46), ("NAVER WORKS", 40), ("Younglimwon", 36), ("Hiworks", 34), ("3DEXPERIENCE", 34)]

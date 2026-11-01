@@ -1,14 +1,14 @@
 """Outro v2 00:01:49:02-00:01:59:15 (253 frames, same length as seg_outro) - client notes on the collage outro:
 more footage, packed and moving like the reference (Jongga "Kimchi Blast": a few big splits with cuts inside the
-panels, then the camera pulls back twice and the mosaic round the main shot opens out to the frame edges); an indigo
+panels, every column pushing in from the frame's edge, dark gutters between them); an indigo
 gothic "AX" in the centre instead of the logo; once all is in, the mosaic is drawn into the AX (it draws back into
 the letters while they grow, the panels outside them clear to white from the edges in, the footage that shows through
 the letters keeps playing), the AX turns solid, comes down to the mark's size and its strokes become the strokes of
 the AXCORE mark ("/", "/", the diamond, the X - as in the film's first FIN); then CORE, the E and the caption.
-  0.00  seg_sphere's last frame (plain white) clears onto the main shot; 0.55 the AX comes up on it
-  0.85  the left column pushes in, 1.55 the right one; rows come in, cuts inside the panels; 3.20 / 3.40 the next
-        columns push in at the edges; 3.75 / 4.45 the camera pulls back - the reference's last frame: main in the
-        centre, two columns of three rows each side, the outermost columns whole
+  0.00  seg_sphere's last frame (plain white) clears onto the main shot
+  0.85  the left column pushes in, 1.55 the right one (the AX comes up slowly); rows come in, cuts inside the
+        panels; 3.20 / 3.55 / 4.10 / 4.40 the outer columns push in from the edges - the reference's last frame:
+        main in the centre, two columns of three rows each side, the outermost columns whole
   5.30  drawn into the AX (to 6.70); 7.00 solid indigo; 7.30 down to the mark; 7.85 the strokes become the mark
   8.25  C O R E, the E, the caption; 9.20 a light runs over the logo; holds to the end (10.54)
 Usage: python3 seg_outro2.py <out.mp4> [height=480] [first last]
@@ -34,54 +34,56 @@ GREY = "#5E5F64"
 LBLUE = "#0053FC"
 CX, CY = W / 2, H / 2
 
-# ---------------------------------------------------------------- the mosaic, in world coordinates (camera zoom 1 =
-# the whole frame), after the reference's last frame: the main shot in a full-height centre column; on each side
-# two columns of three rows (rows staggered) and an outermost full-height column. The first view (zoom Z0) sees the
-# centre and the inner columns; the camera pulls back twice to show the rest.
-Z0, Z1 = 1.60, 1.25
-PULL = [(3.75, Z0, Z1), (4.45, Z1, 1.0)]
+# ---------------------------------------------------------------- the mosaic, after the reference's last frame: the
+# main shot in a full-height centre column; on each side two columns of three rows (rows staggered) and an outermost
+# full-height column. Every column comes in the same way - it pushes in from the frame's edge and the others make
+# room (dark gutters between the panels from the first push on); no camera move.
 HH = O.Y1 - O.Y0
-COLX = {"L3": (0, 193), "L2": (193, 262), "L1": (455, 262), "C": (717, 486), "R1": (1203, 262), "R2": (1465, 262),
-        "R3": (1727, 193)}
-VL, VR = CX - W / (2 * Z0), CX + W / (2 * Z0)     # the first view's edges (world)
-GUT = 3.0                                         # half the gutter between panels
+GUT = 3.5                                         # half the gutter between panels
+COLS = ["L3", "L2", "L1", "A", "R1", "R2", "R3"]
+STAGES = [(-1.0, (0, 0, 0, 1920, 0, 0, 0)),
+          (0.85, (0, 0, 760, 1160, 0, 0, 0)),     # the left column pushes in
+          (1.55, (0, 0, 640, 640, 640, 0, 0)),    # the right one: three columns round the main shot
+          (3.20, (0, 360, 500, 560, 500, 0, 0)),  # the next ones, from the edges
+          (3.55, (0, 330, 380, 520, 380, 310, 0)),
+          (4.10, (230, 290, 290, 500, 300, 310, 0)),
+          (4.40, (193, 262, 262, 486, 262, 262, 193))]
 START = {"g_cubes": 2.6, "g_chart": 2.4, "g_map": 1.2}     # where in a clip a panel starts (past an empty opening)
 
 
-def _panel(clip, cols, rows, t0=0.0, side=None, cuts=()):
-    return dict(clip=clip, cols=cols, rows=rows, t0=t0, side=side, cuts=list(cuts))
+def _colkeys(name):
+    i = COLS.index(name)
+    keys = []
+    for t, ws in STAGES:
+        k = (float(sum(ws[:i])), float(ws[i]))
+        if not keys or keys[-1][1] != k:
+            keys.append((t, k))
+    return keys
+
+
+def _panel(clip, col, rows, t0=0.0, side=None, cuts=()):
+    return dict(clip=clip, cols=_colkeys(col), rows=rows, t0=t0, side=side, cuts=list(cuts))
 
 
 def build_layout():
-    L1, R1, L2, R2 = COLX["L1"], COLX["R1"], COLX["L2"], COLX["R2"]
-    c = COLX["C"]
     P = {}
-    # the main shot: full frame, then the left and the right columns push in
-    P["A"] = _panel(O.MAIN, [(-1, (0.0, float(W))), (0.85, (c[0], W - c[0])), (1.55, c)], [(-1, (0.0, 1.0))],
-                    t0=-1.0)
-    # the inner columns: each comes in as one full-height panel (from the first view's edge), then takes a top and
-    # a bottom row; later the next column pushes in from outside (3.20 / 3.40)
-    lcol = [(-1, (VL, 0.0)), (0.85, (VL, c[0] - VL)), (3.20, L1)]
-    rcol = [(-1, (VR, 0.0)), (1.55, (c[0] + c[1], VR - c[0] - c[1])), (3.40, R1)]
-    P["L1a"] = _panel("o1_chip", lcol, [(-1, (0, 1)), (2.15, (0.35, 1)), (2.85, (0.35, 0.75))], 0.85, "L",
-                      [(1.60, "o3_drones"), (3.60, "22_city")])
-    P["L1t"] = _panel("o2_warehouse", lcol, [(-1, (0, 0)), (2.15, (0, 0.35))], 2.15, "T", [(4.30, "o10_chip2")])
-    P["L1b"] = _panel("g_wave", lcol, [(-1, (1, 1)), (2.85, (0.75, 1))], 2.85, "B")
-    P["R1a"] = _panel("17_robot", rcol, [(-1, (0, 1)), (2.40, (0.33, 1)), (3.10, (0.33, 0.57))], 1.55, "R",
-                      [(2.60, "10_datacenter"), (4.10, "o9_weld")])
-    P["R1t"] = _panel("o7_hologram", rcol, [(-1, (0, 0)), (2.40, (0, 0.33))], 2.40, "T", [(4.60, "q5_city")])
-    P["R1b"] = _panel("g_chart", rcol, [(-1, (1, 1)), (3.10, (0.57, 1))], 3.10, "B")
-    # the outer columns (already in place out of view; their inner edge pushes in, then the camera shows them)
-    l2 = [(-1, (L2[0], VL - L2[0])), (3.20, L2)]
-    r2 = [(-1, (VR, R2[0] + R2[1] - VR)), (3.40, R2)]
-    for j, (rw, clip, cut) in enumerate((((0, 0.55), "g_net", (4.85, "n3_evline")), ((0.55, 0.81), "o4_wafer", None),
-                                         ((0.81, 1), "n6_server", (5.00, "g_floor")))):
-        P["L2%d" % j] = _panel(clip, l2, [(-1, rw)], 0.0, "L", [cut] if cut else [])
-    for j, (rw, clip, cut) in enumerate((((0, 0.27), "g_map", None), ((0.27, 0.77), "18_factory", (4.95, "19_aerial")),
+    P["A"] = _panel(O.MAIN, "A", [(-1, (0.0, 1.0))], t0=-1.0)
+    P["L1a"] = _panel("o1_chip", "L1", [(-1, (0, 1)), (2.15, (0.35, 1)), (2.85, (0.35, 0.75))], 0.85, "L",
+                      [(1.60, "o3_drones"), (3.70, "22_city")])
+    P["L1t"] = _panel("o2_warehouse", "L1", [(-1, (0, 0)), (2.15, (0, 0.35))], 2.15, "T", [(4.70, "o10_chip2")])
+    P["L1b"] = _panel("g_wave", "L1", [(-1, (1, 1)), (2.85, (0.75, 1))], 2.85, "B")
+    P["R1a"] = _panel("17_robot", "R1", [(-1, (0, 1)), (2.40, (0.33, 1)), (3.10, (0.33, 0.57))], 1.55, "R",
+                      [(2.60, "10_datacenter"), (4.25, "o9_weld")])
+    P["R1t"] = _panel("o7_hologram", "R1", [(-1, (0, 0)), (2.40, (0, 0.33))], 2.40, "T", [(4.85, "q5_city")])
+    P["R1b"] = _panel("g_chart", "R1", [(-1, (1, 1)), (3.10, (0.57, 1))], 3.10, "B")
+    for j, (rw, clip, cut) in enumerate((((0, 0.55), "g_net", (4.95, "n3_evline")), ((0.55, 0.81), "o4_wafer", None),
+                                         ((0.81, 1), "n6_server", (5.05, "g_floor")))):
+        P["L2%d" % j] = _panel(clip, "L2", [(-1, rw)], 3.20, "L", [cut] if cut else [])
+    for j, (rw, clip, cut) in enumerate((((0, 0.27), "g_map", None), ((0.27, 0.77), "18_factory", (5.00, "19_aerial")),
                                          ((0.77, 1), "o5_cobots", None))):
-        P["R2%d" % j] = _panel(clip, r2, [(-1, rw)], 0.0, "R", [cut] if cut else [])
-    P["L3"] = _panel("o8_servers", [(-1, COLX["L3"])], [(-1, (0, 1))], 0.0, None, [(5.05, "n2_warehouse")])
-    P["R3"] = _panel("s03_robot", [(-1, COLX["R3"])], [(-1, (0, 1))], 0.0, None)
+        P["R2%d" % j] = _panel(clip, "R2", [(-1, rw)], 3.55, "R", [cut] if cut else [])
+    P["L3"] = _panel("o8_servers", "L3", [(-1, (0, 1))], 4.10, "L", [(5.10, "n2_warehouse")])
+    P["R3"] = _panel("s03_robot", "R3", [(-1, (0, 1))], 4.40, "R")
     for p in P.values():
         p["sw"] = max(v[1] for _, v in p["cols"])
         p["sh"] = max(v[1] - v[0] for _, v in p["rows"]) * HH
@@ -137,8 +139,8 @@ def draw_panel(c, name, s):
     if img is None:
         return
     sw, sh = p["sw"], p["sh"]
-    if name == "A":                                  # the main shot keeps its scale; the columns crop it (reference)
-        sw, sh = COLX["C"][1], HH
+    if name == "A":                                  # the main shot just covers its panel
+        sw, sh = w, h
     k = max(sw / img.width(), sh / img.height()) * 1.04
     k *= 1.0 + 0.05 * prog(s, max(0.0, t0), 6.0)          # every panel keeps pushing in a little
     iw, ih = img.width() * k, img.height() * k
@@ -146,7 +148,7 @@ def draw_panel(c, name, s):
     cx = x + w - sw / 2 if side == "L" else (x + sw / 2 if side == "R" else x + w / 2)
     cy = y + h - sh / 2 if side == "T" else (y + sh / 2 if side == "B" else y + h / 2)
     if name == "A":
-        cx = CX + (0.5 - 0.44) * iw
+        cx = x + w / 2 + clamp((0.5 - 0.44) * iw, -(iw - w) / 2, (iw - w) / 2)
     c.save()
     c.clipRect(R(x + GUT, y + GUT, w - 2 * GUT, h - 2 * GUT))
     pt = skia.Paint(AntiAlias=True)
@@ -178,8 +180,8 @@ MARK = {"s1": [(30.44, 291.9), (54.56, 291.9), (135.85, 210.76), (123.75, 198.74
         "xlr": [(374.1, 224.96), (441.05, 291.9), (465.17, 291.9), (386.2, 212.94)],
         "xc": [(354.1, 191.8), (355.1, 192.8), (354.1, 193.8), (353.1, 192.8)]}
 
-TXT0 = 0.55                                       # the AX comes up on the main shot
-TXT_W = 92.0                                      # its letter height in the world (x zoom on screen: 147 -> 92 px)
+TXT0, TXT_D = 1.55, 0.90                          # the AX comes up slowly as the three columns settle
+TXT_W = 104.0                                     # its letter height on the mosaic (px)
 ABS0, ABS_D = 5.30, 1.40                          # drawn into the AX
 ABS_Z = 0.70                                      # the mosaic draws back to this as the letters grow
 BIG_H = 560.0
@@ -192,18 +194,8 @@ GLINT = 9.20
 LOGO_W = 640.0
 
 
-def pull(dt):
-    """A camera pull-back (reference): most of the way in a few frames, then a slow settle."""
-    if dt <= 0:
-        return 0.0
-    return 0.80 * (1 - (1 - clamp(dt / 0.30)) ** 4) + 0.20 * e_io_sine(clamp(dt / 1.30))
-
-
 def zoom(s):
-    z = math.log(Z0)
-    for (t, a, b) in PULL:
-        z += (math.log(b) - math.log(a)) * pull(s - t)
-    return math.exp(z) * (1.0 + 0.02 * e_io_sine(prog(s, 0.0, ABS0)))
+    return 1.0
 
 
 def absorb(s):
@@ -334,13 +326,13 @@ def render(c, t):
             x, _ = xf(u, 0)
             c.drawRect(R(x - 0.5, 0, 1.0, H), paint_fill("#AFC3E6", 0.45 * deco))
     # the letters
-    txt_in = e_out_cubic(prog(s, TXT0, 0.45))
+    txt_in = e_io_sine(prog(s, TXT0, TXT_D))
     fill_out = e_io_sine(prog(s, ABS0 + 0.45, 0.55))       # the indigo gives way to the footage behind it
     if morph <= 0:
         if txt_in > 0 and fill_out < 1:
             a = txt_in * (1 - fill_out)
             c.save()
-            c.translate(0, 12 * (1 - txt_in))
+            c.translate(0, 10 * (1 - txt_in))
             g = skia.Paint(AntiAlias=True, Color4f=skia.Color4f(1, 1, 1, 0.38 * a * (1 - bgw)))
             g.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 18))
             c.drawPath(ax, g)                        # a soft light behind it so it reads on the shot

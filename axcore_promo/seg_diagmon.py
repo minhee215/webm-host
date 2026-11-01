@@ -53,6 +53,41 @@ def chrome(c, a, y0):
     c.drawLine(0, y0 + 80, A.W, y0 + 80, paint_stroke("#DADDE6", a, 1.0))
 
 
+def monitor(c, t):
+    """seg_axpoint.monitor with the man fading in (not popping on) behind the page as it turns transparent: the
+    diagnosis' own blue is behind him until then."""
+    from engine import W, H, lerp, prog, e_io_cubic, e_io_sine, BLUE as _B
+    k1 = e_io_cubic(prog(t, A.T_MON, 0.6))
+    k2 = e_io_cubic(prog(t, A.T_MON + 0.3, 1.1))
+    fi = e_io_sine(prog(t, A.T_MON + 0.25, 1.05))     # the man fades in
+    c.drawRect(R(0, 0, W, H), paint_fill(_B))
+    img = A.plate("monitor", t)
+    if fi > 0 and img is not None:
+        p = skia.Paint(AntiAlias=True)
+        p.setAlphaf(fi)
+        sg = lerp(10, 3.0, k2) * A.SCV
+        p.setImageFilter(skia.ImageFilters.Blur(sg, sg, skia.TileMode.kClamp))
+        c.save()
+        c.translate(W / 2, A.BAR)
+        c.scale(1.1, 1.1)
+        c.translate(-W / 2, -A.BAR)
+        c.drawImageRect(img, R(0, 0, W, H), A.E.SAMP, p)
+        c.restore()
+    ui = A.snap(1, lambda cc: A.cands(cc, t))
+    c.save()
+    c.translate(W / 2, A.BAR + 80 * k1)
+    c.scale(lerp(1.0, 0.93, k1), lerp(1.0, 0.93, k1))
+    c.translate(-W / 2, -A.BAR)
+    A.draw_img(c, ui, lerp(1.0, 0.45, k2))
+    c.restore()
+    c.drawRect(R(0, 0, W, H), paint_fill(WHITE, 0.22 * k2 * fi))
+    c.save()
+    c.translate(0, -80 * (1 - k1))
+    A.chrome(c, lerp(1.0, 0.55, k2) * k1, A.BAR)
+    c.restore()
+
+
+A.monitor = monitor
 A.cands = diag_page              # the monitor passage (and its cross-fade into the ceiling) shows the diagnosis
 A.chrome = chrome
 

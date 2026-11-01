@@ -3,13 +3,15 @@ to face the lens as before, then the room (the man at his desk) fades out and th
 which settles into the app's main page (주요 정보: briefing bar, then the AI workspace). The workspace's widgets run
 slower. For the connect scene the app window draws back a little and goes very slightly soft, the AXCORE node pops
 softly in the centre, and the company systems / external SaaS come in as before (their clock 3.1 s later, so the
-segment is 44 frames longer: 299 frames, to 00:59:19).
+segment is 58 frames longer: 313 frames, to 00:59:33 = 01:00:09).
   47.38  seg_axpoint's last frame (the ceiling cards turning into the workspace); the UI comes down (as before)
   48.10  no pause: as it lands the room fades out, the app fades in, the UI settles into its main page; the title
          moves from the lower left (white) to the lower right of the page (black)
   48.50  the workspace widgets run (2x slower than before)
-  51.25  the app window draws back (0.92) and softens slightly; 51.55 the node pops
-  51.95  사내 시스템 ... (seg_wsfront's connect graphics, clock - 1.85 s); 외부 SaaS counts "5연결+"
+  51.30  (client's reference) the app goes up and out of frame onto white with soft blue light; the workspace's
+         diamond symbol stays, moves to the centre and grows, and hands over to the AXCORE node as its rings open
+  52.50  사내 시스템 ... (seg_wsfront's connect graphics, clock - 2.4 s), each group spreading out of the node as it
+         comes in; 외부 SaaS counts "5연결+"
 Film time = timeline frame / 24; grain = timeline frame. 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_wsapp.py <out.mp4> [height=480] [first last]
 """
@@ -34,12 +36,13 @@ from engine import (W, H, R, WHITE, INK, STEEL, STEEL_400, BLUE, lerp, prog, cla
 
 K = WF.K
 TL0 = WF.TL0
-SHIFT = 1.85                                   # the connect graphics' clock runs this much later
+SHIFT = 2.40                                   # the connect graphics' clock runs this much later
 NF = WF.NF + int(round(SHIFT * 24))
 APP0, APP_D = 48.10, 0.85                      # the room fades out, the app fades in, the UI settles into it
 WIDG0, WIDG_K = 48.50, 2.0                     # the widgets' animation starts here, this much slower
-SHR0, SHR_D, SHR_K, SHR_BLUR = 51.25, 0.70, 0.92, 2.5
-HUBP = 51.55                                   # the node pops
+EXIT0, EXIT_D = 51.30, 0.80                    # the app goes up and out of frame, leaving white
+SYM0, SYM_D = 51.30, 0.85                      # its diamond symbol stays, moves to the centre and grows
+HUBP = 51.95                                   # the node pops
 WS_RECT = R(330, 304, 1550, 1550 * A.UH / A.UW)   # the workspace inside the app's main page
 SCV = 1.0
 
@@ -113,6 +116,28 @@ def app(c):
     icon(c, "gear", br.right() - 118, br.centerY(), 16, STEEL, 1.0, 1.5)
 
 
+# ---------------------------------------------------------------- the workspace's diamond symbol
+_diamond = A.diamond
+SYM = {"skip": False}
+
+
+def diamond_hook(c, x, y, r, col, a, rot=0.0):
+    """The workspace header's diamond: remember where it is on screen; leave it out when it is drawn on its own."""
+    if r == 24 and col == BLUE:
+        m = c.getTotalMatrix()
+        p = m.mapXY(x, y)
+        q = m.mapXY(x + r, y)
+        sc = (SCV or 1.0)
+        SYM["xy"] = (p.x() / sc, p.y() / sc)
+        SYM["r"] = math.hypot(q.x() - p.x(), q.y() - p.y()) / sc
+        if SYM["skip"]:
+            return
+    _diamond(c, x, y, r, col, a, rot)
+
+
+A.diamond = diamond_hook
+
+
 # ---------------------------------------------------------------- the scene
 def rect_quad(r):
     return [(r.left(), r.top()), (r.right(), r.top()), (r.right(), r.bottom()), (r.left(), r.bottom())]
@@ -167,20 +192,44 @@ def scene(c, t):
         c.saveLayer(None, lp)
         A.caption(c, t)
         c.restore()
-    kr = x * (1 - e_io_sine(prog(t, SHR0, 0.45)))   # ... to the same title, black, at the lower right of the page
+    kr = x   # ... to the same title, black, at the lower right of the page
     if kr > 0.003:
         dy = 10 * (1 - x)
         text(c, "우리 회사에 맞게 구성된", WS_RECT.right(), 828 + dy, 24, "SemiBold", "#1B2333", kr, "right")
         text(c, "AI 워크스페이스", WS_RECT.right(), 884 + dy, 46, "Bold", "#0B0F19", kr, "right")
 
 
+def hub_light(c, tc, k=1.0):
+    """seg_connect2.hub drawn for the white page: the same node (rings, turning arc, a ring per connection, the
+    diamond) in deeper blues so it reads on white."""
+    hx, hy = K.HUB
+    E.radial(c, hx, hy, 210, "#7FB4FF", 0.30 * k, blend=skia.BlendMode.kSrcOver)
+    for rr_, aa in ((90, 0.35), (62, 0.55), (36, 0.95)):
+        c.drawCircle(hx, hy, rr_, paint_stroke("#2F6BFF", k * aa, 1.6))
+    c.save()
+    c.translate(hx, hy)
+    c.rotate(tc * 40)
+    c.drawArc(R(-90, -90, 180, 180), 0, 70, False, paint_stroke("#1E5BFF", k, 2.6))
+    c.restore()
+    for bt in K.BEATS:
+        q_ = prog(tc, bt, 0.9)
+        if 0 < q_ < 1:
+            c.drawCircle(hx, hy, 40 + 160 * e_out_cubic(q_), paint_stroke("#3D7BFF", (1 - q_) * 0.6 * k, 1.6))
+    E.radial(c, hx, hy, 60, "#2FC8FF", 0.55 * k)
+    c.save()
+    c.translate(hx, hy)
+    c.rotate(45)
+    c.drawRect(R(-11, -11, 22, 22), paint_fill("#18B4FF", k))
+    c.restore()
+
+
 def node(c, t, tc):
-    """The AXCORE node (seg_connect2.hub) popping softly in the centre."""
+    """The AXCORE node popping softly in the centre (its rings open out of the symbol)."""
     q = prog(t, HUBP, 0.5)
     a = e_io_sine(prog(t, HUBP, 0.35))
     if a <= 0.003:
         return
-    s = lerp(0.55, 1.0, e_out_back(q, 1.4))
+    s = lerp(0.35, 1.0, e_out_back(q, 1.3))
     hx, hy = K.HUB
     lp = skia.Paint()
     lp.setAlphaf(a)
@@ -189,30 +238,86 @@ def node(c, t, tc):
     c.scale(s, s)
     c.translate(-hx, -hy)
     c.saveLayer(None, lp)
-    E.radial(c, hx, hy, 230, "#0A1A3C", 0.42, blend=skia.BlendMode.kSrcOver)   # a little depth for it on the page
-    K.hub(c, tc)
+    hub_light(c, tc)
     c.restore()
+    c.restore()
+
+
+_glass = E.glass
+
+
+def glass_navy(c, rect, radius=18, alpha=1.0, tint=WHITE, tint_a=0.14, **kw):
+    """The panels' dark glass, denser on the white page so they come in navy rather than as grey boxes."""
+    if tint == E.NAVY_950:
+        tint_a = max(tint_a, 0.86)
+    return _glass(c, rect, radius, alpha, tint=tint, tint_a=tint_a, **kw)
+
+
+def page_bg(c, t):
+    """White, with the soft blue light of the reference coming in at the sides."""
+    c.drawRect(R(0, 0, W, H), paint_fill("#FFFFFF"))
+    k = e_io_sine(prog(t, EXIT0 + 0.3, 1.2))
+    if k > 0:
+        E.radial(c, W + 60, H * 0.45, 900, "#9CC3FF", 0.55 * k, blend=skia.BlendMode.kSrcOver)
+        E.radial(c, -120, H * 0.75, 760, "#C9DCFF", 0.45 * k, blend=skia.BlendMode.kSrcOver)
+
+
+def symbol(c, t):
+    """The diamond left behind: from its place in the workspace header to the centre, growing; it hands over to
+    the node's own diamond as the rings open."""
+    m = e_io_cubic(prog(t, SYM0, SYM_D))
+    if t < SYM0 or "xy" not in SYM:
+        return
+    out = e_io_sine(prog(t, HUBP + 0.10, 0.35))
+    if out >= 1:
+        return
+    (x0, y0), r0 = SYM["xy"], SYM["r"]
+    x, y = lerp(x0, K.HUB[0], m), lerp(y0, K.HUB[1], m)
+    r = lerp(r0, 34.0, e_io_sine(m)) * (1 + 0.15 * math.sin(math.pi * clamp(prog(t, SYM0 + 0.2, SYM_D))))
+    rot = 90 * e_io_cubic(prog(t, SYM0 + 0.25, SYM_D))
+    col = A.colint_mix(BLUE, "#2FC8FF", e_io_sine(prog(t, HUBP - 0.2, 0.4)))
+    c.drawPath(E.poly([(x, y - r * 1.25), (x + r * 1.25, y), (x, y + r * 1.25), (x - r * 1.25, y)], True),
+               paint_fill(col, 0.35 * (1 - out), blur=r * 0.6))
+    c.save()
+    c.translate(x, y)
+    c.rotate(rot)
+    c.translate(-x, -y)
+    _diamond(c, x, y, r, col, 1 - out)
     c.restore()
 
 
 def render(c, t):
-    k = e_io_cubic(prog(t, SHR0, SHR_D))
-    if k <= 0:
+    e = e_io_cubic(prog(t, EXIT0, EXIT_D))
+    if e <= 0:
+        SYM["skip"] = False
         scene(c, t)
-    else:                                      # the app window draws back and softens a touch
+    else:                                      # the app goes up and out, its diamond stays behind
+        SYM["skip"] = True
         img = A.snap(33, lambda cc: scene(cc, t))
-        c.drawRect(R(0, 0, W, H), paint_fill("#E9EDF4"))
-        A.draw_img(c, img, 1.0, SHR_BLUR * k, lerp(1.0, SHR_K, k))
+        SYM["skip"] = False
+        page_bg(c, t)
+        if e < 1:
+            A.draw_img(c, img, 1 - e_io_sine(prog(t, EXIT0 + 0.35, 0.45)), 6 * e, 1.0, dy=-1.05 * H * e)
+        symbol(c, t)
     tc = t - SHIFT
-    if tc > K.PAN0 - 0.2 or t > HUBP:
+    if t > HUBP - 0.1:
         c.save()
         zg = 1.0 + 0.03 * prog(tc, K.PAN0 - 0.5, K.T_END - K.PAN0 + 0.5)
         c.translate(*K.HUB)
         c.scale(zg, zg)
         c.translate(-K.HUB[0], -K.HUB[1])
-        if tc > K.PAN0 - 0.2:
-            WF.systems_panel(c, tc)
-            WF.right_cards(c, tc)
+        E.glass = glass_navy
+        for t0, fn in ((K.PAN0, WF.systems_panel), (K.SAAS0, WF.right_cards)):
+            if tc > t0 - 0.05:                 # each group spreads out of the node as it comes in
+                k = e_out_cubic(prog(tc, t0, 1.0))
+                s_ = lerp(0.45, 1.0, k)
+                c.save()
+                c.translate(*K.HUB)
+                c.scale(s_, s_)
+                c.translate(-K.HUB[0], -K.HUB[1])
+                fn(c, tc)
+                c.restore()
+        E.glass = _glass
         node(c, t, tc)
         c.restore()
 

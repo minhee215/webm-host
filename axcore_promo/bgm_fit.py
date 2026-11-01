@@ -4,7 +4,10 @@ The music's repeating middle is shortened by 34.61 s (a whole number of its phra
 music best matches itself, 2 s either side): it jumps from 39.40 s to 74.01 s, under the cut's cross-blur into
 M-AI Works, with a 120 ms equal-power crossfade, sample-aligned by waveform correlation. That lands the music's final
 hit (143.43 s) at 108.82 s, on the rush into the white flash before the outro, and its own ending at the cut's end.
-Usage: python3 bgm_fit.py <AXCORE_BGM.mp3/wav> <out.wav>
+The client's final cut (2869 frames, 119.66 s) runs 3 frames shorter from the OCR scene on; the splice stays (a
+shift of a fraction of a beat would break the rhythm), so the hit falls 3 frames later in the same white rush, and
+the music is cut to the new length (pass it as the third argument).
+Usage: python3 bgm_fit.py <AXCORE_BGM.mp3/wav> <out.wav> [length s]
 """
 import subprocess
 import sys
@@ -19,6 +22,7 @@ A, R = 39.40, 34.61
 
 def main():
     src, out = sys.argv[1], sys.argv[2]
+    dur = float(sys.argv[3]) if len(sys.argv) > 3 else DUR
     raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", src, "-ac", "2", "-ar", str(SR), "-f", "f32le", "-"],
                          capture_output=True, check=True).stdout
     x = np.frombuffer(raw, np.float32).reshape(-1, 2).astype(np.float64)
@@ -32,7 +36,7 @@ def main():
                         x[ia - xf // 2:ia + xf // 2] * np.cos(g * np.pi / 2)[:, None]
                         + x[ib - xf // 2:ib + xf // 2] * np.sin(g * np.pi / 2)[:, None],
                         x[ib + xf // 2:]])
-    n = int(round(DUR * SR))
+    n = int(round(dur * SR))
     y = np.pad(y, ((0, max(0, n - len(y))), (0, 0)))[:n]
     fo = int(0.5 * SR)
     y[-fo:] *= np.linspace(1, 0, fo)[:, None] ** 2

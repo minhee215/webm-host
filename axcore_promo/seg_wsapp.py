@@ -42,7 +42,7 @@ APP0, APP_D = 48.10, 0.85                      # the room fades out, the app fad
 WIDG0, WIDG_K = 48.50, 2.0                     # the widgets' animation starts here, this much slower
 EXIT0, EXIT_D = 51.30, 0.80                    # the app goes up and out of frame, leaving white
 SYM0, SYM_D = 51.30, 0.85                      # its diamond symbol stays, moves to the centre and grows
-HUBP = 51.95                                   # the node pops
+HUBP = 51.90                                   # the node pops
 WS_RECT = R(330, 304, 1550, 1550 * A.UH / A.UW)   # the workspace inside the app's main page
 SCV = 1.0
 
@@ -215,12 +215,7 @@ def hub_light(c, tc, k=1.0):
         q_ = prog(tc, bt, 0.9)
         if 0 < q_ < 1:
             c.drawCircle(hx, hy, 40 + 160 * e_out_cubic(q_), paint_stroke("#3D7BFF", (1 - q_) * 0.6 * k, 1.6))
-    E.radial(c, hx, hy, 60, "#2FC8FF", 0.55 * k)
-    c.save()
-    c.translate(hx, hy)
-    c.rotate(45)
-    c.drawRect(R(-11, -11, 22, 22), paint_fill("#18B4FF", k))
-    c.restore()
+    E.radial(c, hx, hy, 60, "#2FC8FF", 0.55 * k)          # (its diamond is the symbol itself: symbol())
 
 
 def node(c, t, tc):
@@ -262,27 +257,27 @@ def page_bg(c, t):
         E.radial(c, -120, H * 0.75, 760, "#C9DCFF", 0.45 * k, blend=skia.BlendMode.kSrcOver)
 
 
+NODE_R = 11 * math.sqrt(2)                     # the node's diamond (a 22 px square turned 45 degrees)
+
+
 def symbol(c, t):
-    """The diamond left behind: from its place in the workspace header to the centre, growing; it hands over to
-    the node's own diamond as the rings open."""
-    m = e_io_cubic(prog(t, SYM0, SYM_D))
+    """The diamond left behind: from its place in the workspace header to the centre - growing a little on the
+    way, then shrinking and turning cyan - where it simply stays as the node's own diamond (no cross-fade)."""
     if t < SYM0 or "xy" not in SYM:
         return
-    out = e_io_sine(prog(t, HUBP + 0.10, 0.35))
-    if out >= 1:
-        return
+    m = e_io_cubic(prog(t, SYM0, SYM_D))
     (x0, y0), r0 = SYM["xy"], SYM["r"]
     x, y = lerp(x0, K.HUB[0], m), lerp(y0, K.HUB[1], m)
-    r = lerp(r0, 34.0, e_io_sine(m)) * (1 + 0.15 * math.sin(math.pi * clamp(prog(t, SYM0 + 0.2, SYM_D))))
-    rot = 90 * e_io_cubic(prog(t, SYM0 + 0.25, SYM_D))
-    col = A.colint_mix(BLUE, "#2FC8FF", e_io_sine(prog(t, HUBP - 0.2, 0.4)))
-    c.drawPath(E.poly([(x, y - r * 1.25), (x + r * 1.25, y), (x, y + r * 1.25), (x - r * 1.25, y)], True),
-               paint_fill(col, 0.35 * (1 - out), blur=r * 0.6))
+    r = lerp(r0, NODE_R, m) + 12 * math.sin(math.pi * m)
+    rot = 90 * m
+    col = A.colint_mix(BLUE, "#18B4FF", e_io_sine(clamp((m - 0.45) / 0.55)))
+    c.drawPath(E.poly([(x, y - r * 1.3), (x + r * 1.3, y), (x, y + r * 1.3), (x - r * 1.3, y)], True),
+               paint_fill(col, 0.30, blur=r * 0.6))
     c.save()
     c.translate(x, y)
     c.rotate(rot)
     c.translate(-x, -y)
-    _diamond(c, x, y, r, col, 1 - out)
+    _diamond(c, x, y, r, col, 1.0)
     c.restore()
 
 
@@ -298,7 +293,6 @@ def render(c, t):
         page_bg(c, t)
         if e < 1:
             A.draw_img(c, img, 1 - e_io_sine(prog(t, EXIT0 + 0.35, 0.45)), 6 * e, 1.0, dy=-1.05 * H * e)
-        symbol(c, t)
     tc = t - SHIFT
     if t > HUBP - 0.1:
         c.save()
@@ -320,6 +314,8 @@ def render(c, t):
         E.glass = _glass
         node(c, t, tc)
         c.restore()
+    if e > 0:
+        symbol(c, t)                           # over the node: it is the node's diamond
 
 
 K.SAAS_COUNT_PLUS = True                       # 외부 SaaS: "5연결+"

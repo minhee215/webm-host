@@ -255,14 +255,6 @@ def mixc(c0, c1, q, a=1.0):
     return skia.Color4f(lerp(x.fR, y.fR, q), lerp(x.fG, y.fG, q), lerp(x.fB, y.fB, q), a)
 
 
-SQUARES = []                                      # the reference's small blue squares round the letters
-_rr = np.random.default_rng(7)
-for _j in range(12):
-    _u = _rr.uniform(-0.55, 2.55)
-    _v = _rr.uniform(-0.12, 1.12) if not (-0.05 < _u < 2.02) else (_rr.choice([-0.16, 1.16]) + _rr.uniform(-0.05, 0.05))
-    SQUARES.append((_u, _v, _rr.uniform(9, 22), _rr.uniform(0, 0.5), LBLUE if _j % 3 else INDIGO))
-
-
 def letters(s):
     """The AX's screen transform: on the mosaic it rides with the camera; drawn in, it grows to BIG_H; then it comes
     down to the mark's size and place."""
@@ -309,20 +301,6 @@ def render(c, t):
                     r = R(CX + (x - CX) * z - 1, CY + (y - CY) * z - 1, w * z + 2, h * z + 2)
                     c.drawRect(r, paint_fill("#FFFFFF", wa))
             c.restore()
-    # thin guide lines and the small squares (reference vocabulary) on the white
-    deco = e_io_sine(prog(s, ABS0 + 0.9, 0.5)) * (1 - e_io_sine(prog(s, SHR0 - 0.1, 0.35)))
-    if deco > 0:
-        for (u, v, sz, d0, colr) in SQUARES:
-            a = deco * e_out_cubic(prog(s, ABS0 + 0.95 + d0, 0.3))
-            x, y = xf(u, v)
-            k = sz * (0.6 + 0.4 * a)
-            c.drawRect(R(x - k / 2, y - k / 2, k, k), paint_fill(colr, 0.9 * a))
-        for v in (0.0, 1.0):
-            _, y = xf(0, v)
-            c.drawRect(R(0, y - 0.5, W, 1.0), paint_fill("#AFC3E6", 0.45 * deco))
-        for u in (0.0, 1.97):
-            x, _ = xf(u, 0)
-            c.drawRect(R(x - 0.5, 0, 1.0, H), paint_fill("#AFC3E6", 0.45 * deco))
     # the letters
     txt_in = e_io_sine(prog(s, TXT0, TXT_D))
     fill_out = e_io_sine(prog(s, ABS0 + 0.45, 0.55))       # the indigo gives way to the footage behind it

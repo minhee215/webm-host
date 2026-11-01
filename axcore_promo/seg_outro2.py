@@ -6,7 +6,9 @@ the letters while they grow, the panels outside them clear to white from the edg
 the letters keeps playing), the AX turns solid, comes down to the mark's size and its strokes become the strokes of
 the AXCORE mark ("/", "/", the diamond, the X - as in the film's first FIN); then CORE, the E and the caption.
   0.00  seg_sphere's last frame (plain white) clears onto the main shot; 0.55 the AX comes up on it
-  0.85  splits and cuts inside the panels (reference pace); 3.75 / 4.45 the camera pulls back - the outer panels
+  0.85  the left column pushes in, 1.55 the right one; rows come in, cuts inside the panels; 3.20 / 3.40 the next
+        columns push in at the edges; 3.75 / 4.45 the camera pulls back - the reference's last frame: main in the
+        centre, two columns of three rows each side, the outermost columns whole
   5.30  drawn into the AX (to 6.70); 7.00 solid indigo; 7.30 down to the mark; 7.85 the strokes become the mark
   8.25  C O R E, the E, the caption; 9.20 a light runs over the logo; holds to the end (10.54)
 Usage: python3 seg_outro2.py <out.mp4> [height=480] [first last]
@@ -33,70 +35,78 @@ LBLUE = "#0053FC"
 CX, CY = W / 2, H / 2
 
 # ---------------------------------------------------------------- the mosaic, in world coordinates (camera zoom 1 =
-# the whole frame). The first view (zoom Z0) sees only the core; the splits happen there; the ring of panels round
-# it is already in place and comes into view as the camera pulls back.
-Z0, Z1 = 1.42, 1.17
+# the whole frame), after the reference's last frame: the main shot in a full-height centre column; on each side
+# two columns of three rows (rows staggered) and an outermost full-height column. The first view (zoom Z0) sees the
+# centre and the inner columns; the camera pulls back twice to show the rest.
+Z0, Z1 = 1.60, 1.25
 PULL = [(3.75, Z0, Z1), (4.45, Z1, 1.0)]
-CORE = (CX - W / (2 * Z0), CY - (O.Y1 - O.Y0) / (2 * Z0), W / Z0, (O.Y1 - O.Y0) / Z0)
-# (time, panel split, side the new panel comes in from, its share, clip)
-OPS = [(0.85, "A", "L", 0.40, "o1_chip"), (1.55, "A", "R", 0.45, "17_robot"), (2.15, "C", "B", 0.46, "g_wave"),
-       (2.35, "B", "T", 0.42, "o2_warehouse"), (2.85, "B", "R", 0.42, "g_net"), (3.05, "D", "R", 0.48, "o4_wafer"),
-       (3.25, "E", "L", 0.45, "10_datacenter"), (3.45, "C", "T", 0.40, "o7_hologram")]
-# cuts inside the panels (reference): (panel, time, new clip)
-CUTS = [("B", 1.25, "o3_drones"), ("B", 2.00, "o5_cobots"), ("C", 2.55, "22_city"), ("D", 2.95, "g_chart"),
-        ("E", 3.55, "n6_server"), ("C", 4.05, "o10_chip2"), ("F", 4.25, "18_factory"), ("D", 4.80, "g_floor"),
-        ("G", 4.95, "o9_weld"), ("B", 5.05, "g_map")]
-# the ring (world rects) and its clips
-_y0, _y1 = O.Y0, O.Y1
-_cx0, _cy0, _cw, _ch = CORE
-_cx1, _cy1 = _cx0 + _cw, _cy0 + _ch
-
-
-def _ring():
-    out = []
-    for (x0, x1), ys in (((0, 140), (_y0, 390, 655, _y1)), ((140, _cx0), (_y0, 320, 600, _y1)),
-                         ((_cx1, W - 140), (_y0, 360, 630, _y1)), ((W - 140, W), (_y0, 300, 570, _y1))):
-        for a, b in zip(ys, ys[1:]):
-            out.append((x0, a, x1 - x0, b - a))
-    for (a, b), xs in (((_y0, _cy0), (_cx0, 560, 905, 1255, _cx1)), ((_cy1, _y1), (_cx0, 640, 1000, 1330, _cx1))):
-        for x0, x1 in zip(xs, xs[1:]):
-            out.append((x0, a, x1 - x0, b - a))
-    return out
-
-
-RING_CLIPS = ["o6_amr", "g_cubes", "n3_evline", "q5_city", "o8_servers", "s03_robot", "n2_warehouse", "19_aerial",
-              "r5_robot", "n5_battery", "06_line", "p2_carline", "o3_drones", "g_chart", "o2_warehouse", "n7_campus",
-              "o1_chip", "05_warehouse", "q1_refinery", "n1_pharma"]
+HH = O.Y1 - O.Y0
+COLX = {"L3": (0, 193), "L2": (193, 262), "L1": (455, 262), "C": (717, 486), "R1": (1203, 262), "R2": (1465, 262),
+        "R3": (1727, 193)}
+VL, VR = CX - W / (2 * Z0), CX + W / (2 * Z0)     # the first view's edges (world)
+GUT = 3.0                                         # half the gutter between panels
 START = {"g_cubes": 2.6, "g_chart": 2.4, "g_map": 1.2}     # where in a clip a panel starts (past an empty opening)
-NAMES = "BCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def _panel(clip, cols, rows, t0=0.0, side=None, cuts=()):
+    return dict(clip=clip, cols=cols, rows=rows, t0=t0, side=side, cuts=list(cuts))
 
 
 def build_layout():
-    panels = {"A": dict(clip=O.MAIN, t0=-1.0, keys=[(-1.0, CORE)], scale_rect=CORE, focus=(0.40, 0.5))}
-    names = iter(NAMES)
-    for (t, tgt, side, share, clip) in OPS:
-        x, y, w, h = panels[tgt]["keys"][-1][1]
-        if side in "LR":
-            nw = w * share
-            new = (x, y, nw, h) if side == "L" else (x + w - nw, y, nw, h)
-            kept = (x + nw, y, w - nw, h) if side == "L" else (x, y, w - nw, h)
-            start = (x, y, 0.0, h) if side == "L" else (x + w, y, 0.0, h)
-        else:
-            nh = h * share
-            new = (x, y, w, nh) if side == "T" else (x, y + h - nh, w, nh)
-            kept = (x, y + nh, w, h - nh) if side == "T" else (x, y, w, h - nh)
-            start = (x, y, w, 0.0) if side == "T" else (x, y + h, w, 0.0)
-        panels[tgt]["keys"].append((t, kept))
-        panels[next(names)] = dict(clip=clip, t0=t, keys=[(t - 1.0, start), (t, new)], scale_rect=new, side=side)
-    for j, (r, clip) in enumerate(zip(_ring(), RING_CLIPS)):
-        panels["r%d" % j] = dict(clip=clip, t0=0.0, keys=[(-1.0, r)], scale_rect=r)
-    for (n, t, clip) in CUTS:
-        panels[n].setdefault("cuts", []).append((t, clip))
-    return panels
+    L1, R1, L2, R2 = COLX["L1"], COLX["R1"], COLX["L2"], COLX["R2"]
+    c = COLX["C"]
+    P = {}
+    # the main shot: full frame, then the left and the right columns push in
+    P["A"] = _panel(O.MAIN, [(-1, (0.0, float(W))), (0.85, (c[0], W - c[0])), (1.55, c)], [(-1, (0.0, 1.0))],
+                    t0=-1.0)
+    # the inner columns: each comes in as one full-height panel (from the first view's edge), then takes a top and
+    # a bottom row; later the next column pushes in from outside (3.20 / 3.40)
+    lcol = [(-1, (VL, 0.0)), (0.85, (VL, c[0] - VL)), (3.20, L1)]
+    rcol = [(-1, (VR, 0.0)), (1.55, (c[0] + c[1], VR - c[0] - c[1])), (3.40, R1)]
+    P["L1a"] = _panel("o1_chip", lcol, [(-1, (0, 1)), (2.15, (0.35, 1)), (2.85, (0.35, 0.75))], 0.85, "L",
+                      [(1.60, "o3_drones"), (3.60, "22_city")])
+    P["L1t"] = _panel("o2_warehouse", lcol, [(-1, (0, 0)), (2.15, (0, 0.35))], 2.15, "T", [(4.30, "o10_chip2")])
+    P["L1b"] = _panel("g_wave", lcol, [(-1, (1, 1)), (2.85, (0.75, 1))], 2.85, "B")
+    P["R1a"] = _panel("17_robot", rcol, [(-1, (0, 1)), (2.40, (0.33, 1)), (3.10, (0.33, 0.57))], 1.55, "R",
+                      [(2.60, "10_datacenter"), (4.10, "o9_weld")])
+    P["R1t"] = _panel("o7_hologram", rcol, [(-1, (0, 0)), (2.40, (0, 0.33))], 2.40, "T", [(4.60, "q5_city")])
+    P["R1b"] = _panel("g_chart", rcol, [(-1, (1, 1)), (3.10, (0.57, 1))], 3.10, "B")
+    # the outer columns (already in place out of view; their inner edge pushes in, then the camera shows them)
+    l2 = [(-1, (L2[0], VL - L2[0])), (3.20, L2)]
+    r2 = [(-1, (VR, R2[0] + R2[1] - VR)), (3.40, R2)]
+    for j, (rw, clip, cut) in enumerate((((0, 0.55), "g_net", (4.85, "n3_evline")), ((0.55, 0.81), "o4_wafer", None),
+                                         ((0.81, 1), "n6_server", (5.00, "g_floor")))):
+        P["L2%d" % j] = _panel(clip, l2, [(-1, rw)], 0.0, "L", [cut] if cut else [])
+    for j, (rw, clip, cut) in enumerate((((0, 0.27), "g_map", None), ((0.27, 0.77), "18_factory", (4.95, "19_aerial")),
+                                         ((0.77, 1), "o5_cobots", None))):
+        P["R2%d" % j] = _panel(clip, r2, [(-1, rw)], 0.0, "R", [cut] if cut else [])
+    P["L3"] = _panel("o8_servers", [(-1, COLX["L3"])], [(-1, (0, 1))], 0.0, None, [(5.05, "n2_warehouse")])
+    P["R3"] = _panel("s03_robot", [(-1, COLX["R3"])], [(-1, (0, 1))], 0.0, None)
+    for p in P.values():
+        p["sw"] = max(v[1] for _, v in p["cols"])
+        p["sh"] = max(v[1] - v[0] for _, v in p["rows"]) * HH
+    return P
 
 
 PANELS = build_layout()
-O.PANELS = PANELS
+
+
+def keyed(keys, s):
+    """The value as the sum of each key's move (fast in, slow drift - the reference's split move)."""
+    cur = list(keys[0][1])
+    prev = keys[0][1]
+    for (t, v) in keys[1:]:
+        q = O.snap(s - t)
+        for i in range(len(cur)):
+            cur[i] += (v[i] - prev[i]) * q
+        prev = v
+    return cur
+
+
+def rect_at(p, s):
+    x, w = keyed(p["cols"], s)
+    f0, f1 = keyed(p["rows"], s)
+    return x, O.Y0 + f0 * HH, w, (f1 - f0) * HH
 
 
 def clip_frame(name, t0, s):
@@ -116,31 +126,29 @@ def clip_frame(name, t0, s):
 
 def draw_panel(c, name, s):
     p = PANELS[name]
-    x, y, w, h = O._rect_at(p, s)
+    x, y, w, h = rect_at(p, s)
     if w < 1 or h < 1:
         return
     clip, t0 = p["clip"], p["t0"]
-    for (tc, cc) in p.get("cuts", []):
+    for (tc, cc) in p["cuts"]:
         if s >= tc:
             clip, t0 = cc, tc
     img = clip_frame(clip, t0, s)
     if img is None:
         return
-    sx, sy, sw, sh = p["scale_rect"]
-    k = max(sw / img.width(), sh / img.height()) * 1.02
-    k *= 1.0 + 0.06 * prog(s, max(0.0, t0), 6.0)          # every panel keeps pushing in a little
+    sw, sh = p["sw"], p["sh"]
+    if name == "A":                                  # the main shot keeps its scale; the columns crop it (reference)
+        sw, sh = COLX["C"][1], HH
+    k = max(sw / img.width(), sh / img.height()) * 1.04
+    k *= 1.0 + 0.05 * prog(s, max(0.0, t0), 6.0)          # every panel keeps pushing in a little
     iw, ih = img.width() * k, img.height() * k
-    side = p.get("side")
+    side = p["side"]
     cx = x + w - sw / 2 if side == "L" else (x + sw / 2 if side == "R" else x + w / 2)
     cy = y + h - sh / 2 if side == "T" else (y + sh / 2 if side == "B" else y + h / 2)
-    if name == "A":                                  # the main shot just covers its panel (draws back as it narrows)
-        k = max(w / img.width(), h / img.height()) * 1.04
-        iw, ih = img.width() * k, img.height() * k
-        fx_ = p.get("focus", (0.5, 0.5))[0]
-        cx = x + w / 2 + clamp((0.5 - fx_) * iw, -(iw - w) / 2, (iw - w) / 2)
-        cy = y + h / 2
+    if name == "A":
+        cx = CX + (0.5 - 0.44) * iw
     c.save()
-    c.clipRect(R(x + 1.5, y + 1.5, w - 3, h - 3))
+    c.clipRect(R(x + GUT, y + GUT, w - 2 * GUT, h - 2 * GUT))
     pt = skia.Paint(AntiAlias=True)
     pt.setColorFilter(O.grade(clip))
     c.drawImageRect(img, R(cx - iw / 2, cy - ih / 2, iw, ih), skia.SamplingOptions(skia.FilterMode.kLinear), pt)
@@ -171,7 +179,7 @@ MARK = {"s1": [(30.44, 291.9), (54.56, 291.9), (135.85, 210.76), (123.75, 198.74
         "xc": [(354.1, 191.8), (355.1, 192.8), (354.1, 193.8), (353.1, 192.8)]}
 
 TXT0 = 0.55                                       # the AX comes up on the main shot
-TXT_W = 98.0                                      # its letter height in the world (x zoom on screen: 139 -> 98 px)
+TXT_W = 92.0                                      # its letter height in the world (x zoom on screen: 147 -> 92 px)
 ABS0, ABS_D = 5.30, 1.40                          # drawn into the AX
 ABS_Z = 0.70                                      # the mosaic draws back to this as the letters grow
 BIG_H = 560.0
@@ -304,7 +312,7 @@ def render(c, t):
             c.clipPath(ax, skia.ClipOp.kDifference, True)
             dmax = math.hypot(CX, CY)
             for name, p in PANELS.items():
-                x, y, w, h = O._rect_at(p, s)
+                x, y, w, h = rect_at(p, s)
                 d = math.hypot(x + w / 2 - CX, y + h / 2 - CY) / dmax
                 wa = e_io_sine(prog(s, ABS0 + 0.05 + 0.60 * (1 - clamp(d)), 0.42))
                 if wa > 0:

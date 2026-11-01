@@ -6,8 +6,8 @@ the letters while they grow, the panels outside them clear to white from the edg
 the letters keeps playing), the AX turns solid, comes down to the mark's size and its strokes become the strokes of
 the AXCORE mark ("/", "/", the diamond, the X - as in the film's first FIN); then CORE, the E and the caption.
   0.00  seg_sphere's last frame (plain white) clears onto the main shot
-  0.85  the left column pushes in, 1.55 the right one (the AX comes up slowly); rows come in, cuts inside the
-        panels; 3.20 / 3.55 / 4.10 / 4.40 the outer columns push in from the edges - the reference's last frame:
+  0.85  the left column pushes in, 1.55 the right one (the AX comes up slowly); from here both sides at once:
+        2.20 / 2.85 the rows, 3.30 / 4.20 the outer columns push in from the edges - the reference's last frame:
         main in the centre, two columns of three rows each side, the outermost columns whole
   5.30  drawn into the AX (to 6.70); 7.00 solid indigo; 7.30 down to the mark; 7.85 the strokes become the mark
   8.25  C O R E, the E, the caption; 9.20 a light runs over the logo; holds to the end (10.54)
@@ -44,10 +44,8 @@ COLS = ["L3", "L2", "L1", "A", "R1", "R2", "R3"]
 STAGES = [(-1.0, (0, 0, 0, 1920, 0, 0, 0)),
           (0.85, (0, 0, 760, 1160, 0, 0, 0)),     # the left column pushes in
           (1.55, (0, 0, 640, 640, 640, 0, 0)),    # the right one: three columns round the main shot
-          (3.20, (0, 360, 500, 560, 500, 0, 0)),  # the next ones, from the edges
-          (3.55, (0, 330, 380, 520, 380, 310, 0)),
-          (4.10, (230, 290, 290, 500, 300, 310, 0)),
-          (4.40, (193, 262, 262, 486, 262, 262, 193))]
+          (3.30, (0, 330, 380, 500, 380, 330, 0)),  # from here both sides at once
+          (4.20, (193, 262, 262, 486, 262, 262, 193))]
 START = {"g_cubes": 2.6, "g_chart": 2.4, "g_map": 1.2}     # where in a clip a panel starts (past an empty opening)
 
 
@@ -68,22 +66,22 @@ def _panel(clip, col, rows, t0=0.0, side=None, cuts=()):
 def build_layout():
     P = {}
     P["A"] = _panel(O.MAIN, "A", [(-1, (0.0, 1.0))], t0=-1.0)
-    P["L1a"] = _panel("o1_chip", "L1", [(-1, (0, 1)), (2.15, (0.35, 1)), (2.85, (0.35, 0.75))], 0.85, "L",
+    P["L1a"] = _panel("o1_chip", "L1", [(-1, (0, 1)), (2.20, (0.35, 1)), (2.85, (0.35, 0.75))], 0.85, "L",
                       [(1.60, "o3_drones"), (3.70, "22_city")])
-    P["L1t"] = _panel("o2_warehouse", "L1", [(-1, (0, 0)), (2.15, (0, 0.35))], 2.15, "T", [(4.70, "o10_chip2")])
+    P["L1t"] = _panel("o2_warehouse", "L1", [(-1, (0, 0)), (2.20, (0, 0.35))], 2.20, "T", [(4.70, "o10_chip2")])
     P["L1b"] = _panel("g_wave", "L1", [(-1, (1, 1)), (2.85, (0.75, 1))], 2.85, "B")
-    P["R1a"] = _panel("17_robot", "R1", [(-1, (0, 1)), (2.40, (0.33, 1)), (3.10, (0.33, 0.57))], 1.55, "R",
+    P["R1a"] = _panel("17_robot", "R1", [(-1, (0, 1)), (2.20, (0.33, 1)), (2.85, (0.33, 0.57))], 1.55, "R",
                       [(2.60, "10_datacenter"), (4.25, "o9_weld")])
-    P["R1t"] = _panel("o7_hologram", "R1", [(-1, (0, 0)), (2.40, (0, 0.33))], 2.40, "T", [(4.85, "q5_city")])
-    P["R1b"] = _panel("g_chart", "R1", [(-1, (1, 1)), (3.10, (0.57, 1))], 3.10, "B")
+    P["R1t"] = _panel("o7_hologram", "R1", [(-1, (0, 0)), (2.20, (0, 0.33))], 2.20, "T", [(4.85, "q5_city")])
+    P["R1b"] = _panel("g_chart", "R1", [(-1, (1, 1)), (2.85, (0.57, 1))], 2.85, "B")
     for j, (rw, clip, cut) in enumerate((((0, 0.55), "g_net", (4.95, "n3_evline")), ((0.55, 0.81), "o4_wafer", None),
                                          ((0.81, 1), "n6_server", (5.05, "g_floor")))):
-        P["L2%d" % j] = _panel(clip, "L2", [(-1, rw)], 3.20, "L", [cut] if cut else [])
+        P["L2%d" % j] = _panel(clip, "L2", [(-1, rw)], 3.30, "L", [cut] if cut else [])
     for j, (rw, clip, cut) in enumerate((((0, 0.27), "g_map", None), ((0.27, 0.77), "18_factory", (5.00, "19_aerial")),
                                          ((0.77, 1), "o5_cobots", None))):
-        P["R2%d" % j] = _panel(clip, "R2", [(-1, rw)], 3.55, "R", [cut] if cut else [])
-    P["L3"] = _panel("o8_servers", "L3", [(-1, (0, 1))], 4.10, "L", [(5.10, "n2_warehouse")])
-    P["R3"] = _panel("s03_robot", "R3", [(-1, (0, 1))], 4.40, "R")
+        P["R2%d" % j] = _panel(clip, "R2", [(-1, rw)], 3.30, "R", [cut] if cut else [])
+    P["L3"] = _panel("o8_servers", "L3", [(-1, (0, 1))], 4.20, "L", [(5.10, "n2_warehouse")])
+    P["R3"] = _panel("s03_robot", "R3", [(-1, (0, 1))], 4.20, "R")
     for p in P.values():
         p["sw"] = max(v[1] for _, v in p["cols"])
         p["sh"] = max(v[1] - v[0] for _, v in p["rows"]) * HH

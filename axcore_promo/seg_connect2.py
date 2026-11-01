@@ -255,6 +255,9 @@ def saas_rect(i):
              SAAS_RH)
 
 
+SAAS_COUNT_PLUS = False
+
+
 def saas_time(i):
     return SAAS0 + 0.35 + i * SAAS_DT
 
@@ -286,8 +289,11 @@ def right_cards(c, t):
     E.glass(c, P, 18, a, tint=NAVY_950, tint_a=0.34, blur=24, border=0.6, shadow=0.25)
     E.text(c, "외부 SaaS", P.left() + C.PAN_PAD, P.top() + 38, 20, "Bold", WHITE, a)
     n_on = sum(1 for i in range(len(SAAS)) if t >= saas_time(i) + 0.9)
-    E.text(c, "%d / %d 연결" % (n_on, len(SAAS)), P.right() - C.PAN_PAD, P.top() + 37, 14, "SemiBold",
-           CYAN if n_on == len(SAAS) else "#C9D6EA", a, "right")
+    if SAAS_COUNT_PLUS:                                      # (client re-edit) as the systems panel: "5연결+"
+        E.text(c, "%d연결+" % n_on, P.right() - C.PAN_PAD, P.top() + 37, 19, "Bold", "#5FB4E8", a, "right")
+    else:
+        E.text(c, "%d / %d 연결" % (n_on, len(SAAS)), P.right() - C.PAN_PAD, P.top() + 37, 14, "SemiBold",
+               CYAN if n_on == len(SAAS) else "#C9D6EA", a, "right")
     c.restore()
     for i, name in enumerate(SAAS):
         t0 = saas_time(i)

@@ -3,12 +3,13 @@ to face the lens as before, then the room (the man at his desk) fades out and th
 which settles into the app's main page (주요 정보: briefing bar, then the AI workspace). The workspace's widgets run
 slower. For the connect scene the app window draws back a little and goes very slightly soft, the AXCORE node pops
 softly in the centre, and the company systems / external SaaS come in as before (their clock 3.1 s later, so the
-segment is 74 frames longer: 329 frames, to 01:00:21).
+segment is 44 frames longer: 299 frames, to 00:59:19).
   47.38  seg_axpoint's last frame (the ceiling cards turning into the workspace); the UI comes down (as before)
-  49.35  the room and the title fade out, the app fades in, the UI settles into its main page
-  49.75  the workspace widgets run (2x slower than before)
-  52.50  the app window draws back (0.92) and softens slightly; 52.80 the node pops
-  53.20  사내 시스템 ... (seg_wsfront's connect graphics, clock - 3.1 s)
+  48.10  no pause: as it lands the room fades out, the app fades in, the UI settles into its main page; the title
+         moves from the lower left (white) to the lower right of the page (black)
+  48.50  the workspace widgets run (2x slower than before)
+  51.25  the app window draws back (0.92) and softens slightly; 51.55 the node pops
+  51.95  사내 시스템 ... (seg_wsfront's connect graphics, clock - 1.85 s); 외부 SaaS counts "5연결+"
 Film time = timeline frame / 24; grain = timeline frame. 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_wsapp.py <out.mp4> [height=480] [first last]
 """
@@ -33,12 +34,12 @@ from engine import (W, H, R, WHITE, INK, STEEL, STEEL_400, BLUE, lerp, prog, cla
 
 K = WF.K
 TL0 = WF.TL0
-SHIFT = 3.1                                    # the connect graphics' clock runs this much later
+SHIFT = 1.85                                   # the connect graphics' clock runs this much later
 NF = WF.NF + int(round(SHIFT * 24))
-APP0, APP_D = 49.35, 0.85                      # the room fades out, the app fades in, the UI settles into it
-WIDG0, WIDG_K = 49.75, 2.0                     # the widgets' animation starts here, this much slower
-SHR0, SHR_D, SHR_K, SHR_BLUR = 52.50, 0.70, 0.92, 2.5
-HUBP = 52.80                                   # the node pops
+APP0, APP_D = 48.10, 0.85                      # the room fades out, the app fades in, the UI settles into it
+WIDG0, WIDG_K = 48.50, 2.0                     # the widgets' animation starts here, this much slower
+SHR0, SHR_D, SHR_K, SHR_BLUR = 51.25, 0.70, 0.92, 2.5
+HUBP = 51.55                                   # the node pops
 WS_RECT = R(330, 304, 1550, 1550 * A.UH / A.UW)   # the workspace inside the app's main page
 SCV = 1.0
 
@@ -159,13 +160,18 @@ def scene(c, t):
         app(c)
         c.restore()
     workspace(c, t, q, lerp(0.92, 1.0, x))
-    k = 1 - x                                  # the lower-left title fades out with the room
+    k = 1 - x                                  # the lower-left (white) title gives way ...
     if k > 0:
         lp = skia.Paint()
         lp.setAlphaf(k)
         c.saveLayer(None, lp)
         A.caption(c, t)
         c.restore()
+    kr = x * (1 - e_io_sine(prog(t, SHR0, 0.45)))   # ... to the same title, black, at the lower right of the page
+    if kr > 0.003:
+        dy = 10 * (1 - x)
+        text(c, "우리 회사에 맞게 구성된", WS_RECT.right(), 828 + dy, 24, "SemiBold", "#1B2333", kr, "right")
+        text(c, "AI 워크스페이스", WS_RECT.right(), 884 + dy, 46, "Bold", "#0B0F19", kr, "right")
 
 
 def node(c, t, tc):
@@ -211,6 +217,7 @@ def render(c, t):
         c.restore()
 
 
+K.SAAS_COUNT_PLUS = True                       # 외부 SaaS: "5연결+"
 K.GLOW_PEAK = -100.0                          # the node's own fade-in is replaced by its pop (node())
 
 

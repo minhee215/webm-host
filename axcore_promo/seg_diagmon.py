@@ -1,9 +1,10 @@
 """Replacement for 00:00:39:12-00:00:44:03 of seg_axpoint (client re-edit): the M-AI Works page is left out. The AX
 diagnosis (the pentagon) holds a moment, then it is the page that becomes the browser window and turns transparent
-over the man looking at it, into the ceiling shot - the old monitor passage, unchanged otherwise. 77 frames instead
-of 112 (the client takes the shorter length): the first frame continues 39:11, the last is the old 44:03 state.
-  f  0-21  the diagnosis (film 39.500-40.375), its last bars filling in
-  f 22-76  the monitor passage, film 41.875-44.125 (= the old 44:03), the diagnosis on the screen
+over the man looking at it, into the ceiling shot - the old monitor passage, unchanged otherwise. 41 frames instead
+of 112 (the client wants it short: the diagnosis holds a quarter second, the monitor passage runs ~1.8x): the first frame continues 39:11, the last is the old 44:03 state.
+  f  0-5   the diagnosis (film 39.500-39.708)
+  f  6-27  the monitor passage, film 41.875-43.60 sped up, the diagnosis on the screen
+  f 28-40  the cross-fade into the ceiling at its own pace, film 43.625-44.125 (= the old 44:03)
 Usage: python3 seg_diagmon.py <out.mp4> [height=480] [first last]
 """
 import subprocess
@@ -16,8 +17,9 @@ import seg_axpoint as A
 from engine import R, BLUE, INK, STEEL, STEEL_400, WHITE, paint_fill, paint_stroke, rrect, text
 
 F_TL = 948                       # 00:00:39:12 (the old 39:12-39:13 already blur toward M-AI Works)
-HOLD = 22                        # frames of the diagnosis before the monitor passage
-NF = 77
+HOLD = 6                         # frames of the diagnosis before the monitor passage
+MON = 22                         # frames for the monitor passage up to the ceiling (film 41.875-43.60, ~1.8x)
+NF = 41
 T_END = 44.125                   # the old 44:03 (film time) - the last frame
 D0 = F_TL / 24.0                 # diagnosis clock at the first frame
 
@@ -25,7 +27,9 @@ D0 = F_TL / 24.0                 # diagnosis clock at the first frame
 def film(f):
     if f < HOLD:
         return D0 + f / 24.0
-    return T_END - (NF - 1 - f) / 24.0
+    if f < HOLD + MON:
+        return 41.875 + (f - HOLD) * (A.T_CEIL - 41.875) / MON
+    return T_END - (NF - 1 - f) / 24.0          # the cross-fade into the ceiling at its own pace
 
 
 def diag_page(c, t):

@@ -56,7 +56,7 @@ const envScene = new THREE.Scene();
 envScene.add(new THREE.Mesh(new THREE.SphereGeometry(20, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide,
   vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
   fragmentShader: `varying vec3 vP; void main(){ float y = vP.y; vec3 c = mix(vec3(0.03), vec3(0.32,0.34,0.38), smoothstep(-0.3, 0.9, y)); gl_FragColor = vec4(c, 1.); }` })));
-for (const [pos, sz, k] of [[[0, 12, 0], [14, 8], 1.6], [[-12, 4, 6], [6, 10], 0.9], [[12, 3, -6], [5, 8], 0.7]]) {
+for (const [pos, sz, k] of [[[0, 12, 0], [14, 8], 0.95], [[-12, 4, 6], [6, 10], 0.55], [[12, 3, -6], [5, 8], 0.45]]) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(...sz), new THREE.MeshBasicMaterial({ color: new THREE.Color(k, k, k * 1.05), side: THREE.DoubleSide }));
   m.position.set(...pos); m.lookAt(0, 0, 0); envScene.add(m); }
 scene.environment = pmrem.fromScene(envScene, 0.03).texture;
@@ -159,7 +159,7 @@ const M = {
   enamel: phys({ color: "#cfd3d7", roughness: 0.3, clearcoat: 0.6, clearcoatRoughness: 0.2 }),
   steel: std({ color: "#7b8189", metalness: 0.9, roughness: 0.38 }),
   steelDark: std({ color: "#3d4248", metalness: 0.85, roughness: 0.45 }),
-  stainless: std({ color: "#b9bfc5", metalness: 1, roughness: 0.26, roughnessMap: TEX.brushed }),
+  stainless: std({ color: "#a9afb5", metalness: 1, roughness: 0.42, roughnessMap: TEX.brushed }),
   drum: std({ map: TEX.perforated, metalness: 0.9, roughness: 0.32, side: THREE.BackSide }),
   plastic: std({ color: "#c2c6ca", roughness: 0.5 }),
   glassDark: phys({ color: "#1b2430", roughness: 0.05, transparent: true, opacity: 0.6, clearcoat: 1 }),
@@ -283,14 +283,15 @@ function buildWasher() {
   const bowl = new THREE.Mesh(new THREE.SphereGeometry(0.17, 48, 16, 0, PI * 2, 0, 0.55), M.glassDark); bowl.rotation.x = PI / 2; bowl.position.z = -0.1; door.add(bowl);
   const handle = rbox(0.03, 0.1, 0.03, 0.01, M.plastic); handle.position.set(0.2, 0, 0.03); door.add(handle);
   const tub = new THREE.Group(); tub.position.set(0, Hh / 2 - 0.02, -0.02); g.add(tub);
-  const tubC = cyl(0.25, 0.42, M.stainless, 72); tubC.rotation.x = PI / 2; tub.add(tubC);
-  for (const z of [-0.18, -0.06, 0.06, 0.18]) { const rib = new THREE.Mesh(new THREE.TorusGeometry(0.252, 0.008, 8, 72), M.stainless); rib.position.z = z; tub.add(rib); }
+  const tubM = std({ color: "#868c93", metalness: 0.75, roughness: 0.55, roughnessMap: TEX.brushed });
+  const tubC = cyl(0.25, 0.42, tubM, 72); tubC.rotation.x = PI / 2; tub.add(tubC);
+  for (const z of [-0.18, -0.06, 0.06, 0.18]) { const rib = new THREE.Mesh(new THREE.TorusGeometry(0.252, 0.008, 8, 72), tubM); rib.position.z = z; tub.add(rib); }
   const drum = cyl(0.2, 0.36, M.drum, 72, true); drum.rotation.x = PI / 2; drum.position.z = 0.03; tub.add(drum);
   const spider = cyl(0.12, 0.04, M.steelDark, 6); spider.rotation.x = PI / 2; spider.position.z = -0.23; tub.add(spider);
   for (const z of [D / 2 - 0.035, -D / 2 + 0.035]) { const p = box(0.03, Hh - 0.06, 0.045, M.steel); p.position.set(Wd / 2 - 0.016, Hh / 2, z); g.add(p);
     for (let i = 0; i < 6; i++) { const hl = cyl(0.006, 0.032, M.hole, 12); hl.rotation.z = PI / 2; hl.position.set(Wd / 2 - 0.016, 0.12 + i * 0.12, z); g.add(hl); } }
   for (const y of [0.07, Hh - 0.045]) { const r = box(0.03, 0.035, D - 0.03, M.steel); r.position.set(Wd / 2 - 0.016, y, 0); g.add(r); }
-  for (const z of [-0.12, 0.1]) { const pts = []; for (let i = 0; i <= 120; i++) { const a = i / 120 * PI * 2 * 7; pts.push(V(0.17 + 0.018 * Math.cos(a), Hh - 0.05 - i / 120 * 0.13, z + 0.018 * Math.sin(a))); } g.add(tubeAlong(pts, 0.004, M.chrome, false, 400)); }
+  for (const z of [-0.12, 0.1]) { const pts = []; for (let i = 0; i <= 120; i++) { const a = i / 120 * PI * 2 * 7; pts.push(V(0.17 + 0.018 * Math.cos(a), Hh - 0.05 - i / 120 * 0.13, z + 0.018 * Math.sin(a))); } g.add(tubeAlong(pts, 0.004, std({ color: "#7d8288", metalness: 0.8, roughness: 0.5 }), false, 400)); }
   for (const z of [-0.12, 0.12]) { const d = cyl(0.016, 0.2, M.steelDark, 16); d.position.set(0.15, 0.17, z); d.rotation.z = 0.25; g.add(d); const d2 = cyl(0.01, 0.12, M.chrome, 12); d2.position.set(0.12, 0.27, z); d2.rotation.z = 0.25; g.add(d2); }
   const motor = cyl(0.06, 0.12, M.steelDark, 24); motor.rotation.x = PI / 2; motor.position.set(0.05, 0.13, -0.18); g.add(motor);
   g.add(tubeAlong([V(0.22, 0.12, 0.2), V(0.25, 0.2, 0.1), V(0.24, 0.3, 0.0), V(0.2, 0.25, -0.15)], 0.016, M.rubber));
@@ -339,21 +340,21 @@ function buildPaperLine() {
   const wg = new THREE.BufferGeometry(); wg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); wg.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); wg.setIndex(idx); wg.computeVertexNormals();
   g.add(new THREE.Mesh(wg, webMat));
   g.add(contactShadow(3.4, 4.6, 0.75));
-  return { g, rollG, rollerMeshes, tex, rollers };
+  return { g, rollG, rollerMeshes, tex, rollers, tab, webMat };
 }
 
 // ---- full-size sedan in the spirit of The new GRANDEUR (front faces +X, right side +Z)
 function buildCar() {
-  const C = new THREE.Group(); const L = 5.03;
-  const TOP = [[0,0.60],[0.03,0.68],[0.10,0.745],[0.30,0.785],[0.70,0.83],[1.20,0.88],[1.62,0.93],[1.85,1.05],[2.10,1.21],[2.35,1.35],[2.60,1.425],[2.95,1.455],[3.40,1.46],[3.75,1.445],[4.05,1.385],[4.30,1.28],[4.50,1.16],[4.66,1.075],[4.82,1.05],[4.96,1.04],[5.005,1.00],[5.025,0.90],[5.03,0.72]];
+  const C = new THREE.Group(); const L = 4.99;
+  const TOP = [[0,0.56],[0.04,0.67],[0.12,0.74],[0.35,0.785],[0.75,0.825],[1.2,0.87],[1.55,0.915],[1.75,1.02],[2.0,1.19],[2.25,1.33],[2.5,1.425],[2.8,1.465],[3.1,1.462],[3.4,1.425],[3.7,1.34],[4.0,1.22],[4.3,1.11],[4.55,1.05],[4.8,1.035],[4.93,1.0],[4.975,0.92],[4.99,0.72]];
   const yTop = x => { x = clamp(x, 0, L); let i = 0; while (i < TOP.length - 2 && TOP[i + 1][0] < x) i++;
     const p0 = TOP[Math.max(0, i - 1)], p1 = TOP[i], p2 = TOP[i + 1], p3 = TOP[Math.min(TOP.length - 1, i + 2)]; const q = (x - p1[0]) / (p2[0] - p1[0]), q2 = q * q, q3 = q2 * q;
     return 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * q + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * q2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * q3); };
-  const FX = 0.98, RX = 3.875, WR = 0.43, WCY = 0.35;
-  const belt = x => lerp(0.97, 1.02, clamp((x - 1.6) / 2.9));
-  const yBot = x => { let y = 0.19; if (x < 0.3) y = 0.19 + 0.16 * (1 - x / 0.3) ** 2; if (x > 4.7) y = 0.19 + 0.25 * ((x - 4.7) / 0.33) ** 2;
+  const FX = 0.98, RX = 3.865, WR = 0.43, WCY = 0.35;
+  const belt = x => lerp(0.95, 1.03, clamp((x - 1.6) / 2.8));
+  const yBot = x => { let y = 0.19; if (x < 0.3) y = 0.19 + 0.16 * (1 - x / 0.3) ** 2; if (x > 4.62) y = 0.19 + 0.25 * ((x - 4.62) / 0.37) ** 2;
     for (const c of [FX, RX]) { const d = x - c; if (Math.abs(d) < WR) y = Math.max(y, WCY + Math.sqrt(WR * WR - d * d)); } return y; };
-  const halfW = x => { const t = Math.abs((x - L / 2) / (L / 2)); return 0.94 * Math.pow(Math.max(0, 1 - Math.pow(t, 4.6)), 0.28); };
+  const halfW = x => { const tt = (x - L / 2) / (L / 2), t = Math.abs(tt); return 0.935 * Math.pow(Math.max(0, 1 - Math.pow(t, tt < 0 ? 4.4 : 3.4)), 0.3); };
   const sm = (a, b, x) => { const k = clamp((x - a) / (b - a)); return k * k * (3 - 2 * k); };
   function section(x) {
     const w = halfW(x), yt = yTop(x), yb = Math.min(yBot(x), yt - 0.06), bl = belt(x);
@@ -382,13 +383,13 @@ function buildCar() {
     const x = (xs[i] + xs[i + 1]) / 2, h = Math.min(halfIdx(j), halfIdx((j + 1) % Mn)), y = (rings[i][j].y + rings[i][(j + 1) % Mn].y) / 2;
     let zn = 0;
     if (h < 3) zn = 3; else if (h < 10 && y < 0.33) zn = 3;
-    else if (h >= 13 && h < 18 && x > 1.66 && x < 4.66 && secs[i].cabH > 0.05) zn = (x > 2.82 && x < 2.93) ? 2 : 1;
-    else if (h >= 18 && ((x > 1.68 && x < 2.5) || (x > 4.02 && x < 4.66))) zn = 1;
+    else if (h >= 13 && h < 18 && x > 1.66 && x < 4.42 && secs[i].cabH > 0.05) zn = (x > 2.8 && x < 2.9) ? 2 : 1;
+    else if (h >= 18 && ((x > 1.68 && x < 2.42) || (x > 3.48 && x < 4.5))) zn = 1;
     zones[zn].push(a, b, c, b, d, c);
   }
   const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   bg.setIndex(zones.flat()); let off = 0; zones.forEach((z, i) => { bg.addGroup(off, z.length, i); off += z.length; }); bg.computeVertexNormals();
-  const paint = phys({ color: "#2c3237", metalness: 0.65, roughness: 0.36, clearcoat: 0.8, clearcoatRoughness: 0.22 });
+  const paint = phys({ color: "#1c2320", metalness: 0.55, roughness: 0.42, clearcoat: 0.5, clearcoatRoughness: 0.3 });
   const glass = phys({ color: "#05070a", roughness: 0.03, clearcoat: 1, specularIntensity: 0.6 });
   const gloss = phys({ color: "#08090b", roughness: 0.15, clearcoat: 1 });
   const matte = std({ color: "#121315", roughness: 0.6 });
@@ -398,29 +399,35 @@ function buildCar() {
   const sp = (x, y, s = 1, o = 0.004) => V(wx(x), y, s * (sideZ(x, y) + o));
   const roofEdge = (x, s, o = 0.006) => { const q = section(x).pts[18]; return V(wx(x), q[1] + o, s * (q[0] + o)); };
   const hoodEdge = (x, s, o = 0.006) => { const q = section(x).pts[12]; return V(wx(x), q[1] + o, s * (q[0] + o * 0.5)); };
-  // front fascia: parametric diamond grille (upper + lower), lamp pods, DRL
-  C.add(new THREE.Mesh((() => { const nz = 30, ny = 6, P = [], I = []; for (let iy = 0; iy <= ny; iy++) for (let iz = 0; iz <= nz; iz++) { const z = lerp(-0.82, 0.82, iz / nz), y = lerp(0.2, 0.64, iy / ny); P.push(wx(noseX(z)) + 0.004, y, z); }
+  // front fascia: wide jewel-pattern grille, slim corner lamps, chrome lip
+  const gW = 0.74, gTop = 0.655, gBot = 0.3;
+  C.add(new THREE.Mesh((() => { const nz = 32, ny = 6, P = [], I = []; for (let iy = 0; iy <= ny; iy++) for (let iz = 0; iz <= nz; iz++) { const z = lerp(-gW, gW, iz / nz), y = lerp(gBot, gTop, iy / ny); P.push(wx(noseX(z)) + 0.004, y, z); }
     for (let iy = 0; iy < ny; iy++) for (let iz = 0; iz < nz; iz++) { const a = iy * (nz + 1) + iz; I.push(a, a + 1, a + nz + 1, a + 1, a + nz + 2, a + nz + 1); }
-    const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); gg.setIndex(I); gg.computeVertexNormals(); return gg; })(), std({ color: "#050506", roughness: 0.7, side: THREE.DoubleSide })));
-  const diamonds = [];
-  for (let iy = 0; iy < 9; iy++) for (let iz = 0; iz < 34; iz++) { const z = -0.78 + (iz + (iy % 2) * 0.5) * 0.047, y = 0.36 + iy * 0.031; if (Math.abs(z) > 0.6 && y > 0.43) continue; if (Math.abs(z) > 0.8) continue; diamonds.push([z, y, 1]); }
-  for (let iy = 0; iy < 3; iy++) for (let iz = 0; iz < 30; iz++) { const z = -0.7 + (iz + (iy % 2) * 0.5) * 0.048, y = 0.22 + iy * 0.03; if (Math.abs(z) > 0.72) continue; diamonds.push([z, y, 0.8]); }
-  const dg = new THREE.OctahedronGeometry(0.018, 0); dg.scale(0.55, 1, 1.25);
-  const dm = new THREE.InstancedMesh(dg, darkChrome, diamonds.length); const mtx = new THREE.Matrix4();
-  diamonds.forEach(([z, y, s], i) => { mtx.compose(V(wx(noseX(z)) + 0.012, y, z), new THREE.Quaternion(), V(s, s, s)); dm.setMatrixAt(i, mtx); }); C.add(dm);
+    const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); gg.setIndex(I); gg.computeVertexNormals(); return gg; })(), std({ color: "#040505", roughness: 0.6, side: THREE.DoubleSide })));
+  const jewels = [];
+  for (let iy = 0; iy < 8; iy++) for (let iz = 0; iz < 24; iz++) { const z = -gW + 0.03 + (iz + (iy % 2) * 0.5) * 0.062, y = gBot + 0.03 + iy * 0.042; if (Math.abs(z) > gW - 0.03) continue; if (Math.abs(z) > 0.6 && y > 0.58) continue; jewels.push([z, y, 1 - 0.25 * Math.abs(z) / gW]); }
+  const jg = new THREE.OctahedronGeometry(0.026, 0); jg.scale(0.45, 0.95, 1.25);
+  const jm = new THREE.InstancedMesh(jg, std({ color: "#4a5056", metalness: 1, roughness: 0.3 }), jewels.length); const mtx = new THREE.Matrix4();
+  jewels.forEach(([z, y, sc], i) => { mtx.compose(V(wx(noseX(z)) + 0.014, y, z), new THREE.Quaternion(), V(sc, sc, sc)); jm.setMatrixAt(i, mtx); }); C.add(jm);
+  // grille surround
+  C.add(tubeAlong([V(0, gBot, -gW), V(0, gTop - 0.06, -gW - 0.02), V(0, gTop, -0.6), V(0, gTop + 0.005, 0), V(0, gTop, 0.6), V(0, gTop - 0.06, gW + 0.02), V(0, gBot, gW)].map(p => V(wx(noseX(p.z)) + 0.01, p.y, p.z)), 0.007, darkChrome));
   for (const s of [1, -1]) {
-    const z = s * 0.71, X = wx(noseX(z));
-    const pod = new THREE.Group(); pod.position.set(X + 0.01, 0.5, z); pod.rotation.y = s * -0.35; C.add(pod);
-    pod.add(rbox(0.05, 0.15, 0.2, 0.02, glass));
-    const bezel = frame(0.2, 0.15, 0.03, 0.012, 0.03, darkChrome); bezel.rotation.y = PI / 2; bezel.position.x = 0.01; pod.add(bezel);
-    for (const y of [-0.035, 0, 0.035]) { const fin = box(0.012, 0.008, 0.15, std({ color: "#111", emissive: "#e6f1ff", emissiveIntensity: 0.9 })); fin.position.set(0.02, y, -s * 0.01); pod.add(fin); }
+    // slim lamp at the upper grille corner
+    const lamp = new THREE.Group(); const z = s * 0.73; lamp.position.set(wx(noseX(z)) + 0.012, 0.675, z); lamp.rotation.set(s * 0.08, s * -0.45, 0); C.add(lamp);
+    lamp.add(rbox(0.04, 0.05, 0.3, 0.015, glass));
+    const drl = box(0.008, 0.007, 0.26, std({ color: "#111", emissive: "#e9f3ff", emissiveIntensity: 0.55 })); drl.position.set(0.022, 0.012, 0); lamp.add(drl);
+    for (const dz of [-0.07, 0.0, 0.07]) { const pr = cyl(0.016, 0.01, darkChrome, 16); pr.rotation.z = PI / 2; pr.position.set(0.021, -0.008, dz); lamp.add(pr); }
+    // side air curtain vent
+    const vent = rbox(0.03, 0.13, 0.05, 0.01, std({ color: "#050505", roughness: 0.7 })); vent.position.set(wx(noseX(s * 0.82)) + 0.004, 0.35, s * 0.82); vent.rotation.y = s * -0.6; C.add(vent);
   }
-  C.add(tubeAlong(smp(-0.86, 0.86, 30, z => V(wx(noseX(z)) + 0.005, 0.735, z)), 0.006, std({ color: "#000", emissive: "#eef6ff", emissiveIntensity: 1.1 })));
-  C.add(tubeAlong(smp(-0.86, 0.86, 30, z => V(wx(noseX(z, true)) - 0.006, 0.965, z)), 0.009, std({ color: "#200", emissive: "#ff1a10", emissiveIntensity: 1.0 })));
-  C.add(tubeAlong(smp(-0.7, 0.7, 20, z => V(wx(noseX(z)) + 0.006, 0.195, z)), 0.006, darkChrome));
+  // chrome lower lip + lower intake
+  C.add(tubeAlong(smp(-0.78, 0.78, 26, z => V(wx(noseX(z)) + 0.008, 0.255 - 0.03 * (z / 0.78) ** 2, z)), 0.008, std({ color: "#c9ced4", metalness: 1, roughness: 0.18 })));
+  C.add(tubeAlong(smp(-0.55, 0.55, 20, z => V(wx(noseX(z)) + 0.005, 0.2, z)), 0.012, std({ color: "#050505", roughness: 0.6 })));
+  // tail lamp bar
+  C.add(tubeAlong(smp(-0.86, 0.86, 30, z => V(wx(noseX(z, true)) - 0.006, 0.93, z)), 0.009, std({ color: "#200", emissive: "#ff1a10", emissiveIntensity: 0.6 })));
   for (const s of [1, -1]) {
-    C.add(tubeAlong(smp(1.70, 4.64, 60, x => { const q = section(x); return V(wx(x), q.sideTop + 0.004, s * (q.wc0 + 0.006)); }), 0.006, darkChrome));
-    C.add(tubeAlong(smp(1.74, 4.62, 60, x => { const q = section(x); return V(wx(x), lerp(q.sideTop, q.yt - q.rr, 0.94), s * (lerp(q.wc0, q.wr, 0.94) + 0.006)); }), 0.005, darkChrome));
+    C.add(tubeAlong(smp(1.70, 4.40, 60, x => { const q = section(x); return V(wx(x), q.sideTop + 0.004, s * (q.wc0 + 0.006)); }), 0.006, darkChrome));
+    C.add(tubeAlong(smp(1.74, 4.38, 60, x => { const q = section(x); return V(wx(x), lerp(q.sideTop, q.yt - q.rr, 0.94), s * (lerp(q.wc0, q.wr, 0.94) + 0.006)); }), 0.005, darkChrome));
     for (const dx of [1.68, 2.88]) C.add(tubeAlong(smp(0.36, belt(dx) - 0.03, 12, y => sp(dx, y, s, 0.002)), 0.0028, matte));
     C.add(tubeAlong(smp(0, 1, 16, k => { const x = lerp(3.92, 3.5, eOut(k)); return sp(x, lerp(belt(3.92) - 0.03, WCY + 0.46, k), s, 0.002); }), 0.0028, matte));
     C.add(tubeAlong(smp(0.22, 1.6, 30, x => hoodEdge(x, s, 0.002)), 0.0026, matte));
@@ -458,7 +465,7 @@ function buildCNC() {
   const tapes = [[-0.42, 0.2], [0.02, 0.05], [0.42, -0.1]].map(([z, x]) => { const t = new THREE.Group(); t.add(flat(slab(1.15, 0.12, 0.006, 0.006, M.tape))); t.position.set(x, 0.175, z); t.rotation.y = -0.18; g.add(t); return t; });
   const plate = rbox(1.75, 0.06, 1.08, 0.006, M.plate); g.add(plate);
   const head = new THREE.Group(); g.add(head);
-  const hous = cyl(0.17, 0.55, std({ color: "#c9cdd2", metalness: 0.9, roughness: 0.25 }), 48); hous.position.y = 0.52; head.add(hous);
+  const hous = cyl(0.17, 0.55, std({ color: "#7d838a", metalness: 0.8, roughness: 0.5 }), 48); hous.position.y = 0.52; head.add(hous);
   for (let i = 0; i < 6; i++) { const f = cyl(0.18, 0.012, M.steelDark, 48); f.position.y = 0.35 + i * 0.05; head.add(f); }
   const nose = cyl(0.11, 0.08, M.steel, 40, false, 0.13); nose.position.y = 0.21; head.add(nose);
   const nut = cyl(0.07, 0.06, M.chrome, 6); nut.position.y = 0.14; head.add(nut);
@@ -544,7 +551,7 @@ shot(3.2, g => {
       const dir = camera.position.clone().sub(base[i]).normalize();
       p.position.copy(base[i]).addScaledVector(dir, 1.2 * (1 - q)); fades[i](eOut(seg(u, t0, t0 + 0.14)));
     });
-    lights(V(2.5, 3, 2.5), V(-2.5, 1.5, 1.5), V(-1, 2.5, -3), 1.9, 0.5, 1.6, 0.70);
+    lights(V(1.5, 2.2, 3.5), V(-2.5, 1.5, 1.5), V(-1, 2.5, -3), 1.2, 0.45, 0.9, 0.32);
     dof(V(0.3, 0.45, 0), 0.0025, 0.006);
   } };
 });
@@ -558,14 +565,14 @@ shot(2.2, g => {
     const f = flow(u);
     camera.position.copy(vlerp(V(0.6, 1.38, 0.82), V(0.52, 1.0, 0.58), f)); camera.fov = 38; camera.updateProjectionMatrix();
     const tg = vlerp(V(0.31, 0.66, 0.24), V(0.31, 0.56, 0.25), f); camera.lookAt(tg);
-    lights(V(2, 3, 1.5), V(-1, 1, 2), V(1.5, 2, -3), 1.8, 0.4, 1.8, 0.70);
+    lights(V(2, 3, 1.5), V(-1, 1, 2), V(1.5, 2, -3), 1.2, 0.4, 1.1, 0.32);
     dof(tg, 0.02, 0.012);
   } };
 });
 
 /* 05 · 제지 — 라인 위를 따라 롤 쪽으로 전진하는 플라이스루 */
 shot(3.0, g => {
-  const L = buildPaperLine(); g.add(L.g);
+  const L = buildPaperLine(); g.add(L.g); L.tab.visible = false;
   return { update(u, t) {
     L.rollG.rotation.x = t * 1.4; L.rollerMeshes.forEach(r => r.rotation.x = t * 7);
     L.tex.offset.y = lerp(0.42, -0.34, u);
@@ -579,7 +586,7 @@ shot(3.0, g => {
 
 /* 06 · 제지 매크로 — 원단 롤 클로즈업: 시안 탭이 회전해 올라오고 원단이 풀려 나감 */
 shot(2.0, g => {
-  const L = buildPaperLine(); g.add(L.g);
+  const L = buildPaperLine(); g.add(L.g); L.webMat.emissiveIntensity = 0;
   return { update(u, t) {
     L.rollG.rotation.x = lerp(-1.25, 1.05, u); L.rollerMeshes.forEach(r => r.rotation.x = t * 7);
     L.tex.offset.y = lerp(0.1, -0.12, u);
@@ -621,13 +628,13 @@ shot(3.6, g => {
     [rearDoorPath(K), sideN, V(0, 0.05, 1)],
     [smp(0.42, 1.58, 36, x => K.hoodEdge(x, 1, 0.008)), topN, V(0, 1, 0.3)],
     [smp(0.42, 1.58, 36, x => K.hoodEdge(x, -1, 0.008)), () => V(0, 1, -0.35), V(0, 1, -0.3)],
-    [smp(2.52, 3.98, 40, x => K.roofEdge(x, 1, 0.008)), topN, V(0, 1, 0.3)],
+    [smp(2.45, 3.62, 40, x => K.roofEdge(x, 1, 0.008)), topN, V(0, 1, 0.3)],
   ]);
   const c = V(0.3, 0.6, 0.1);
   return { update(u) {
     driveTapes(T, u, 0.3);
     camOrbit(c, 16, 52, 8, 12, 7.3, 6.4, flow(u), 30);
-    lights(V(6, 5, 5), V(-3, 1.5, 3), V(-4, 3, -4), 1.5, 0.45, 1.6, 1.00);
+    lights(V(4, 1.8, 6), V(-3, 1.5, 3), V(-4, 1.5, -4), 1.0, 0.4, 0.55, 0.26);
     dof(V(1.2, 0.7, 1.0), 0.0012, 0.005);
   } };
 });
@@ -644,28 +651,8 @@ shot(2.4, g => {
     const f = flow(u);
     camera.position.copy(vlerp(V(fx - 1.0, 0.8, 1.6), V(fx + 0.55, 0.72, 1.5), f)); camera.fov = 40; camera.updateProjectionMatrix();
     const tg = vlerp(V(fx - 0.15, 0.55, 0.95), V(fx + 0.75, 0.48, 0.95), f); camera.lookAt(tg);
-    lights(V(2, 5, 6), V(-3, 1, 3), V(-2, 2, -3), 1.5, 0.45, 1.6, 1.00);
+    lights(V(2, 2, 6), V(-3, 1, 3), V(-2, 1.5, -3), 1.0, 0.4, 0.6, 0.28);
     dof(V(fx, 0.55, 0.95), 0.012, 0.012);
-  } };
-});
-
-/* 09 · 자동차 후면 — 크레인 다운, 트렁크·루프·도어 테두리 부착 */
-shot(2.4, g => {
-  const K = buildCar(); g.add(K.C);
-  const sideN = () => V(0, 0.12, 1), topN = () => V(0, 1, 0);
-  const outline = (a, b) => [].concat(smp(a, b, 30, x => K.roofEdge(x, 1, 0.008)), smp(1, -1, 12, s => K.roofEdge(b, s, 0.008)), smp(b, a, 30, x => K.roofEdge(x, -1, 0.008)), smp(-1, 1, 12, s => K.roofEdge(a, s, 0.008)));
-  const T = carTapes(K, [
-    [outline(4.70, 4.97), topN, V(0, 1, 0)],
-    [outline(2.52, 3.98), topN, V(0, 1, 0)],
-    [rearDoorPath(K), sideN, V(0, 0.05, 1)],
-  ]);
-  return { update(u) {
-    driveTapes(T, u, 0.16);
-    const f = flow(u);
-    camera.position.copy(vlerp(V(-5.0, 4.4, 4.0), V(-4.3, 2.5, 3.9), f)); camera.fov = 30; camera.updateProjectionMatrix();
-    camera.lookAt(vlerp(V(-0.5, 0.6, 0.1), V(-0.45, 0.72, 0.1), f));
-    lights(V(-6, 5, 5), V(4, 1.5, 3), V(3, 3, -4), 1.5, 0.45, 1.5, 1.00);
-    dof(V(-1.4, 1.0, 0.4), 0.0012, 0.005);
   } };
 });
 
@@ -678,25 +665,8 @@ shot(3.0, g => {
     const k = eInOutCubic(seg(u, 0.44, 0.86)); K.plate.position.set(0, lerp(0.75, 0.212, k), 0); K.plate.rotation.z = lerp(0.05, 0, k);
     K.head.position.set(0.95, 0.85, -0.25); K.tool.rotation.y = t * 30;
     camOrbit(c, 28, 72, 50, 36, 4.6, 3.9, flow(u), 30);
-    lights(V(2, 5, 3), V(-3, 1.5, 2), V(-2, 3, -3), 1.7, 0.5, 1.6, 0.64);
+    lights(V(2, 5, 3), V(-3, 1.5, 2), V(-2, 3, -3), 1.2, 0.45, 1.1, 0.4);
     dof(c, 0.0025, 0.006);
-  } };
-});
-
-/* 11 · 건축 매크로 — 공구 주위를 도는 로우 오빗, 엔드밀 가공 */
-shot(2.4, g => {
-  const K = buildCNC(); g.add(K.g); K.plate.position.set(0, 0.212, 0);
-  return { update(u, t) {
-    const d = eInOutCubic(seg(u, 0.03, 0.34)), mv = eInOutSine(seg(u, 0.34, 1.0));
-    const x = lerp(-0.25, 0.2, mv);
-    K.head.position.set(x, lerp(0.42, 0.262, d), 0.1); K.tool.rotation.y = t * 45;
-    K.groove.visible = mv > 0.002; K.groove.scale.x = Math.max(0.001, 0.45 * mv); K.groove.position.set(-0.25 + 0.225 * mv, 0.2425, 0.1);
-    const cutting = d > 0.98;
-    K.chipData.forEach(c => { const tt = ((t * 1.6 + c.t0) % 0.5); c.m.visible = cutting && mv > 0.02;
-      c.m.position.set(x + c.vx * tt, 0.25 + c.vy * tt - 2.2 * tt * tt, 0.1 + c.vz * tt); c.m.rotation.set(c.rot + t * 9, c.rot * 2 + t * 7, 0); });
-    camOrbit(V(x, 0.28, 0.1), 38, 84, 12, 19, 0.95, 0.72, flow(u), 42);
-    lights(V(1.5, 3, 2), V(-2, 0.5, 2), V(-1, 1.5, -2), 1.6, 0.45, 1.8, 0.60);
-    dof(V(x, 0.27, 0.1), 0.02, 0.012);
   } };
 });
 

@@ -398,7 +398,7 @@ function buildCar() {
   }
   const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   bg.setIndex(zones.flat()); let off = 0; zones.forEach((z, i) => { bg.addGroup(off, z.length, i); off += z.length; }); bg.computeVertexNormals();
-  const paint = phys({ color: "#1c2320", metalness: 0.55, roughness: 0.42, clearcoat: 0.5, clearcoatRoughness: 0.3 });
+  const paint = phys({ color: "#1c2320", metalness: 0.5, roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.4 });
   const glass = phys({ color: "#05070a", roughness: 0.03, clearcoat: 1, specularIntensity: 0.6 });
   const gloss = phys({ color: "#08090b", roughness: 0.15, clearcoat: 1 });
   const matte = std({ color: "#121315", roughness: 0.6 });
@@ -409,23 +409,27 @@ function buildCar() {
   const roofEdge = (x, s, o = 0.006) => { const q = section(x).pts[18]; return V(wx(x), q[1] + o, s * (q[0] + o)); };
   const hoodEdge = (x, s, o = 0.006) => { const q = section(x).pts[12]; return V(wx(x), q[1] + o, s * (q[0] + o * 0.5)); };
   // front fascia: wide jewel-pattern grille, slim corner lamps, chrome lip
-  const gW = 0.74, gTop = 0.655, gBot = 0.3;
-  C.add(new THREE.Mesh((() => { const nz = 32, ny = 6, P = [], I = []; for (let iy = 0; iy <= ny; iy++) for (let iz = 0; iz <= nz; iz++) { const z = lerp(-gW, gW, iz / nz), y = lerp(gBot, gTop, iy / ny); P.push(wx(noseX(z)) + 0.004, y, z); }
+  const gW = 0.64, gTop = 0.65, gBot = 0.3;
+  C.add(new THREE.Mesh((() => { const nz = 32, ny = 6, P = [], I = []; for (let iy = 0; iy <= ny; iy++) for (let iz = 0; iz <= nz; iz++) { const z = lerp(-gW, gW, iz / nz), y = lerp(gBot, gTop, iy / ny); P.push(wx(noseX(z)) + 0.016, y, z); }
     for (let iy = 0; iy < ny; iy++) for (let iz = 0; iz < nz; iz++) { const a = iy * (nz + 1) + iz; I.push(a, a + 1, a + nz + 1, a + 1, a + nz + 2, a + nz + 1); }
     const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); gg.setIndex(I); gg.computeVertexNormals(); return gg; })(), std({ color: "#040505", roughness: 0.6, side: THREE.DoubleSide })));
   const jewels = [];
   for (let iy = 0; iy < 8; iy++) for (let iz = 0; iz < 24; iz++) { const z = -gW + 0.03 + (iz + (iy % 2) * 0.5) * 0.062, y = gBot + 0.03 + iy * 0.042; if (Math.abs(z) > gW - 0.03) continue; if (Math.abs(z) > 0.6 && y > 0.58) continue; jewels.push([z, y, 1 - 0.25 * Math.abs(z) / gW]); }
   const jg = new THREE.OctahedronGeometry(0.026, 0); jg.scale(0.45, 0.95, 1.25);
   const jm = new THREE.InstancedMesh(jg, std({ color: "#4a5056", metalness: 1, roughness: 0.3 }), jewels.length); const mtx = new THREE.Matrix4();
-  jewels.forEach(([z, y, sc], i) => { mtx.compose(V(wx(noseX(z)) + 0.014, y, z), new THREE.Quaternion(), V(sc, sc, sc)); jm.setMatrixAt(i, mtx); }); C.add(jm);
+  jewels.forEach(([z, y, sc], i) => { mtx.compose(V(wx(noseX(z)) + 0.026, y, z), new THREE.Quaternion(), V(sc, sc, sc)); jm.setMatrixAt(i, mtx); }); C.add(jm);
   // grille surround
-  C.add(tubeAlong([V(0, gBot, -gW), V(0, gTop - 0.06, -gW - 0.02), V(0, gTop, -0.6), V(0, gTop + 0.005, 0), V(0, gTop, 0.6), V(0, gTop - 0.06, gW + 0.02), V(0, gBot, gW)].map(p => V(wx(noseX(p.z)) + 0.01, p.y, p.z)), 0.007, darkChrome));
+  C.add(tubeAlong([V(0, gBot, -gW), V(0, gTop - 0.06, -gW - 0.02), V(0, gTop, -0.6), V(0, gTop + 0.005, 0), V(0, gTop, 0.6), V(0, gTop - 0.06, gW + 0.02), V(0, gBot, gW)].map(p => V(wx(noseX(p.z)) + 0.022, p.y, p.z)), 0.007, darkChrome));
   for (const s of [1, -1]) {
-    // slim lamp at the upper grille corner
-    const lamp = new THREE.Group(); const z = s * 0.73; lamp.position.set(wx(noseX(z)) + 0.012, 0.675, z); lamp.rotation.set(s * 0.08, s * -0.45, 0); C.add(lamp);
-    lamp.add(rbox(0.04, 0.05, 0.3, 0.015, glass));
-    const drl = box(0.008, 0.007, 0.26, std({ color: "#111", emissive: "#e9f3ff", emissiveIntensity: 0.55 })); drl.position.set(0.022, 0.012, 0); lamp.add(drl);
-    for (const dz of [-0.07, 0.0, 0.07]) { const pr = cyl(0.016, 0.01, darkChrome, 16); pr.rotation.z = PI / 2; pr.position.set(0.021, -0.008, dz); lamp.add(pr); }
+    // slim lamp that wraps the front corner, following the body surface
+    const lampPt = (z, dy = 0, out = 0.006) => { const az = Math.abs(z); return V(wx(noseX(z)) + out, 0.676 - 0.035 * clamp((az - 0.42) / 0.4) + dy, z); };
+    const zs = smp(0.42, 0.84, 30, k => s * k);
+    const lampN = i => { const z = zs[i], t = lampPt(z + 0.005 * s).sub(lampPt(z - 0.005 * s)); return V(t.z * s, 0, -t.x * s).normalize(); };
+    C.add(ribbon(zs.map(z => lampPt(z)), lampN, 0.052, 0.006, glass));
+    C.add(tubeAlong(zs.map(z => lampPt(z, 0.016, 0.014)), 0.0035, std({ color: "#111", emissive: "#e9f3ff", emissiveIntensity: 0.5 })));
+    C.add(tubeAlong(zs.map(z => lampPt(z, -0.03, 0.01)), 0.0025, darkChrome));
+    [0.5, 0.6, 0.7].forEach(az => { const z = s * az, p0 = lampPt(z, -0.006, 0.012), n = lampN(Math.round((az - 0.42) / 0.42 * 30));
+      const pr = cyl(0.013, 0.006, darkChrome, 20); pr.position.copy(p0); pr.quaternion.setFromUnitVectors(V(0, 1, 0), n); C.add(pr); });
     // side air curtain vent
     const vent = rbox(0.03, 0.13, 0.05, 0.01, std({ color: "#050505", roughness: 0.7 })); vent.position.set(wx(noseX(s * 0.82)) + 0.004, 0.35, s * 0.82); vent.rotation.y = s * -0.6; C.add(vent);
   }
@@ -646,7 +650,7 @@ shot(3.6, g => {
   return { update(u) {
     driveTapes(T, u, 0.3);
     camOrbit(c, 16, 52, 8, 12, 7.3, 6.4, flow(u), 30);
-    lights(V(4, 1.8, 6), V(-3, 1.5, 3), V(-4, 1.5, -4), 1.0, 0.4, 0.55, 0.26);
+    lights(V(4, 1.2, 6), V(-3, 1.5, 3), V(-4, 1.5, -4), 0.85, 0.4, 0.5, 0.2);
     dof(V(1.2, 0.7, 1.0), 0.0012, 0.005);
   } };
 });

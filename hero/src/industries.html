@@ -225,6 +225,15 @@ function fadable(group) {
   return a => map.forEach(m => { m.opacity = a; m.depthWrite = a > 0.98; m.visible = a > 0.002; });
 }
 
+/* YONWOO logo printed around the tape core (like a branded core) */
+const logoTex = (() => { const c = document.createElement("canvas"); c.width = 2048; c.height = 256; const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; t.wrapS = THREE.RepeatWrapping; t.userData.canvas = c; return t; })();
+const logoReady = new Promise(res => { const img = new Image(); img.onload = () => {
+  const c = logoTex.userData.canvas, g = c.getContext("2d"); g.fillStyle = "#f4f4f2"; g.fillRect(0, 0, c.width, c.height);
+  const w = 340, h = w * img.height / img.width;
+  for (let row = 0; row < 2; row++) for (let i = 0; i < 6; i++) g.drawImage(img, i * (c.width / 6) + (row ? c.width / 12 : 0) + 8, 40 + row * 110, w, h);
+  logoTex.needsUpdate = true; res(); }; img.onerror = () => res(); img.src = "assets/yonwoo-logo.png"; });
+
 /* =========================================================
    BUILDERS
    ========================================================= */
@@ -680,17 +689,20 @@ shot(2.8, g => {
   const ringTex = canvasTex(512, 512, (c, w, h) => { c.fillStyle = "#c9cdd2"; c.fillRect(0, 0, w, h); const r = rng(12);
     for (let i = 0; i < 120; i++) { c.strokeStyle = `rgba(${r() > .5 ? "255,255,255" : "70,75,82"},${0.08 + r() * 0.12})`; c.lineWidth = 1; c.beginPath(); c.arc(256, 256, 112 + i * 1.2, 0, 7); c.stroke(); }
     c.fillStyle = "#0000"; });
-  const faceM = std({ map: ringTex, roughness: 0.45, metalness: 0.1 });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(R1, R1, Wd, 128, 1, true), std({ color: "#c3c7cc", roughness: 0.4 })); body.rotation.x = PI / 2; roll.add(body);
+  const clear = phys({ color: "#f3f6f9", transmission: 0.55, roughness: 0.42, thickness: 0.15, ior: 1.4, side: THREE.DoubleSide, emissive: "#9aa6b2", emissiveIntensity: 0.12 });
+  const faceM = clear.clone(); faceM.map = ringTex; faceM.transmission = 0.45;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(R1, R1, Wd, 128, 1, true), clear); body.rotation.x = PI / 2; roll.add(body);
   for (const s of [1, -1]) {
     const face = new THREE.Mesh(new THREE.RingGeometry(R0 + 0.035, R1, 128, 1), faceM); face.position.z = s * Wd / 2; if (s < 0) face.rotation.y = PI; roll.add(face);
     const edge = new THREE.Mesh(new THREE.TorusGeometry(R1, 0.006, 8, 160), M.tape); edge.position.z = s * Wd / 2; roll.add(edge);
   }
-  const core = new THREE.Mesh(new THREE.CylinderGeometry(R0 + 0.035, R0 + 0.035, Wd + 0.01, 64, 1, true), std({ color: "#a37650", roughness: 0.8, side: THREE.DoubleSide })); core.rotation.x = PI / 2; roll.add(core);
-  const coreIn = new THREE.Mesh(new THREE.CylinderGeometry(R0, R0, Wd + 0.012, 64, 1, true), std({ color: "#6e4f33", roughness: 0.9, side: THREE.BackSide })); coreIn.rotation.x = PI / 2; roll.add(coreIn);
+  const coreTex = logoTex; coreTex.repeat.set(2, 1);
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(R0 + 0.035, R0 + 0.035, Wd + 0.01, 96, 1, true), std({ map: coreTex, roughness: 0.7 })); core.rotation.x = PI / 2; roll.add(core);
+  const coreIn = new THREE.Mesh(new THREE.CylinderGeometry(R0, R0, Wd + 0.012, 96, 1, true), std({ map: coreTex, roughness: 0.75, side: THREE.BackSide })); coreIn.rotation.x = PI / 2; roll.add(coreIn);
+  for (const s of [1, -1]) { const lip = new THREE.Mesh(new THREE.RingGeometry(R0, R0 + 0.035, 96, 1), std({ color: "#ecebe7", roughness: 0.8, side: THREE.DoubleSide })); lip.position.z = s * (Wd / 2 + 0.006); roll.add(lip); }
   // unrolled strip leaving the bottom of the roll, flowing toward +X
   const path = smp(0, 3.4, 120, x => V(x, 0.03 * Math.sin(x * 1.6) - 0.004, 0));
-  const strip = ribbon(path, () => V(0, 1, 0), Wd, 0.008, std({ color: "#c3c7cc", roughness: 0.4 })); g.add(strip);
+  const strip = ribbon(path, () => V(0, 1, 0), Wd, 0.008, clear.clone()); g.add(strip);
   const edges = [Wd / 2, -Wd / 2].map(zo => { const e = ribbon(path.map(p => p.clone().setZ(zo)), () => V(0, 1, 0), 0.014, 0.01, M.tape); g.add(e); return e; });
   const strips = [strip, ...edges]; const segIdx = 24, nSeg = path.length - 1;
   g.add(contactShadow(4.5, 2.2, 0.55));
@@ -724,8 +736,10 @@ function render(t) {
 window.DURATION = DUR;
 window.SHOT_STARTS = STARTS;
 window.renderFrame = render;
+// clones of the logo texture share the canvas image but need their own upload flag
+function coreTexFix() { scene.traverse(o => { const m = o.material; if (m && m.map && m.map.userData && m.map.userData.canvas) m.map.needsUpdate = true; }); }
 render(0);
-window.sceneReady = Promise.resolve(true);
+window.sceneReady = logoReady.then(() => { coreTexFix(); render(0); return true; });
 if (QS.get("play") === "1") { const st = performance.now(); const tick = now => { render(((now - st) / 1000) % DUR); requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
 </script>
 </body>

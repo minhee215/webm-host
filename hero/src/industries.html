@@ -51,7 +51,15 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, W / H, 0.005, 200);
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+// soft studio environment: gradient dome + large dim softboxes (no small hot spots)
+const envScene = new THREE.Scene();
+envScene.add(new THREE.Mesh(new THREE.SphereGeometry(20, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide,
+  vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader: `varying vec3 vP; void main(){ float y = vP.y; vec3 c = mix(vec3(0.03), vec3(0.32,0.34,0.38), smoothstep(-0.3, 0.9, y)); gl_FragColor = vec4(c, 1.); }` })));
+for (const [pos, sz, k] of [[[0, 12, 0], [14, 8], 1.6], [[-12, 4, 6], [6, 10], 0.9], [[12, 3, -6], [5, 8], 0.7]]) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(...sz), new THREE.MeshBasicMaterial({ color: new THREE.Color(k, k, k * 1.05), side: THREE.DoubleSide }));
+  m.position.set(...pos); m.lookAt(0, 0, 0); envScene.add(m); }
+scene.environment = pmrem.fromScene(envScene, 0.03).texture;
 scene.environmentIntensity = 0.42;
 const key = new THREE.DirectionalLight(0xffffff, 2); scene.add(key);
 const fill = new THREE.DirectionalLight(0xa9c2ff, 0.5); scene.add(fill);
@@ -70,17 +78,18 @@ const grad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMater
   fragmentShader: `uniform vec2 uSpot; uniform float uT; varying vec2 vUv;
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
     void main(){ vec2 p = vUv;
-      vec2 d = p - uSpot; d.x *= 1.15; float spot = exp(-dot(d,d) * 3.4) * (0.94 + 0.06*sin(uT*0.7));
-      vec2 f = p - vec2(0.5, 0.06); f.x *= 0.9; float floorG = exp(-dot(f,f) * 16.0);
-      vec2 v = (p - 0.5) * vec2(1.6, 1.1); float vig = smoothstep(1.15, 0.2, length(v));
-      vec3 edge = vec3(0.045, 0.05, 0.06), mid = vec3(0.105, 0.11, 0.122);
-      vec3 c = mix(edge, mid, vig) + vec3(0.40, 0.44, 0.53) * spot * 0.38 + vec3(0.2) * floorG * 0.15;
-      c += (h(p * 913.0 + uT) - 0.5) * 0.008;
+      // black studio gradient: dark top-left, soft charcoal toward bottom-right, faint floor line
+      vec2 lc = vec2(0.78 + 0.03 * sin(uT * 0.25), 0.22 + 0.02 * cos(uT * 0.2));
+      vec2 d = (p - lc) * vec2(1.5, 1.2); float glow = exp(-dot(d, d) * 1.6);
+      float floorBand = smoothstep(0.0, 0.16, p.y) * (1.0 - smoothstep(0.16, 0.3, p.y)) * 0.35;
+      vec3 c = vec3(0.011, 0.011, 0.012) + vec3(0.038, 0.038, 0.04) * glow + vec3(0.012) * floorBand * glow;
+      c *= mix(0.82, 1.0, smoothstep(0.0, 0.45, p.x + (1.0 - p.y) * 0.2));
+      c += (h(p * 913.0 + uT) - 0.5) * 0.002;
       gl_FragColor = vec4(c, 1.); }`,
 }));
 grad.renderOrder = -10; grad.frustumCulled = false; bgScene.add(grad);
 const wave = new THREE.Mesh(new THREE.PlaneGeometry(44, 34, 220, 170).rotateX(-PI / 2), new THREE.ShaderMaterial({
-  transparent: true, depthWrite: false, uniforms: { uT: bgU.uT, uA: { value: 0.24 } },
+  transparent: true, depthWrite: false, uniforms: { uT: bgU.uT, uA: { value: 0.16 } },
   vertexShader: `uniform float uT; varying vec3 vW; varying vec2 vP;
     float Hh(vec2 p){ return 0.75*sin(0.30*p.x + 0.42*p.y + uT*0.32) + 0.45*sin(0.52*p.y - 0.2*p.x + uT*0.26) + 0.22*sin(0.85*p.x + uT*0.45); }
     void main(){ vec3 p = position; vP = p.xz; p.y += Hh(p.xz); vec4 w = modelMatrix * vec4(p, 1.); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
@@ -95,7 +104,7 @@ const wave = new THREE.Mesh(new THREE.PlaneGeometry(44, 34, 220, 170).rotateX(-P
       float fade = smoothstep(30., 12., dist) * smoothstep(3., 7., dist);
       gl_FragColor = vec4(vec3(sh) * vec3(0.93, 0.96, 1.0), fade * uA); }`,
 }));
-wave.position.set(0, -1.2, -9); bgScene.add(wave);
+wave.position.set(0, -1.2, -9); // wave field removed: plain black gradient background
 const BG = [[0.0, 0.50], [0.6, 0.46], [-0.4, 0.55], [0.3, 0.52], [-0.7, 0.48], [0.9, 0.5], [0.15, 0.54], [-0.5, 0.47], [0.45, 0.5], [-0.2, 0.53], [0.75, 0.49]];
 function updateBg(i, t) { const [ry, sx] = BG[i % BG.length]; wave.rotation.y = ry; bgU.uSpot.value.set(sx, 1.02); bgU.uT.value = t; }
 
@@ -105,7 +114,7 @@ const composer = new EffectComposer(renderer, rt);
 composer.addPass(new RenderPass(bgScene, bgCam));
 const mainPass = new RenderPass(scene, camera); mainPass.clear = false; mainPass.clearDepth = true; composer.addPass(mainPass);
 const bokeh = new BokehPass(scene, camera, { focus: 3, aperture: 0.004, maxblur: 0.006 }); composer.addPass(bokeh);
-composer.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), 0.16, 0.35, 0.96));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(W, H), 0.28, 0.35, 1.25));
 composer.addPass(new OutputPass());
 
 /* ---------- textures ---------- */
@@ -124,6 +133,7 @@ const TEX = {
     for (let i = 0; i < 9000; i++) { g.strokeStyle = `rgba(${r() > .5 ? "250,248,244" : "120,115,105"},${0.12 + r() * 0.22})`; g.lineWidth = 0.6 + r() * 1.2;
       const x = r() * w, y = r() * h, a = r() * 6.28, L = 10 + r() * 40; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a + 1) * L * .6, y + Math.sin(a + 1) * L * .6, x + Math.cos(a) * L, y + Math.sin(a) * L); g.stroke(); }
     g.fillStyle = "#c41f18"; g.fillRect(0, 1180, w, 70); g.fillStyle = "rgba(255,255,255,.10)"; g.fillRect(0, 1184, w, 8); g.fillStyle = "rgba(0,0,0,.18)"; g.fillRect(0, 1246, w, 4); }),
+  stripe: canvasTex(16, 2048, (g, w, h) => { g.fillStyle = "#000"; g.fillRect(0, 0, w, h); g.fillStyle = "#4cc8ff"; g.fillRect(0, 1180, w, 70); }),
   rings: canvasTex(512, 512, (g, w, h) => { g.fillStyle = "#e3e0d9"; g.fillRect(0, 0, w, h); const r = rng(9);
     for (let i = 0; i < 170; i++) { g.strokeStyle = `rgba(120,110,95,${0.05 + r() * .1})`; g.lineWidth = 1 + r(); g.beginPath(); g.arc(256, 256, 30 + i * 1.33, 0, 7); g.stroke(); } }),
   brushed: canvasTex(512, 512, (g, w, h) => { g.fillStyle = "#808080"; g.fillRect(0, 0, w, h); const r = rng(2);
@@ -134,7 +144,7 @@ const TEX = {
 const std = o => new THREE.MeshStandardMaterial(o);
 const phys = o => new THREE.MeshPhysicalMaterial(o);
 const M = {
-  tape: std({ map: TEX.foam, roughness: 0.78, emissive: "#ff1d10", emissiveIntensity: 0.12 }),
+  tape: std({ color: "#8fe2ff", roughness: 0.45, emissive: "#3cc4ff", emissiveIntensity: 2.6 }),
   phoneAlu: std({ color: "#8f959c", metalness: 1, roughness: 0.3, roughnessMap: TEX.brushed }),
   phoneDark: std({ color: "#2b2f35", metalness: 0.6, roughness: 0.45 }),
   backGlass: phys({ color: "#4a5058", roughness: 0.42, clearcoat: 0.5 }),
@@ -161,7 +171,7 @@ const M = {
   machineDark: std({ color: "#3e444b", metalness: 0.7, roughness: 0.5 }),
   jig: std({ color: "#3b4046", metalness: 0.7, roughness: 0.5 }),
   bed: std({ color: "#8a9097", metalness: 0.7, roughness: 0.5, roughnessMap: TEX.brushed }),
-  plate: std({ color: "#b9bdc2", metalness: 0.25, roughness: 0.55 }),
+  plate: std({ color: "#9ba0a6", metalness: 0.25, roughness: 0.6 }),
   hole: std({ color: "#0d0e10", roughness: 0.8 }),
 };
 
@@ -319,8 +329,8 @@ function buildPaperLine() {
   const core = cyl(0.08, span, M.kraft, 32); core.rotation.z = PI / 2; rollG.add(core);
   const tab = box(span - 0.12, 0.005, 0.07, M.tape); tab.position.y = 0.422; rollG.add(tab);
   const shaft = cyl(0.04, span + 0.4, M.chrome, 24); shaft.rotation.z = PI / 2; shaft.position.copy(rollG.position); g.add(shaft);
-  const tex = TEX.fiber.clone(); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.needsUpdate = true;
-  const webMat = std({ map: tex, roughness: 0.92, side: THREE.DoubleSide });
+  const tex = TEX.stripe.clone(); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.needsUpdate = true;
+  const webMat = std({ color: "#b4b1aa", roughness: 0.92, emissive: "#ffffff", emissiveMap: tex, emissiveIntensity: 1.9, side: THREE.DoubleSide });
   const path = [V(0, 1.12 + 0.42, -2.25), ...rollers.map(([z, y]) => V(0, y + 0.002, z)), V(0, 0.62, 2.4)];
   let acc = 0; const len = []; for (let i = 0; i < path.length; i++) { if (i) acc += path[i].distanceTo(path[i - 1]); len.push(acc); }
   const pos = [], uv = [], idx = [];
@@ -378,7 +388,7 @@ function buildCar() {
   }
   const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   bg.setIndex(zones.flat()); let off = 0; zones.forEach((z, i) => { bg.addGroup(off, z.length, i); off += z.length; }); bg.computeVertexNormals();
-  const paint = phys({ color: "#2c3237", metalness: 0.7, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.09 });
+  const paint = phys({ color: "#2c3237", metalness: 0.65, roughness: 0.36, clearcoat: 0.8, clearcoatRoughness: 0.22 });
   const glass = phys({ color: "#05070a", roughness: 0.03, clearcoat: 1, specularIntensity: 0.6 });
   const gloss = phys({ color: "#08090b", roughness: 0.15, clearcoat: 1 });
   const matte = std({ color: "#121315", roughness: 0.6 });
@@ -469,137 +479,177 @@ function buildCNC() {
 const SHOTS = [];
 function shot(dur, build) { const g = new THREE.Group(); g.visible = false; scene.add(g); const s = build(g); s.g = g; s.dur = dur; SHOTS.push(s); }
 function cam(p0, p1, t0, t1, k, fov = 30) { camera.position.copy(vlerp(p0, p1, k)); camera.fov = fov; camera.updateProjectionMatrix(); camera.lookAt(vlerp(t0, t1, k)); }
-function lights(k, f, r, ki = 2, fi = 0.5, ri = 1.8) { key.position.copy(k); key.intensity = ki * 0.75; fill.position.copy(f); fill.intensity = fi; rim.position.copy(r); rim.intensity = ri * 1.2; }
+function lights(k, f, r, ki = 2, fi = 0.5, ri = 1.8, env = 0.7) { scene.environmentIntensity = env; key.position.copy(k); key.intensity = ki * 0.75; fill.position.copy(f); fill.intensity = fi; rim.position.copy(r); rim.intensity = ri * 1.2; }
 function dof(point, aperture = 0.004, maxblur = 0.006) { bokeh.uniforms.focus.value = camera.position.distanceTo(point); bokeh.uniforms.aperture.value = aperture; bokeh.uniforms.maxblur.value = maxblur; }
 
-/* 01 · 모바일 — 분해된 레이어가 위에서 아래로 순차 등장 (wide) */
+/* camera helpers: motion never comes to a full stop, so hard cuts carry momentum */
+const eOutCubic = eOut;
+const eInOutSine = x => -(Math.cos(PI * x) - 1) / 2;
+const eInOutCubic = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const flow = u => 0.78 * u + 0.22 * eInOutSine(u);
+const DEG = PI / 180;
+function camOrbit(c, az0, az1, el0, el1, r0, r1, k, fov = 30) {
+  const az = lerp(az0, az1, k) * DEG, el = lerp(el0, el1, k) * DEG, r = lerp(r0, r1, k);
+  camera.position.set(c.x + r * Math.cos(el) * Math.cos(az), c.y + r * Math.sin(el), c.z + r * Math.cos(el) * Math.sin(az));
+  camera.fov = fov; camera.updateProjectionMatrix(); camera.lookAt(c);
+}
+
+/* 01 · 모바일 — 분해된 레이어가 위에서 아래로 순차 등장 / 오빗 */
 shot(3.6, g => {
   const P = buildPhone(); const root = new THREE.Group(); root.rotation.y = 0.35; g.add(root);
   const layers = [P.display, P.tape, P.body, P.inner, P.back];
   const rest = [1.05, 0.74, 0.38, 0.08, -0.22];
   const fades = layers.map(l => { root.add(l); return fadable(l); });
+  const c = V(0.02, 0.42, 0.02);
   return { update(u) {
     layers.forEach((l, i) => {
-      const t0 = 0.02 + i * 0.085, k = seg(u, t0, t0 + 0.32);
-      l.position.y = rest[i] + 0.55 * (1 - eOutExpo(k)) - 0.03 * eInOutQuart(seg(u, 0.6, 1));
-      l.rotation.x = 0.25 * (1 - eOutExpo(k)); fades[i](eOut(seg(u, t0, t0 + 0.16)));
+      const t0 = 0.03 + i * 0.09, k = eOutCubic(seg(u, t0, t0 + 0.3));
+      l.position.y = rest[i] + 0.13 * (1 - k) - 0.035 * i * eInOutSine(seg(u, 0.62, 1)) * 0.5;
+      const s = lerp(0.94, 1, k); l.scale.set(s, 1, s);
+      fades[i](eOut(seg(u, t0, t0 + 0.2)));
     });
-    root.rotation.y = 0.35 + 0.25 * eInOutQuart(u);
-    cam(V(3.3, 2.0, 3.5), V(2.85, 1.65, 3.05), V(0.05, 0.62, 0.05), V(0.05, 0.56, 0.05), eOutQuart(u), 30);
-    lights(V(1.5, 4, 1.5), V(-2.5, 1, 2), V(-1.5, 2.5, -3), 2.3, 0.5, 2.0);
-    dof(V(0, 0.6, 0.2), 0.003, 0.006);
+    camOrbit(c, 22, 74, 30, 21, 5.0, 4.35, flow(u), 30);
+    lights(V(1.5, 4, 1.5), V(-2.5, 1, 2), V(-1.5, 2.5, -3), 2.2, 0.5, 2.0);
+    dof(c, 0.003, 0.006);
   } };
 });
 
-/* 02 · 모바일 — 모서리 매크로: 디스플레이가 빨간 접착 프레임 위로 압착 */
+/* 02 · 모바일 매크로 — 측면 모서리를 따라 트래킹, 디스플레이가 접착 프레임 위로 */
 shot(2.2, g => {
   const P = buildPhone(); g.add(P.body, P.inner, P.tape, P.display);
   P.inner.position.y = -0.012; P.tape.position.y = 0.046;
   const cx = P.w / 2 - 0.06, cz = P.h / 2 - 0.08;
   return { update(u) {
-    const k = eInOutQuart(seg(u, 0.18, 0.72)), settle = Math.sin(seg(u, 0.72, 0.9) * PI) * 0.004;
-    P.display.position.y = lerp(0.22, 0.058, k) - settle;
-    cam(V(cx + 0.42, 0.1, cz + 0.3), V(cx + 0.33, 0.075, cz + 0.22), V(cx - 0.05, 0.05, cz - 0.08), V(cx - 0.06, 0.045, cz - 0.1), eInOutQuart(u), 44);
-    lights(V(1, 3, 2), V(-2, 0.5, 2), V(-1.5, 1.5, -2), 2.2, 0.45, 2.4);
-    dof(V(cx, 0.05, cz), 0.03, 0.014);
+    P.display.position.y = lerp(0.24, 0.058, eInOutCubic(seg(u, 0.12, 0.68)));
+    const k = flow(u);
+    camera.position.copy(vlerp(V(cx + 0.44, 0.11, cz + 0.12), V(cx + 0.38, 0.085, cz - 0.42), k));
+    camera.fov = 42; camera.updateProjectionMatrix();
+    const tg = vlerp(V(cx - 0.04, 0.05, cz - 0.1), V(cx - 0.05, 0.05, cz - 0.55), k); camera.lookAt(tg);
+    lights(V(1, 3, 2), V(-2, 0.5, 2), V(-1.5, 1.5, -2), 2.0, 0.45, 2.2, 0.70);
+    dof(tg, 0.016, 0.01);
   } };
 });
 
-/* 03 · 가전 — 세탁기 측판이 열리며 패널 접촉부의 빨간 패드가 드러남 (wide) */
+/* 03 · 가전 — 측판이 열리고, 테이프 패드가 카메라 쪽에서 날아와 프레임 기둥에 부착 / 오빗 */
 shot(3.2, g => {
-  const Wm = buildWasher(); g.add(Wm.g); const fadePads = fadable(Wm.pads);
+  const Wm = buildWasher(); g.add(Wm.g);
+  const pads = Wm.pads.children.slice(); const base = pads.map(p => p.position.clone()); const fades = pads.map(p => fadable(p));
+  const c = V(0.22, 0.45, 0.0);
   return { update(u) {
-    const k = eInOutExpo(seg(u, 0.12, 0.62));
+    const k = eInOutCubic(seg(u, 0.04, 0.42));
     Wm.panel.position.set(Wm.Wd / 2 + 0.012 + 0.62 * k, Wm.Hh / 2, 0.08 * k); Wm.panel.rotation.y = -0.22 * k;
-    const pk = seg(u, 0.45, 0.7); fadePads(eOut(pk)); Wm.pads.scale.set(1, lerp(0.6, 1, eOutBack(pk)), 1);
-    cam(V(2.2, 1.25, 1.95), V(1.85, 1.0, 1.6), V(0.22, 0.42, 0), V(0.26, 0.42, -0.02), eOutQuart(u), 30);
-    lights(V(2.5, 3, 2.5), V(-2.5, 1.5, 1.5), V(-1, 2.5, -3), 2.3, 0.5, 1.8);
+    camOrbit(c, 62, 26, 22, 15, 2.95, 2.45, flow(u), 30);
+    pads.forEach((p, i) => {
+      const t0 = 0.4 + i * 0.07, q = eOutCubic(seg(u, t0, t0 + 0.32));
+      const dir = camera.position.clone().sub(base[i]).normalize();
+      p.position.copy(base[i]).addScaledVector(dir, 1.2 * (1 - q)); fades[i](eOut(seg(u, t0, t0 + 0.14)));
+    });
+    lights(V(2.5, 3, 2.5), V(-2.5, 1.5, 1.5), V(-1, 2.5, -3), 1.9, 0.5, 1.6, 0.70);
     dof(V(0.3, 0.45, 0), 0.0025, 0.006);
   } };
 });
 
-/* 04 · 가전 — 매크로: 측판이 기둥의 빨간 패드에 맞닿음 */
+/* 04 · 가전 매크로 — 위에서 틈 안으로 크레인 다운, 측판이 패드에 맞닿음 */
 shot(2.2, g => {
   const Wm = buildWasher(); g.add(Wm.g);
-  const z0 = Wm.D / 2 - 0.035;
   return { update(u) {
-    const k = eInOutExpo(seg(u, 0.1, 0.78));
+    const k = eInOutCubic(seg(u, 0.1, 0.8));
     Wm.panel.position.set(Wm.Wd / 2 + 0.012 + lerp(0.22, 0.0, k), Wm.Hh / 2, 0); Wm.panel.rotation.y = lerp(-0.12, 0, k);
-    cam(V(0.66, 1.18, 0.78), V(0.55, 1.06, 0.62), V(0.31, 0.6, 0.24), V(0.31, 0.58, 0.25), eInOutQuart(u), 38);
-    lights(V(2, 3, 1.5), V(-1, 1, 2), V(1.5, 2, -3), 2.2, 0.4, 2.2);
-    dof(V(0.31, 0.6, z0), 0.02, 0.012);
+    const f = flow(u);
+    camera.position.copy(vlerp(V(0.6, 1.38, 0.82), V(0.52, 1.0, 0.58), f)); camera.fov = 38; camera.updateProjectionMatrix();
+    const tg = vlerp(V(0.31, 0.66, 0.24), V(0.31, 0.56, 0.25), f); camera.lookAt(tg);
+    lights(V(2, 3, 1.5), V(-1, 1, 2), V(1.5, 2, -3), 1.8, 0.4, 1.8, 0.70);
+    dof(tg, 0.02, 0.012);
   } };
 });
 
-/* 05 · 제지 — 롤러 라인 정면: 원단과 연결 테이프가 흘러옴 (wide) */
+/* 05 · 제지 — 라인 위를 따라 롤 쪽으로 전진하는 플라이스루 */
 shot(3.0, g => {
   const L = buildPaperLine(); g.add(L.g);
   return { update(u, t) {
     L.rollG.rotation.x = t * 1.4; L.rollerMeshes.forEach(r => r.rotation.x = t * 7);
-    L.tex.offset.y = lerp(0.42, -0.32, eInOutQuart(u));
-    cam(V(1.6, 2.6, 4.2), V(1.1, 2.25, 3.7), V(0, 0.7, -0.5), V(0, 0.72, -0.4), eOutQuart(u), 32);
-    lights(V(1.5, 4, 3), V(-3, 1.5, 2), V(-1, 2.5, -4), 2.2, 0.5, 2.0);
-    dof(V(0, 0.85, 0.4), 0.0025, 0.006);
+    L.tex.offset.y = lerp(0.42, -0.34, u);
+    const f = flow(u);
+    camera.position.copy(vlerp(V(1.0, 2.05, 4.4), V(0.35, 1.45, 2.55), f)); camera.fov = 34; camera.updateProjectionMatrix();
+    const tg = vlerp(V(0, 0.72, -0.2), V(0, 0.8, -1.25), f); camera.lookAt(tg);
+    lights(V(1.5, 4, 3), V(-3, 1.5, 2), V(-1, 2.5, -4), 1.6, 0.5, 1.8, 0.64);
+    dof(V(0, 0.82, 0.3), 0.0025, 0.006);
   } };
 });
 
-/* 06 · 제지 — 매크로·광각: 원단 표면을 스치며 연결 테이프가 지나감 */
+/* 06 · 제지 매크로 — 원단 롤 클로즈업: 시안 탭이 회전해 올라오고 원단이 풀려 나감 */
 shot(2.0, g => {
   const L = buildPaperLine(); g.add(L.g);
   return { update(u, t) {
-    L.rollG.rotation.x = t * 1.4; L.rollerMeshes.forEach(r => r.rotation.x = t * 7);
-    L.tex.offset.y = lerp(-0.06, -0.38, u);
-    cam(V(0.62, 0.93, 1.05), V(0.48, 0.9, 0.95), V(0.0, 0.76, 0.45), V(-0.05, 0.76, 0.5), eInOutQuart(u), 44);
-    lights(V(2, 3, 1), V(-2, 0.5, 2), V(-1, 1.5, -3), 2.2, 0.45, 2.2);
-    dof(V(0.15, 0.78, 0.55), 0.016, 0.012);
+    L.rollG.rotation.x = lerp(-1.25, 1.05, u); L.rollerMeshes.forEach(r => r.rotation.x = t * 7);
+    L.tex.offset.y = lerp(0.1, -0.12, u);
+    const f = flow(u);
+    camera.position.copy(vlerp(V(1.05, 1.95, -1.15), V(0.72, 1.82, -1.32), f)); camera.fov = 40; camera.updateProjectionMatrix();
+    const tg = vlerp(V(0.25, 1.42, -2.1), V(0.15, 1.45, -2.15), f); camera.lookAt(tg);
+    lights(V(2, 4, 1), V(-2, 1, 1), V(-1, 2, -4), 1.6, 0.45, 1.8, 0.6);
+    dof(V(0.3, 1.5, -2.0), 0.012, 0.01);
   } };
 });
 
 /* car tape factory: ribbons that fade in hovering above the body, then press onto it */
 function carTapes(K, defs) {
-  return defs.map(([pts, nrm, dir]) => { const r = ribbon(pts, nrm, 0.038, 0.004, M.tape.clone()); const grp = new THREE.Group(); grp.add(r); K.C.add(grp); return { grp, dir: dir.clone().normalize(), fade: fadable(grp) }; });
+  return defs.map(([pts, nrm, dir]) => { const r = ribbon(pts, nrm, 0.036, 0.004, M.tape.clone()); const grp = new THREE.Group(); grp.add(r); K.C.add(grp); return { grp, dir: dir.clone().normalize(), fade: fadable(grp) }; });
 }
 function driveTapes(list, u, t0) {
-  const a = eOut(seg(u, t0, t0 + 0.14)), p = eOutQuart(seg(u, t0 + 0.12, t0 + 0.42));
+  const p = eOutCubic(seg(u, t0 + 0.06, t0 + 0.42)), a = eOut(seg(u, t0, t0 + 0.12)) * lerp(0.35, 1, p);
   list.forEach(o => { o.fade(a); o.grp.position.copy(o.dir).multiplyScalar(0.2 * (1 - p)); });
 }
+// rear door: its trailing edge sweeps down and wraps around the rear wheel arch
+const rearDoorPath = K => {
+  const top = x => K.belt(x) - 0.06, arch = x => K.WCY + Math.sqrt(Math.max(0, K.WR * K.WR - (x - K.RX) ** 2)) + 0.045;
+  return [].concat(
+    smp(2.92, 3.80, 24, x => K.sp(x, top(x))),
+    smp(0, 1, 14, k => { const x = lerp(3.80, 3.49, eInOutSine(k)); return K.sp(x, lerp(top(3.80), arch(3.49), k)); }),
+    smp(3.49, 3.452, 6, x => K.sp(x, arch(x))),
+    smp(arch(3.452), 0.4, 4, y => K.sp(3.452, y)),
+    smp(3.452, 2.92, 18, x => K.sp(x, 0.4)),
+    smp(0.4, top(2.92), 8, y => K.sp(2.92, y)));
+};
 const doorPath = (K, a, b) => [].concat(smp(a, b, 24, x => K.sp(x, K.belt(x) - 0.06)), smp(K.belt(b) - 0.06, 0.4, 8, y => K.sp(b, y)), smp(b, a, 24, x => K.sp(x, 0.4)), smp(0.4, K.belt(a) - 0.06, 8, y => K.sp(a, y)));
 
-/* 07 · 자동차 — 정면 3/4 로우: 테이프가 페이드 인 후 차체에 부착 (wide) */
+/* 07 · 자동차 — 정면에서 3/4로 도는 오빗, 테이프가 페이드 인 후 차체에 부착 */
 shot(3.6, g => {
   const K = buildCar(); g.add(K.C);
   const sideN = () => V(0, 0.12, 1), topN = () => V(0, 1, 0.35);
   const T = carTapes(K, [
     [doorPath(K, 1.70, 2.86), sideN, V(0, 0.05, 1)],
-    [doorPath(K, 2.92, 3.86), sideN, V(0, 0.05, 1)],
-    [smp(0.22, 1.58, 40, x => K.hoodEdge(x, 1, 0.008)), topN, V(0, 1, 0.3)],
-    [smp(0.22, 1.58, 40, x => K.hoodEdge(x, -1, 0.008)), () => V(0, 1, -0.35), V(0, 1, -0.3)],
+    [rearDoorPath(K), sideN, V(0, 0.05, 1)],
+    [smp(0.42, 1.58, 36, x => K.hoodEdge(x, 1, 0.008)), topN, V(0, 1, 0.3)],
+    [smp(0.42, 1.58, 36, x => K.hoodEdge(x, -1, 0.008)), () => V(0, 1, -0.35), V(0, 1, -0.3)],
     [smp(2.52, 3.98, 40, x => K.roofEdge(x, 1, 0.008)), topN, V(0, 1, 0.3)],
   ]);
+  const c = V(0.3, 0.6, 0.1);
   return { update(u) {
     driveTapes(T, u, 0.3);
-    cam(V(5.6, 1.15, 4.7), V(4.9, 0.95, 4.1), V(0.45, 0.62, 0.1), V(0.4, 0.6, 0.1), eOutQuart(u), 30);
-    lights(V(3, 5, 5), V(-4, 1.5, 3), V(-4, 3, -4), 2.4, 0.5, 2.2);
+    camOrbit(c, 16, 52, 8, 12, 7.3, 6.4, flow(u), 30);
+    lights(V(6, 5, 5), V(-3, 1.5, 3), V(-4, 3, -4), 1.5, 0.45, 1.6, 1.00);
     dof(V(1.2, 0.7, 1.0), 0.0012, 0.005);
   } };
 });
 
-/* 08 · 자동차 — 매크로: 도어 테두리에 테이프가 붙는 순간 */
+/* 08 · 자동차 매크로 — 도어 라인을 따라가는 측면 트래킹 */
 shot(2.4, g => {
   const K = buildCar(); g.add(K.C);
   const a = 1.70, b = 2.86;
   const pts = [].concat(smp(K.belt(b) - 0.06, 0.4, 20, y => K.sp(b, y)), smp(b, a, 30, x => K.sp(x, 0.4)));
   const T = carTapes(K, [[pts, () => V(0, 0.1, 1), V(0, 0.05, 1)]]);
-  const focus = K.sp(b, 0.62);
+  const fx = K.sp(b, 0.62).x;
   return { update(u) {
-    driveTapes(T, u, 0.18);
-    cam(V(focus.x - 0.85, 0.78, 1.55), V(focus.x - 0.62, 0.7, 1.32), V(focus.x + 0.05, 0.6, 0.95), V(focus.x + 0.02, 0.58, 0.95), eInOutQuart(u), 42);
-    lights(V(2, 4, 4), V(-3, 1, 3), V(-2, 2, -3), 2.3, 0.5, 2.2);
-    dof(focus, 0.012, 0.012);
+    driveTapes(T, u, 0.14);
+    const f = flow(u);
+    camera.position.copy(vlerp(V(fx - 1.0, 0.8, 1.6), V(fx + 0.55, 0.72, 1.5), f)); camera.fov = 40; camera.updateProjectionMatrix();
+    const tg = vlerp(V(fx - 0.15, 0.55, 0.95), V(fx + 0.75, 0.48, 0.95), f); camera.lookAt(tg);
+    lights(V(2, 5, 6), V(-3, 1, 3), V(-2, 2, -3), 1.5, 0.45, 1.6, 1.00);
+    dof(V(fx, 0.55, 0.95), 0.012, 0.012);
   } };
 });
 
-/* 09 · 자동차 — 후면 하이 앵글: 트렁크·루프·도어 테두리 부착 */
+/* 09 · 자동차 후면 — 크레인 다운, 트렁크·루프·도어 테두리 부착 */
 shot(2.4, g => {
   const K = buildCar(); g.add(K.C);
   const sideN = () => V(0, 0.12, 1), topN = () => V(0, 1, 0);
@@ -607,42 +657,45 @@ shot(2.4, g => {
   const T = carTapes(K, [
     [outline(4.70, 4.97), topN, V(0, 1, 0)],
     [outline(2.52, 3.98), topN, V(0, 1, 0)],
-    [doorPath(K, 2.92, 3.86), sideN, V(0, 0.05, 1)],
+    [rearDoorPath(K), sideN, V(0, 0.05, 1)],
   ]);
   return { update(u) {
-    driveTapes(T, u, 0.18);
-    cam(V(-4.6, 3.4, 4.3), V(-4.0, 3.0, 3.8), V(-0.5, 0.7, 0.1), V(-0.45, 0.72, 0.1), eOutQuart(u), 30);
-    lights(V(-2, 6, 4), V(4, 1.5, 3), V(3, 3, -4), 2.3, 0.5, 2.0);
+    driveTapes(T, u, 0.16);
+    const f = flow(u);
+    camera.position.copy(vlerp(V(-5.0, 4.4, 4.0), V(-4.3, 2.5, 3.9), f)); camera.fov = 30; camera.updateProjectionMatrix();
+    camera.lookAt(vlerp(V(-0.5, 0.6, 0.1), V(-0.45, 0.72, 0.1), f));
+    lights(V(-6, 5, 5), V(4, 1.5, 3), V(3, 3, -4), 1.5, 0.45, 1.5, 1.00);
     dof(V(-1.4, 1.0, 0.4), 0.0012, 0.005);
   } };
 });
 
-/* 10 · 건축 — 지그에 테이프 부착, 자재판이 내려앉음 (wide) */
+/* 10 · 건축 — 오버헤드 오빗, 지그에 테이프 부착 후 자재판이 내려앉음 */
 shot(3.0, g => {
   const K = buildCNC(); g.add(K.g); const fades = K.tapes.map(fadable); K.groove.visible = false; K.chips.visible = false;
+  const c = V(0.05, 0.25, 0);
   return { update(u, t) {
-    K.tapes.forEach((tp, i) => { const t0 = 0.05 + i * 0.06; fades[i](eOut(seg(u, t0, t0 + 0.12))); tp.position.y = 0.175 + 0.18 * (1 - eOutQuart(seg(u, t0 + 0.08, t0 + 0.32))); });
-    const k = eInOutExpo(seg(u, 0.45, 0.85)); K.plate.position.set(0, lerp(0.75, 0.212, k), 0); K.plate.rotation.z = lerp(0.05, 0, k);
+    K.tapes.forEach((tp, i) => { const t0 = 0.05 + i * 0.07; fades[i](eOut(seg(u, t0, t0 + 0.14))); tp.position.y = 0.175 + 0.2 * (1 - eOutCubic(seg(u, t0 + 0.06, t0 + 0.34))); });
+    const k = eInOutCubic(seg(u, 0.44, 0.86)); K.plate.position.set(0, lerp(0.75, 0.212, k), 0); K.plate.rotation.z = lerp(0.05, 0, k);
     K.head.position.set(0.95, 0.85, -0.25); K.tool.rotation.y = t * 30;
-    cam(V(3.1, 2.75, 3.0), V(2.7, 2.4, 2.65), V(0.1, 0.25, 0), V(0.1, 0.28, 0), eOutQuart(u), 30);
-    lights(V(2, 5, 3), V(-3, 1.5, 2), V(-2, 3, -3), 2.2, 0.5, 1.8);
-    dof(V(0, 0.2, 0), 0.0025, 0.006);
+    camOrbit(c, 28, 72, 50, 36, 4.6, 3.9, flow(u), 30);
+    lights(V(2, 5, 3), V(-3, 1.5, 2), V(-2, 3, -3), 1.7, 0.5, 1.6, 0.64);
+    dof(c, 0.0025, 0.006);
   } };
 });
 
-/* 11 · 건축 — 매크로: 회전하는 엔드밀이 내려와 가공, 칩이 튐 */
+/* 11 · 건축 매크로 — 공구 주위를 도는 로우 오빗, 엔드밀 가공 */
 shot(2.4, g => {
   const K = buildCNC(); g.add(K.g); K.plate.position.set(0, 0.212, 0);
   return { update(u, t) {
-    const d = eInOutExpo(seg(u, 0.05, 0.38)), mv = eInOutQuart(seg(u, 0.38, 1.0));
+    const d = eInOutCubic(seg(u, 0.03, 0.34)), mv = eInOutSine(seg(u, 0.34, 1.0));
     const x = lerp(-0.25, 0.2, mv);
     K.head.position.set(x, lerp(0.42, 0.262, d), 0.1); K.tool.rotation.y = t * 45;
     K.groove.visible = mv > 0.002; K.groove.scale.x = Math.max(0.001, 0.45 * mv); K.groove.position.set(-0.25 + 0.225 * mv, 0.2425, 0.1);
     const cutting = d > 0.98;
     K.chipData.forEach(c => { const tt = ((t * 1.6 + c.t0) % 0.5); c.m.visible = cutting && mv > 0.02;
       c.m.position.set(x + c.vx * tt, 0.25 + c.vy * tt - 2.2 * tt * tt, 0.1 + c.vz * tt); c.m.rotation.set(c.rot + t * 9, c.rot * 2 + t * 7, 0); });
-    cam(V(0.55, 0.42, 0.78), V(0.45, 0.36, 0.66), V(-0.02, 0.27, 0.1), V(0.05, 0.27, 0.1), eInOutQuart(u), 44);
-    lights(V(1.5, 3, 2), V(-2, 0.5, 2), V(-1, 1.5, -2), 2.3, 0.45, 2.4);
+    camOrbit(V(x, 0.28, 0.1), 38, 84, 12, 19, 0.95, 0.72, flow(u), 42);
+    lights(V(1.5, 3, 2), V(-2, 0.5, 2), V(-1, 1.5, -2), 1.6, 0.45, 1.8, 0.60);
     dof(V(x, 0.27, 0.1), 0.02, 0.012);
   } };
 });

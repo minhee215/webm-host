@@ -1,0 +1,8 @@
+{
+  "name": "hero-scenes",
+  "private": true,
+  "description": "Hero video scenes rendered frame-by-frame with Playwright + ffmpeg",
+  "dependencies": {
+    "three": "0.170.0"
+  }
+}

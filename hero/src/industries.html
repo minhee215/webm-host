@@ -26,7 +26,9 @@ import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
-const W = 1920, H = 1080, PI = Math.PI;
+const QS = new URLSearchParams(location.search);
+const W = +(QS.get("w") || 1920), H = +(QS.get("h") || 1080), PI = Math.PI;
+document.body.style.width = W + "px"; document.body.style.height = H + "px";
 
 /* ---------- utils ---------- */
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -97,7 +99,7 @@ const globe = new THREE.Group(); bgRoot.add(globe);
     uniforms: { uA: BG_ALPHA }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
     vertexShader: `attribute float aA; varying float vA; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.);
       vec3 n = normalize(mat3(modelViewMatrix)*position); vA = aA * (0.25 + 0.75*smoothstep(-0.2, 0.6, n.z) + 0.6*pow(1.0-abs(n.z), 3.0));
-      gl_PointSize = 2.2 * (22.0 / -mv.z); gl_Position = projectionMatrix*mv; }`,
+      gl_PointSize = 2.2 * (22.0 / -mv.z) * ${(H / 1080).toFixed(3)}; gl_Position = projectionMatrix*mv; }`,
     fragmentShader: `uniform float uA; varying float vA; void main(){ float d = length(gl_PointCoord-0.5); float k = smoothstep(0.5,0.1,d);
       gl_FragColor = vec4(vec3(0.72,0.80,0.95)*k*vA*uA, 1.); }`,
   })));

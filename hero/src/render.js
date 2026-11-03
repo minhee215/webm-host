@@ -1,7 +1,7 @@
 // Frame-accurate renderer: drives window.renderFrame(t) in headless Chromium and
 // pipes PNG frames into ffmpeg.
 //
-//   node render.js <scene.html> <out-basename> [--fps=30]
+//   node render.js <scene.html> <out-basename> [--fps=30] [--w=854 --h=480]
 //   node render.js <scene.html> <out-dir> --stills=0.5,2,4   (PNG stills only)
 //
 // Produces <out>.webm (VP9) and <out>.mp4 (H.264, for Safari/iOS) plus <out>-poster.jpg.
@@ -30,7 +30,7 @@ const opt = Object.fromEntries(args.filter(a => a.startsWith("--")).map(a => {
 }));
 const [scene, out] = args.filter(a => !a.startsWith("--"));
 const FPS = +(opt.fps || 30);
-const W = 1920, H = 1080;
+const W = +(opt.w || 1920), H = +(opt.h || 1080);
 
 const run = (cmd, argv, input) => new Promise((res, rej) => {
   const p = spawn(cmd, argv, { stdio: [input ? "pipe" : "ignore", "inherit", "inherit"] });
@@ -40,7 +40,8 @@ const run = (cmd, argv, input) => new Promise((res, rej) => {
 
 (async () => {
   const q = new URLSearchParams();
-  if (opt.theme) q.set("theme", opt.theme);
+  if (opt.w) q.set("w", opt.w);
+  if (opt.h) q.set("h", opt.h);
   const root = path.dirname(path.resolve(scene));
   const srv = await serve(root);
   const url = `http://127.0.0.1:${srv.address().port}/${path.basename(scene)}?${q}`;

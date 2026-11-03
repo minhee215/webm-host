@@ -6,6 +6,7 @@
 <style>
   html, body { margin: 0; padding: 0; background: #0c0d10; overflow: hidden; }
   canvas { display: block; }
+  #fade { position: fixed; inset: 0; background: #000; pointer-events: none; opacity: 1; }
 </style>
 <script type="importmap">
 { "imports": {
@@ -15,6 +16,7 @@
 </script>
 </head>
 <body>
+<div id="fade"></div>
 <script type="module">
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -736,6 +738,8 @@ function render(t) {
   const s = SHOTS[i], tl = t - STARTS[i];
   s.update(tl / s.dur, tl);
   updateBg(i, t);
+  // gentle fade in at the very start and fade out at the very end (cuts everywhere else)
+  document.getElementById("fade").style.opacity = String(Math.max(1 - eInOutSine(seg(t, 0, 0.6)), eInOutSine(seg(t, DUR - 0.8, DUR))));
   composer.render();
 }
 window.DURATION = DUR;

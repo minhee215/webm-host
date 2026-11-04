@@ -514,6 +514,18 @@
   },
   "g_floor": {
    "file": "hf_20261101_150207_16466d40-92c7-493e-a850-8513f7cb51fd.mp4"
+  },
+  "op_hall": {
+   "file": "hf_20261104_051038_50fbf3a6-1a08-41fc-baf4-c9e8d00c7529.mp4"
+  },
+  "op_inspect": {
+   "file": "hf_20261104_050553_b7a8fb27-fb94-4935-a1a3-41b68e7f4fbd.mp4"
+  },
+  "op_warehouse": {
+   "file": "hf_20261104_051252_d466d97e-dfc6-4a93-8fcf-77bfb866898c.mp4"
+  },
+  "op_bodyline": {
+   "file": "hf_20261104_051251_19be2711-927d-4bb8-9955-942da27306b4.mp4"
   }
  }
 }

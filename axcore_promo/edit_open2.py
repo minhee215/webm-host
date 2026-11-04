@@ -11,6 +11,8 @@ No fades (the final cut starts straight on the picture). 23.976 fps, 21:9 band i
 optical-flow slow motion: setpts=PTS/0.55 (hall), /0.5 (warehouse), minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc)
 Usage: python3 edit_open2.py <hall> <inspect> <warehouse> <bodyline> <out.mp4> [height=1440]
 """
+import os
+
 import numpy as np
 
 import edit_open as EO
@@ -26,15 +28,23 @@ EO.FADE = 1                  # no head fade (the final cut starts straight on th
 EO.PUSH = 0.0
 EO.DRIFT = 0.0
 EO.SHOTS = [   # (hall and warehouse: optical-flow slow motion of the clips, x0.55 / x0.5 - client: too fast)
-    dict(key="hall", a=10, n=48, speed=[(0, 1.0), (42, 1.0), (48, 1.3)], push=0.0, drift=0.0, v=0.50,
+    dict(key="hall", a=10, n=48, speed=[(0, 1.0), (42, 1.0), (48, 1.3)], push=0.0, drift=0.0, v=0.50, sharp=True,
          b_in=0.0, b_out=-0.004),
     dict(key="inspect", a=30, n=48, speed=[(0, 1.3), (6, 1.0), (42, 1.0), (48, 1.3)], push=0.0, drift=0.0,
-         v=0.45, b_in=0.0034, b_out=-0.012, z_in=0.018),
+         v=0.45, b_in=0.0034, b_out=-0.012, z_in=0.018, sharp=True),
     dict(key="warehouse", a=132, n=48, speed=[(0, 1.2), (6, 1.0), (42, 1.0), (48, 1.2)], push=0.0, drift=0.0,
-         v=0.50, b_in=-0.006, b_out=-0.004),
+         v=0.50, b_in=-0.006, b_out=-0.004, sharp=True),
     dict(key="bodyline", a=24, n=51, speed=[(0, 1.0), (51, 1.0)], push=0.0, drift=0.0, v=0.48,
          b_in=-0.0098, b_out=0.0, sharp=True),
 ]
+
+
+if os.environ.get("AXP_WH") == "fwd":     # option: the forward warehouse take (no rack uprights sweeping the lens -
+    # the lateral take has motion blur baked into its passing uprights); x0.6 optical-flow slow motion
+    EO.SHOTS[1].update(b_out=-0.008)
+    EO.SHOTS[2] = dict(key="warehouse", a=170, n=48, speed=[(0, 1.2), (6, 1.0), (42, 1.0), (48, 1.2)], push=0.0,
+                       drift=0.0, v=0.50, b_in=-0.0147, b_out=-0.012, sharp=True)
+    EO.SHOTS[3].update(b_in=-0.0046)
 
 
 def travel(i, shot, k):
@@ -63,8 +73,8 @@ _render_frame = EO.render_frame
 
 
 def render_frame(clip, i, shot, k, W, Hb):
-    """The body line: one sharp source frame per output frame - no shutter blend (its fast black arms doubled up
-    under the blend; client). The other shots keep edit_open's 180-degree shutter."""
+    """One sharp source frame per output frame - no shutter blend (client: the fast black arms of the body line
+    doubled up under it, the rack uprights smeared). (Kept as an option per shot; all four shots are sharp.)"""
     if not shot.get("sharp"):
         return _render_frame(clip, i, shot, k, W, Hb)
     s, x = EO.cam(i, shot, k)

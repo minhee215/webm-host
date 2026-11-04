@@ -7,31 +7,33 @@ client's four stock references (made anew, no people), 2 s each, joined by hard 
 The cut grammar of edit_open.py (speed ramped up into a cut and out of it, pan bumps with the frame's velocity
 continuous across the cut, 180-degree shutter blur, a shared cool look), with a different camera move on each shot.
 No fades (the final cut starts straight on the picture). 23.976 fps, 21:9 band in 16:9; 48 + 48 + 48 + 51 = 195 frames.
-(source clips: op_hall, op_inspect, op_warehouse, op_bodyline in assets/clips.json, used as downloaded)
+(source clips: op_hall, op_inspect, op_warehouse, op_bodyline in assets/clips.json; hall and warehouse go in as
+optical-flow slow motion: setpts=PTS/0.55 (hall), /0.5 (warehouse), minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc)
 Usage: python3 edit_open2.py <hall> <inspect> <warehouse> <bodyline> <out.mp4> [height=1440]
 """
 import numpy as np
 
 import edit_open as EO
 
-# Camera moves (each clip's own, measured with camflow: similarity fit to LK tracks) - different on every shot, matched
-# only across the cuts: 1 dolly forward -> 2 push in on the wafer, then the camera picks up a move to the right ->
-# 3 trucks right past rack uprights (they sweep the frame) -> 4 trucks right high over the line and settles.
+# Camera moves (each clip's own, measured with camflow: similarity fit to LK tracks) - a different move on every shot,
+# matched only across the cuts: 1 slow dolly forward -> 2 arcs round the inspection stage to the right while the arm
+# scans the wafer -> 3 trucks right past rack uprights (they sweep the frame) -> 4 high over the line, pulling back
+# and drifting right, settles.
 # Around each cut a pan bump (exponential, time constant TAU) sized per side so the frame's sideways velocity is the
 # same on both sides of the cut, the clip's own move included (x: frame offset as a fraction of width; content moving
 # left = camera moving right = negative). The speed ramps (x1.8 at the cut) are counted in.
 EO.FADE = 1                  # no head fade (the final cut starts straight on the picture)
 EO.PUSH = 0.0
 EO.DRIFT = 0.0
-EO.SHOTS = [
-    dict(key="hall", a=0, n=48, speed=[(0, 1.0), (40, 1.0), (48, 1.8)], push=0.0, drift=0.0, v=0.50,
-         b_in=0.0, b_out=0.0),
-    dict(key="inspect", a=36, n=48, speed=[(0, 1.8), (6, 1.0), (40, 1.0), (48, 1.8)], push=0.0, drift=0.0,
-         v=0.45, b_in=0.0, b_out=-0.040),
-    dict(key="warehouse", a=66, n=48, speed=[(0, 1.8), (6, 1.0), (40, 1.0), (48, 1.8)], push=0.0, drift=0.0,
-         v=0.50, b_in=-0.0084, b_out=-0.005),
-    dict(key="bodyline", a=24, n=51, speed=[(0, 1.8), (6, 1.0), (51, 1.0)], push=0.0, drift=0.0, v=0.48,
-         b_in=-0.035, b_out=0.0),
+EO.SHOTS = [   # (hall and warehouse: optical-flow slow motion of the clips, x0.55 / x0.5 - client: too fast)
+    dict(key="hall", a=10, n=48, speed=[(0, 1.0), (42, 1.0), (48, 1.3)], push=0.0, drift=0.0, v=0.50,
+         b_in=0.0, b_out=-0.004),
+    dict(key="inspect", a=30, n=48, speed=[(0, 1.3), (6, 1.0), (42, 1.0), (48, 1.3)], push=0.0, drift=0.0,
+         v=0.45, b_in=0.0034, b_out=-0.012, z_in=0.018),
+    dict(key="warehouse", a=132, n=48, speed=[(0, 1.2), (6, 1.0), (42, 1.0), (48, 1.2)], push=0.0, drift=0.0,
+         v=0.50, b_in=-0.006, b_out=-0.004),
+    dict(key="bodyline", a=24, n=51, speed=[(0, 1.2), (6, 1.0), (51, 1.0)], push=0.0, drift=0.0, v=0.48,
+         b_in=-0.0098, b_out=0.0),
 ]
 
 
@@ -45,6 +47,18 @@ def travel(i, shot, k):
 
 
 EO.travel = travel
+_cam = EO.cam
+
+
+def cam(i, shot, k):
+    """edit_open's camera plus zoom bumps for a cut that matches on a forward move: the outgoing shot's zoom speeds
+    up into the cut (z_out), the incoming one leaves it still zooming in and eases off (z_in); never below cover."""
+    s, x = _cam(i, shot, k)
+    z = shot.get("z_out", 0.0) * np.exp((k - shot["n"]) / EO.TAU) + shot.get("z_in", 0.0) * (1 - np.exp(-k / EO.TAU))
+    return s * np.exp(z), x
+
+
+EO.cam = cam
 
 if __name__ == "__main__":
     EO.main()

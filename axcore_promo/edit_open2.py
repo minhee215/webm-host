@@ -47,6 +47,15 @@ if os.environ.get("AXP_WH") == "fwd":     # option: the forward warehouse take (
     EO.SHOTS[3].update(b_in=-0.0046)
 
 
+if os.environ.get("AXP_WH") == "agv":     # the client's own clip (0_Agv_Aisle, cleared for use): an AGV carrying
+    # boxes comes in from the left and turns away down the aisle, camera nearly still - the orbit's move to the right
+    # carries into the AGV's; the frame's pan eases out as it arrives
+    EO.SHOTS[1].update(b_out=-0.008)
+    EO.SHOTS[2] = dict(key="warehouse", a=0, n=48, speed=[(0, 1.0), (42, 1.0), (48, 1.2)], push=0.0, drift=0.0,
+                       v=0.55, b_in=-0.014, b_out=-0.006, sharp=True)
+    EO.SHOTS[3].update(b_in=0.0)
+
+
 def travel(i, shot, k):
     x = 0.0
     if shot["b_in"]:

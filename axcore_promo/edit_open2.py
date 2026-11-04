@@ -32,8 +32,8 @@ EO.SHOTS = [   # (hall and warehouse: optical-flow slow motion of the clips, x0.
          v=0.45, b_in=0.0034, b_out=-0.012, z_in=0.018),
     dict(key="warehouse", a=132, n=48, speed=[(0, 1.2), (6, 1.0), (42, 1.0), (48, 1.2)], push=0.0, drift=0.0,
          v=0.50, b_in=-0.006, b_out=-0.004),
-    dict(key="bodyline", a=24, n=51, speed=[(0, 1.2), (6, 1.0), (51, 1.0)], push=0.0, drift=0.0, v=0.48,
-         b_in=-0.0098, b_out=0.0),
+    dict(key="bodyline", a=24, n=51, speed=[(0, 1.0), (51, 1.0)], push=0.0, drift=0.0, v=0.48,
+         b_in=-0.0098, b_out=0.0, sharp=True),
 ]
 
 
@@ -59,6 +59,19 @@ def cam(i, shot, k):
 
 
 EO.cam = cam
+_render_frame = EO.render_frame
+
+
+def render_frame(clip, i, shot, k, W, Hb):
+    """The body line: one sharp source frame per output frame - no shutter blend (its fast black arms doubled up
+    under the blend; client). The other shots keep edit_open's 180-degree shutter."""
+    if not shot.get("sharp"):
+        return _render_frame(clip, i, shot, k, W, Hb)
+    s, x = EO.cam(i, shot, k)
+    return EO.place(clip.frame(int(round(EO.src_time(shot, k)))), s, x, shot, W, Hb)
+
+
+EO.render_frame = render_frame
 
 if __name__ == "__main__":
     EO.main()

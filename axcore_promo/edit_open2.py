@@ -13,6 +13,7 @@ Usage: python3 edit_open2.py <hall> <inspect> <warehouse> <bodyline> <out.mp4> [
 """
 import os
 
+import cv2
 import numpy as np
 
 import edit_open as EO
@@ -92,7 +93,29 @@ def render_frame(clip, i, shot, k, W, Hb):
     if not shot.get("sharp"):
         return _render_frame(clip, i, shot, k, W, Hb)
     s, x = EO.cam(i, shot, k)
-    return EO.place(clip.frame(int(round(EO.src_time(shot, k)))), s, x, shot, W, Hb)
+    return sharpen(EO.place(clip.frame(int(round(EO.src_time(shot, k)))), s, x, shot, W, Hb))
+
+
+def place(src, s, x, shot, W, Hb):
+    """edit_open's placement with a Lanczos resample (the 720p sources are blown up ~2-2.5x; bilinear went soft)."""
+    h, w = src.shape[:2]
+    s = max(W / w, Hb / h) * s
+    cx = w / 2 - x * W / s
+    cy = min(max(shot["v"] * h, Hb / s / 2), h - Hb / s / 2)
+    cx = min(max(cx, W / s / 2), w - W / s / 2)
+    M = np.array([[s, 0, W / 2 - s * cx], [0, s, Hb / 2 - s * cy]], np.float32)
+    return cv2.warpAffine(src, M, (W, Hb), flags=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_REFLECT)
+
+
+EO.place = place
+SHARP_AMT, SHARP_SIG = 0.55, 1.6               # unsharp mask at the output size (sigma in 1440p pixels)
+
+
+def sharpen(img):
+    sig = SHARP_SIG * img.shape[0] / 1072.0
+    if sig < 0.5:
+        return img
+    return cv2.addWeighted(img, 1 + SHARP_AMT, cv2.GaussianBlur(img, (0, 0), sig), -SHARP_AMT, 0)
 
 
 EO.render_frame = render_frame

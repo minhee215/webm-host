@@ -68,12 +68,12 @@ SLOTS = {
     OPENER: (-1250, -560, 2000, 700, 394, -0.42),
     "n1_pharma": (-1350, -30, 2050, 700, 394, -0.45),
     "op3_monitor": (-1250, 480, 2000, 660, 372, -0.42),
-    "n2_warehouse": (1350, -480, 2050, 700, 394, 0.45),
+    "o5_cobots": (1350, -480, 2050, 700, 394, 0.45),
     "n3_evline": (1300, 0, 2000, 700, 394, 0.42),
     "n4_office": (1350, 500, 2050, 700, 394, 0.45),
     "n5_battery": (-430, -620, 2100, 620, 350, -0.12),
     "op3_factory": (430, -620, 2100, 620, 350, 0.12),
-    "n6_server": (-430, 560, 2100, 620, 350, -0.12),
+    "10_datacenter": (-430, 560, 2100, 620, 350, -0.12),
     "op3_inspect": (430, 560, 2100, 620, 350, 0.12),
     "n7_campus": (-2000, -150, 2700, 700, 394, -0.5),
     "17_robot": (2000, 200, 2700, 700, 394, 0.5),
@@ -82,9 +82,9 @@ SLOTS = {
 Z_WALL = 1270.0
 CW, CH, GX, GY = 560, 240, 600, 270
 CELLS = {
-    "n5_battery": (0, 0), "op3_factory": (0, 1), "n2_warehouse": (0, 2),
+    "n5_battery": (0, 0), "op3_factory": (0, 1), "o5_cobots": (0, 2),
     "n1_pharma": (1, 0), "op3_inspect": (1, 1), "n3_evline": (1, 2),
-    "op3_monitor": (2, 0), "n6_server": (2, 1), "n4_office": (2, 2),
+    "op3_monitor": (2, 0), "10_datacenter": (2, 1), "n4_office": (2, 2),
 }
 TARGET = "op3_inspect"
 SCAN_FROM = (2, 0)             # the crosshair first settles on the office window...
@@ -93,7 +93,8 @@ SCAN_LOCK = SCAN_MOVE + SCAN_MOVE_D
 ORDER = list(SLOTS)            # fly-in order
 SCENE_T = 146 * 1001 / 24000
 # usable part (s) of each panel's clip (media reads 0.5 s in, so -0.5 is a clip's first frame). The new opening's
-# clips replace the old opening's s01 / s02 / s03 (client): the target window is the AI inspection (light, PASS)
+# clips replace the old opening's s01 / s02 / s03 (client): the target window is the AI inspection (light, PASS);
+# two more panels without people (client): n2_warehouse -> o5_cobots, n6_server -> 10_datacenter
 CLIP_SPAN = {"op3_inspect": (-0.5, 1.78), "op3_factory": (-0.5, 3.2), "op3_monitor": (-0.5, 1.2)}
 _DUR = {}
 
@@ -400,7 +401,7 @@ def render(c, t):
                 connector(c, st, end, kc, a * (1 - wall), t, i)
 
     # "어디를 바꾸고": brackets hop across panels
-    for j, (n, t0) in enumerate((("n1_pharma", 1.05), ("n3_evline", 1.38), ("op3_factory", 1.70), ("n6_server", 2.0))):
+    for j, (n, t0) in enumerate((("n1_pharma", 1.05), ("n3_evline", 1.38), ("op3_factory", 1.70), ("10_datacenter", 2.0))):
         av = E.vis(t, t0, 0.12, t0 + 0.30, 0.15)
         if av > 0:
             p = [x for x in items if x[1] == n][0][2]

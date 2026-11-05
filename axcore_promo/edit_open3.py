@@ -11,6 +11,7 @@ Sources: the generated clips (21:9, 720p) blown up x2 first (prep_up2: Lanczos +
 output size. The edit grammar and look are edit_open's (no shutter blend: sharp frames).
 Usage: python3 edit_open3.py <factory_x2> <inspect_x2> <screen_x2> <logistics_x2> <out.mp4> [height=1440]
 """
+import os
 import subprocess
 import sys
 
@@ -94,6 +95,22 @@ def main():
     tg["am"] = tg["am"] * 0.5 + EO.COOL_A * 0.5
     tg["bm"] = tg["bm"] * 0.5 + EO.COOL_B * 0.5
     tg["Lm"] += EO.LIFT
+    exp = os.environ.get("AXP_EXPORT_LOGI")
+    if exp:                                       # the logistics clip, whole frames, in this edit's grade (for the
+        i = 3                                     # next scene, which opens on it: seg_where's op3_logi)
+        c = EO.Clip(paths["logistics"], 10 ** 5)
+        n = int(cv2.VideoCapture(paths["logistics"]).get(cv2.CAP_PROP_FRAME_COUNT))
+        f0 = c.frame(0)
+        e = subprocess.Popen(["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s",
+                              "%dx%d" % (f0.shape[1], f0.shape[0]), "-r", "24", "-i", "-", "-c:v", "libx264",
+                              "-crf", "10", "-pix_fmt", "yuv444p", exp], stdin=subprocess.PIPE)
+        for k in range(n):
+            g = EO.grade(c.frame(k), sts[i], tg)
+            e.stdin.write(np.clip(g * 255 + 0.5, 0, 255).astype(np.uint8).tobytes())
+        e.stdin.close()
+        e.wait()
+        print(exp, n)
+        return
     enc = subprocess.Popen(["ffmpeg", "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24",
                             "-s", "%dx%d" % (W, H), "-r", "%d/%d" % (EO.FPS_NUM, EO.FPS_DEN), "-i", "-",
                             "-c:v", "libx264", "-preset", "slow", "-crf", "14" if H >= 1080 else "18",

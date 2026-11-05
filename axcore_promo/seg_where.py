@@ -52,16 +52,20 @@ FPS_NUM, FPS_DEN = 24000, 1001
 DT = FPS_DEN / FPS_NUM
 BAR = 138                      # 21:9 letterbox in 1080 logical px (276 at 4K)
 F = 1100.0                     # focal length (px); a panel at Z=F is drawn 1:1
-OPENER = "s04_inspect"         # the shot the scene opens on (full frame), before it becomes a panel
-OPENER_T0 = 91 / 24            # its clip time at the first frame: the edit's previous cut ends on s04 frame 90
-OPENER_SCALE, OPENER_DX = 1.031, 0.0155   # ...framed at 103.1 %, left edge on the frame edge (matched to that cut)
+OPENER = os.environ.get("AXP_OPENER", "op3_logi")   # the shot the scene opens on (full frame), then a panel
+# opening v3 (edit_open3) ends on the logistics clip's frame 56, framed full width in the 21:9 band (op3_logi is that
+# clip padded to 16:9, so the band shows it whole); the old opening ended on s04 frame 90 at 103.1 %
+# (media reads a clip 0.5 s in - its default lead-in - so the op3_logi time is given 0.5 s earlier; the clip itself
+# carries the opening's grade, so it is drawn ungraded until it has become a panel)
+OPENER_T0, OPENER_SCALE, OPENER_DX = ((57 / 24 - 0.5, 1.0, 0.0) if OPENER == "op3_logi"
+                                      else (91 / 24, 1.031, 0.0155))
 CYAN_L = "#46B4FF"
 GRADE = E.grade_filter(bright=0.92, contrast=1.04, sat=0.88, tint=(-0.01, 0.0, 0.02))
 
 # constellation slots: (X, Y, Z, w, h, yaw)
 CENTER = (0, -30, 1700, 900, 500, 0.0)
 SLOTS = {
-    "s04_inspect": (-1250, -560, 2000, 700, 394, -0.42),
+    OPENER: (-1250, -560, 2000, 700, 394, -0.42),
     "n1_pharma": (-1350, -30, 2050, 700, 394, -0.45),
     "s02_monitor": (-1250, 480, 2000, 660, 372, -0.42),
     "n2_warehouse": (1350, -480, 2050, 700, 394, 0.45),

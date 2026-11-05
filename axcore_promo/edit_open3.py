@@ -2,9 +2,10 @@
   1 factory   a vast autonomous car plant, blue AGVs carrying bodies across a white floor; the camera glides in
   2 inspect   the AI inspection station: vision camera module, the scan light on the board, the arm's probe; a
               holographic PASS badge over the board (prep_up2 --pass)
-  3 screen    the AI inspection screen (seg_aiscreen, drawn at full size): the scan runs down the board, REJECT
+  3 screen    the AI inspection screen (seg_aiscreen, drawn at full size): the top-down conveyor feed, a board comes
+              down under the scan line, REJECT
   4 logistics small robot modules carrying blue totes past the racks; the camera trucks right
-2 s each (48 + 48 + 48 + 51 = 195 frames), hard cuts. The camera moves differ, matched only across the cuts:
+48 + 42 + 42 + 63 = 195 frames (client: a longer logistics shot), hard cuts. The camera moves differ, matched only across the cuts:
 forward -> forward (push in) -> push in, speeding up to the right -> trucking right. White / blue look.
 Sources: the generated clips (21:9, 720p) blown up x2 first (prep_up2: Lanczos + unsharp); the screen rendered at the
 output size. The edit grammar and look are edit_open's (no shutter blend: sharp frames).
@@ -23,13 +24,14 @@ EO.DRIFT = 0.0
 SHOTS = [
     dict(key="factory", a=0, n=48, speed=[(0, 1.0), (42, 1.0), (48, 1.2)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),
-    dict(key="inspect", a=4, n=48, speed=[(0, 1.0), (48, 1.0)], push=0.0, drift=0.0, v=0.50,
+    dict(key="inspect", a=4, n=42, speed=[(0, 1.0), (42, 1.0)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0, z_in=0.008),
     None,                                          # the screen (pre-rendered)
-    dict(key="logistics", a=0, n=51, speed=[(0, 1.0), (51, 1.0)], push=0.0, drift=0.0, v=0.50,
+    dict(key="logistics", a=0, n=63, speed=[(0, 1.0), (63, 1.0)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),
 ]
 EO.SHOTS = [s for s in SHOTS if s]
+SCREEN_N = 42
 
 
 def travel(i, shot, k):
@@ -99,7 +101,7 @@ def main():
     for slot in SHOTS:
         if slot is None:                          # the screen: its own frames, already letterboxed and finished
             cap = cv2.VideoCapture(screen)
-            for _ in range(48):
+            for _ in range(SCREEN_N):
                 ok, f = cap.read()
                 if f.shape[:2] != (H, W):
                     f = cv2.resize(f, (W, H), interpolation=cv2.INTER_AREA)

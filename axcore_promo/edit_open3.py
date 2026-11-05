@@ -5,7 +5,7 @@
   3 screen    the AI inspection screen (seg_aiscreen, drawn at full size): the top-down conveyor feed, a board comes
               down under the scan line, REJECT
   4 logistics small robot modules carrying blue totes past the racks; the camera trucks right
-48 + 42 + 42 + 63 = 195 frames (client: a longer logistics shot), hard cuts. The camera moves differ, matched only across the cuts:
+40 + 56 + 42 + 57 = 195 frames (client: longer logistics; the inspection's stop / light / PASS), hard cuts. The camera moves differ, matched only across the cuts:
 forward -> forward (push in) -> push in, speeding up to the right -> trucking right. White / blue look.
 Sources: the generated clips (21:9, 720p) blown up x2 first (prep_up2: Lanczos + unsharp); the screen rendered at the
 output size. The edit grammar and look are edit_open's (no shutter blend: sharp frames).
@@ -22,13 +22,15 @@ import edit_open as EO
 EO.PUSH = 0.0
 EO.DRIFT = 0.0
 SHOTS = [
-    dict(key="factory", a=0, n=48, speed=[(0, 1.0), (42, 1.0), (48, 1.2)], push=0.0, drift=0.0, v=0.50,
+    dict(key="factory", a=0, n=40, speed=[(0, 1.0), (34, 1.0), (40, 1.2)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),
-    dict(key="inspect", a=0, n=42, speed=[(0, 1.0), (42, 1.0)], push=0.0, drift=0.0, v=0.50,
-         b_in=0.0, b_out=0.0),                    # locked off (client): the PASS hologram must sit still
-    dict(key="screen", a=0, n=42, speed=[(0, 1.0), (42, 1.0)], push=0.0, drift=0.0, v=0.50,
+    # locked off (client): a board comes in and stops, the camera lowers, blue light, PASS; x1.5
+    dict(key="inspect", a=8, n=56, speed=[(0, 1.5), (56, 1.5)], push=0.0, drift=0.0, v=0.50,
+         b_in=0.0, b_out=0.0),
+    # the monitor (prep_monitor2): board in, stop, scan, REJECT; a slow digital push in, speeding right at the end
+    dict(key="screen", a=0, n=42, speed=[(0, 1.0), (42, 1.0)], push=-0.0012, drift=0.0, v=0.50,
          b_in=0.0, b_out=-0.012),
-    dict(key="logistics", a=0, n=63, speed=[(0, 1.0), (63, 1.0)], push=0.0, drift=0.0, v=0.50,
+    dict(key="logistics", a=0, n=57, speed=[(0, 1.0), (57, 1.0)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),
 ]
 EO.SHOTS = SHOTS

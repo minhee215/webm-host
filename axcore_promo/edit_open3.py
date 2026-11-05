@@ -24,9 +24,9 @@ EO.DRIFT = 0.0
 SHOTS = [
     dict(key="factory", a=0, n=48, speed=[(0, 1.0), (42, 1.0), (48, 1.2)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),
-    dict(key="inspect", a=6, n=42, speed=[(0, 1.0), (42, 1.0)], push=0.0, drift=0.0, v=0.50,
-         b_in=0.0, b_out=0.0, z_in=0.008),
-    dict(key="screen", a=10, n=42, speed=[(0, 1.0), (42, 1.0)], push=0.0, drift=0.0, v=0.50,
+    dict(key="inspect", a=0, n=42, speed=[(0, 1.0), (42, 1.0)], push=0.0, drift=0.0, v=0.50,
+         b_in=0.0, b_out=0.0),                    # locked off (client): the PASS hologram must sit still
+    dict(key="screen", a=0, n=42, speed=[(0, 1.0), (42, 1.0)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=-0.012),
     dict(key="logistics", a=0, n=63, speed=[(0, 1.0), (63, 1.0)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),

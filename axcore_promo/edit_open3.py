@@ -24,8 +24,9 @@ EO.DRIFT = 0.0
 SHOTS = [
     dict(key="factory", a=0, n=40, speed=[(0, 1.0), (34, 1.0), (40, 1.2)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),
-    # locked off (client): a board comes in and stops, the camera lowers, blue light, PASS; x1.5
-    dict(key="inspect", a=8, n=56, speed=[(0, 1.5), (56, 1.5)], push=0.0, drift=0.0, v=0.50,
+    # locked off (client): a board comes in and stops, the camera comes down a little, blue light, PASS
+    # (prep_inspect2: already on the edit's clock)
+    dict(key="inspect", a=0, n=56, speed=[(0, 1.0), (56, 1.0)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),
     # the monitor (prep_monitor2): board in, stop, scan, REJECT; a slow digital push in, speeding right at the end
     dict(key="screen", a=0, n=42, speed=[(0, 1.0), (42, 1.0)], push=-0.0012, drift=0.0, v=0.50,

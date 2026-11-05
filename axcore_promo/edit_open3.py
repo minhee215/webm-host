@@ -9,7 +9,7 @@
 forward -> forward (push in) -> push in, speeding up to the right -> trucking right. White / blue look.
 Sources: the generated clips (21:9, 720p) blown up x2 first (prep_up2: Lanczos + unsharp); the screen rendered at the
 output size. The edit grammar and look are edit_open's (no shutter blend: sharp frames).
-Usage: python3 edit_open3.py <factory_x2> <inspect_x2> <screen.mp4> <logistics_x2> <out.mp4> [height=1440]
+Usage: python3 edit_open3.py <factory_x2> <inspect_x2> <screen_x2> <logistics_x2> <out.mp4> [height=1440]
 """
 import subprocess
 import sys
@@ -24,14 +24,14 @@ EO.DRIFT = 0.0
 SHOTS = [
     dict(key="factory", a=0, n=48, speed=[(0, 1.0), (42, 1.0), (48, 1.2)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),
-    dict(key="inspect", a=4, n=42, speed=[(0, 1.0), (42, 1.0)], push=0.0, drift=0.0, v=0.50,
+    dict(key="inspect", a=6, n=42, speed=[(0, 1.0), (42, 1.0)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0, z_in=0.008),
-    None,                                          # the screen (pre-rendered)
+    dict(key="screen", a=10, n=42, speed=[(0, 1.0), (42, 1.0)], push=0.0, drift=0.0, v=0.50,
+         b_in=0.0, b_out=-0.012),
     dict(key="logistics", a=0, n=63, speed=[(0, 1.0), (63, 1.0)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),
 ]
-EO.SHOTS = [s for s in SHOTS if s]
-SCREEN_N = 42
+EO.SHOTS = SHOTS
 
 
 def travel(i, shot, k):
@@ -76,13 +76,13 @@ def frame(clip, i, shot, k, W, Hb):
 
 
 def main():
-    fact, insp, screen, logi, out = sys.argv[1:6]
+    fact, insp, scr, logi, out = sys.argv[1:6]
     H = int(sys.argv[6]) if len(sys.argv) > 6 else 1440
     W = int(round(H * 16 / 9 / 2)) * 2
     bar = int(round(H * EO.BAR_FRAC / 2)) * 2
     Hb = H - 2 * bar
     work = int(W * 1.35)
-    paths = {"factory": fact, "inspect": insp, "logistics": logi}
+    paths = {"factory": fact, "inspect": insp, "screen": scr, "logistics": logi}
     sts = []
     for i, s in enumerate(EO.SHOTS):
         c = EO.Clip(paths[s["key"]], work)
@@ -97,19 +97,7 @@ def main():
                             "-pix_fmt", "yuv420p", "-movflags", "+faststart", out], stdin=subprocess.PIPE)
     rng = np.random.default_rng(7)
     t = 0
-    j = 0
-    for slot in SHOTS:
-        if slot is None:                          # the screen: its own frames, already letterboxed and finished
-            cap = cv2.VideoCapture(screen)
-            for _ in range(SCREEN_N):
-                ok, f = cap.read()
-                if f.shape[:2] != (H, W):
-                    f = cv2.resize(f, (W, H), interpolation=cv2.INTER_AREA)
-                enc.stdin.write(np.ascontiguousarray(f).tobytes())
-                t += 1
-            continue
-        i = j
-        s, st = EO.SHOTS[i], sts[i]
+    for i, (s, st) in enumerate(zip(EO.SHOTS, sts)):
         c = EO.Clip(paths[s["key"]], work)
         for k in range(s["n"]):
             g = EO.grade(frame(c, i, s, k, W, Hb), st, tg)
@@ -118,7 +106,6 @@ def main():
             fr[bar:bar + Hb] = np.clip(g * 255 + 0.5, 0, 255).astype(np.uint8)
             enc.stdin.write(fr.tobytes())
             t += 1
-        j += 1
     enc.stdin.close()
     enc.wait()
     print(out, t, "frames")

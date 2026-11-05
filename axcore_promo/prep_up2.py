@@ -5,7 +5,8 @@ Usage: python3 prep_up2.py <in.mp4> <out.mp4> [first=0] [count=all] [--pass x,y,
   --pass: badge centre as fractions of the source frame at the first frame, and its appear time (s)
   --stab: lock the camera (client: the generated "static" camera still drifts and breathes): every frame is warped
           back onto the first, tracking only the still background between rows y0..y1 (fractions), with a slight
-          zoom to hide the edges; the badge then stays put
+          zoom to hide the edges; the badge then stays put. "--stab -1,0": the clip's camera is already still (measured)
+          - no warp, the badge simply fixed in the frame
 """
 import subprocess
 import sys
@@ -71,7 +72,7 @@ def main():
         if not ok:
             break
         g = cv2.cvtColor(f, cv2.COLOR_BGR2GRAY)
-        if prev is not None:
+        if prev is not None and not (stab is not None and stab[0] < 0):
             mask = None
             if stab is not None:
                 mask = np.zeros_like(prev)
@@ -82,7 +83,9 @@ def main():
             if m is not None:
                 M = np.vstack([m, [0, 0, 1]]) @ M
         prev = g
-        if stab is not None:                          # warp back onto the first frame, zoomed a little
+        if stab is not None and stab[0] < 0:          # (--stab -1,0: the camera is already still - badge fixed)
+            M = np.eye(3)
+        elif stab is not None:                        # warp back onto the first frame, zoomed a little
             hh, ww = f.shape[:2]
             Z = np.array([[1.04, 0, -0.02 * ww], [0, 1.04, -0.02 * hh], [0, 0, 1]])
             f = cv2.warpAffine(f, (Z @ np.linalg.inv(M))[:2], (ww, hh), flags=cv2.INTER_LANCZOS4,
@@ -94,13 +97,13 @@ def main():
             a = np.clip((t - pas[2]) / 0.25, 0, 1)
             if a > 0:
                 flick = 0.75 + 0.25 * np.sin(t * 40) if a < 1 else 0.96 + 0.04 * np.sin(t * 5)
-                s = 1.04 if stab is not None else np.hypot(M[0, 0], M[1, 0])
+                s = (1.0 if stab[0] < 0 else 1.04) if stab is not None else np.hypot(M[0, 0], M[1, 0])
                 if bimg is None or abs(bimg[1] - s) > 0.02:
                     bimg = (badge(float(2 * s * (0.9 + 0.1 * a))), s)
                 b = bimg[0]
                 x0, y0 = pas[0] * f.shape[1], pas[1] * f.shape[0]
-                Mb = np.array([[1.04, 0, -0.02 * f.shape[1]], [0, 1.04, -0.02 * f.shape[0]], [0, 0, 1]]) \
-                    if stab is not None else M
+                Mb = M if stab is None or stab[0] < 0 else \
+                    np.array([[1.04, 0, -0.02 * f.shape[1]], [0, 1.04, -0.02 * f.shape[0]], [0, 0, 1]])
                 x, y = (Mb @ np.array([x0, y0, 1.0]))[:2] * 2
                 y -= 26 * (1 - a) * 2
                 hh, ww = b.shape[:2]

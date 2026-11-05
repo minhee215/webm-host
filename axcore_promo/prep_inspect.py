@@ -50,7 +50,7 @@ def main():
         light.append(float((roi[..., 0] - roi[..., 2]).mean()))
     desc = np.array(desc, float)
     desc = np.convolve(np.pad(desc, 2, mode="edge"), np.ones(5) / 5, mode="valid")    # smooth the track
-    light = np.array(light) - np.median(light[:pk + 1])
+    light = np.array(light) - np.max(light[pk - 4:pk + 7])      # baseline: the board stopped, light off
     light = np.clip(light / max(light.max(), 1e-3), 0, 1)
     light = np.convolve(np.pad(light, 2, mode="edge"), np.ones(5) / 5, mode="valid")
     print("descent max %.0f px, light peak at frame %d" % (desc.max(), int(np.argmax(light))))

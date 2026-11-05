@@ -33,7 +33,7 @@ SHOTS = [
     # the monitor (prep_monitor2): board in, stop, scan, REJECT; a slow digital push in, speeding right at the end
     dict(key="screen", a=0, n=42, speed=[(0, 1.0), (42, 1.0)], push=-0.0012, drift=0.0, v=0.50,
          b_in=0.0, b_out=-0.012),
-    dict(key="logistics", a=6, n=57, speed=[(0, 1.0), (57, 1.0)], push=0.0, drift=0.0, v=0.50,
+    dict(key="logistics", a=0, n=57, speed=[(0, 1.0), (57, 1.0)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),
 ]
 EO.SHOTS = SHOTS

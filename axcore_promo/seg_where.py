@@ -74,7 +74,7 @@ SLOTS = {
     "n5_battery": (-430, -620, 2100, 620, 350, -0.12),
     "op3_factory": (430, -620, 2100, 620, 350, 0.12),
     "10_datacenter": (-430, 560, 2100, 620, 350, -0.12),
-    "op3_inspect": (430, 560, 2100, 620, 350, 0.12),
+    "op3_inspect_live": (430, 560, 2100, 620, 350, 0.12),
     "n7_campus": (-2000, -150, 2700, 700, 394, -0.5),
     "17_robot": (2000, 200, 2700, 700, 394, 0.5),
 }
@@ -83,10 +83,10 @@ Z_WALL = 1270.0
 CW, CH, GX, GY = 560, 240, 600, 270
 CELLS = {
     "n5_battery": (0, 0), "op3_factory": (0, 1), "o5_cobots": (0, 2),
-    "n1_pharma": (1, 0), "op3_inspect": (1, 1), "n3_evline": (1, 2),
+    "n1_pharma": (1, 0), "op3_inspect_live": (1, 1), "n3_evline": (1, 2),
     "op3_monitor": (2, 0), "10_datacenter": (2, 1), "n4_office": (2, 2),
 }
-TARGET = "op3_inspect"
+TARGET = "op3_inspect_live"
 SCAN_FROM = (2, 0)             # the crosshair first settles on the office window...
 SCAN_MOVE, SCAN_MOVE_D = 3.6, 0.8   # ...then glides once to the target
 SCAN_LOCK = SCAN_MOVE + SCAN_MOVE_D
@@ -95,7 +95,11 @@ SCENE_T = 146 * 1001 / 24000
 # usable part (s) of each panel's clip (media reads 0.5 s in, so -0.5 is a clip's first frame). The new opening's
 # clips replace the old opening's s01 / s02 / s03 (client): the target window is the AI inspection (light, PASS);
 # two more panels without people (client): n2_warehouse -> o5_cobots, n6_server -> 10_datacenter
-CLIP_SPAN = {"op3_inspect": (-0.5, 1.78), "op3_factory": (-0.5, 3.2), "op3_monitor": (-0.5, 1.2)}
+CLIP_SPAN = {"op3_factory": (-0.5, 3.2), "op3_monitor": (-0.5, 1.2)}
+# the target window plays the inspection take at x0.75 from 1.35 s, so it never stops: the board comes in and stops,
+# the head comes down, the light and PASS are on as the crosshair locks (4.4 s), the head goes back up through the
+# hand-over into the next scene (seg_insight renders this scene on for its first frames)
+TARGET_T0, TARGET_RATE = 1.35, 0.75
 _DUR = {}
 
 
@@ -105,8 +109,10 @@ def clip_time(n, i, t):
         _DUR[n] = json.load(open(os.path.join(media.CLIP_DIR, n + ".json")))["dur"]
     if n == OPENER:                      # carries straight on from the previous cut at normal speed
         return min(OPENER_T0 + t, _DUR[n] - 1 / 24)
+    if n == TARGET:
+        return min(max(0.0, (t - TARGET_T0) * TARGET_RATE), _DUR[n] - 1 / 24) - 0.5
     a, b = CLIP_SPAN.get(n, (0.12 * (i % 4), _DUR[n] - 0.08))
-    return a + (b - a) * clamp(t / SCENE_T)
+    return a + (b - a) * max(0.0, t / SCENE_T)          # (runs on past the scene for seg_insight's hand-over)
 
 
 def cell_params(name):

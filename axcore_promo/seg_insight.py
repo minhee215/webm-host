@@ -62,6 +62,18 @@ def cover(c, img):
 _WHERE = {}
 
 
+def where_live(f):
+    """seg_where rendered on past its last frame (so its footage keeps playing under the hand-over)."""
+    t = (145 + f) * SW.DT
+    surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(int(W * SCV), int(H * SCV), skia.ColorType.kRGBA_8888_ColorType,
+                                                       skia.AlphaType.kPremul_AlphaType))
+    cc = surf.getCanvas()
+    cc.clear(skia.Color4f(0, 0, 0, 1))
+    cc.scale(SCV, SCV)
+    SW.render(cc, t)
+    return surf.makeImageSnapshot()
+
+
 def where_end():
     """seg_where's last frame (image) and its target-window centre."""
     if "img" not in _WHERE:
@@ -179,7 +191,8 @@ def draw_touch(c, f):
     ga = 1 - e_io_sine(ph(f, G_FADE))
     rb, gz = bracket_rect(f)
     if ga > 0:
-        img, tc = where_end()
+        tc = where_end()[1]
+        img = where_live(f + 1)
         c.save()
         c.translate(*tc)
         c.scale(gz, gz)

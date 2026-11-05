@@ -545,6 +545,10 @@
   "op3_logi": {
    "file": "hf_20261104_094636_05ea43cd-c636-4724-8b6c-4da8953a10c7.mp4",
    "note": "logistics shot of opening v3, 21:9 padded to 16:9 (source placed locally from prep_up2 x2)"
+  },
+  "op3_inspect_live": {
+   "file": "hf_20261105_030518_78956cf8-05f9-4af6-bd19-8d8f88bb1ac4.mp4",
+   "note": "the inspection take at its own pace with the widened light and PASS (prep_inspect dmax 999 + prep_up2), 21:9 on a blurred 16:9 fill; source placed locally"
   }
  }
 }

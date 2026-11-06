@@ -10,6 +10,7 @@
 forward -> forward (push in) -> push in, speeding up to the right -> trucking right. White / blue look.
 Sources: the generated clips (21:9, 720p) blown up x2 first (prep_up2: Lanczos + unsharp); the screen rendered at the
 output size. The edit grammar and look are edit_open's (no shutter blend: sharp frames).
+Env: AXP_FIRST_N=<frames> overrides the first shot's length; AXP_ONLY_SHOT=<index> renders only that shot.
 Usage: python3 edit_open3.py <factory_x2> <inspect_x2> <screen_x2> <logistics_x2> <out.mp4> [height=1440]
 """
 import os
@@ -36,6 +37,9 @@ SHOTS = [
     dict(key="logistics", a=0, n=57, speed=[(0, 1.0), (57, 1.0)], push=0.0, drift=0.0, v=0.50,
          b_in=0.0, b_out=0.0),
 ]
+if os.environ.get("AXP_FIRST_N"):              # first shot length override (e.g. a longer take of the humanoid aisle)
+    SHOTS[0]["n"] = int(os.environ["AXP_FIRST_N"])
+    SHOTS[0]["speed"] = [(0, 1.0), (SHOTS[0]["n"], 1.0)]
 EO.SHOTS = SHOTS
 
 
@@ -118,7 +122,10 @@ def main():
                             "-pix_fmt", "yuv420p", "-movflags", "+faststart", out], stdin=subprocess.PIPE)
     rng = np.random.default_rng(7)
     t = 0
+    only = os.environ.get("AXP_ONLY_SHOT")        # render just this shot (index), in the edit's grade
     for i, (s, st) in enumerate(zip(EO.SHOTS, sts)):
+        if only is not None and i != int(only):
+            continue
         c = EO.Clip(paths[s["key"]], work)
         for k in range(s["n"]):
             g = EO.grade(frame(c, i, s, k, W, Hb), st, tg)

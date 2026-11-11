@@ -84,7 +84,8 @@ const run = (cmd, argv, input) => new Promise((res, rej) => {
   console.log(`\nmaster written (${frames} frames)`);
 
   // VP9 WebM (2-pass, constrained quality)
-  const vp9 = ["-i", raw, "-c:v", "libvpx-vp9", "-b:v", "2600k", "-maxrate", "3800k", "-crf", "28",
+  const px = (W * H) / (1920 * 1080), kb = n => `${Math.round(n * Math.max(1, px))}k`;   // scale bitrate above 1080p
+  const vp9 = ["-i", raw, "-c:v", "libvpx-vp9", "-b:v", kb(2600), "-maxrate", kb(3800), "-crf", "28",
     "-row-mt", "1", "-deadline", "good", "-cpu-used", "2", "-pix_fmt", "yuv420p", "-an"];
   await run("ffmpeg", ["-v", "error", "-y", ...vp9, "-pass", "1", "-passlogfile", out, "-f", "webm", "/dev/null"]);
   await run("ffmpeg", ["-v", "error", "-y", ...vp9, "-pass", "2", "-passlogfile", out, out + ".webm"]);

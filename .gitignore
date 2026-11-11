@@ -1,3 +1,4 @@
 node_modules/
 *.master.mov
 *-0.log
+hero/src/assets/car-model.glb

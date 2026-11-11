@@ -27,6 +27,7 @@ import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js"
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 const QS = new URLSearchParams(location.search);
 const W = +(QS.get("w") || 1920), H = +(QS.get("h") || 1080), PI = Math.PI;
@@ -436,145 +437,77 @@ function buildPaperLine() {
   return { g, rollG, rollerMeshes, tex, rollers, tab, webMat };
 }
 
-// ---- full-size sedan in the spirit of The new GRANDEUR (front faces +X, right side +Z)
+// ---- real car model (assets/car-model.glb): glossy white paint, plates/badges hidden; tape paths are ray-cast onto the body
+const CAR_GLTF = await new GLTFLoader().loadAsync("assets/car-model.glb");
+{
+  const HIDE = /^(plate_01|plate_02|black_matt_24|chrome_02|chrome_11|silver_15|silver_16|silver_17|silver_14|silver_07|silver_08|silver_03)$/;
+  const pearl = phys({ color: "#f1f2f3", metalness: 0.05, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.06, sheen: 0.25, sheenColor: new THREE.Color("#dfe8f2") });
+  CAR_GLTF.scene.traverse(o => {
+    if (!o.isMesh) return;
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.transparent) { m.envMapIntensity = 0.35; m.roughness = Math.max(m.roughness, 0.12); } });
+    if (o.name === "Roof_glass") o.material = phys({ color: "#0c0f13", roughness: 0.35, transparent: true, opacity: 0.92, envMapIntensity: 0.25 });
+    if (HIDE.test(o.name)) { o.visible = false; return; }
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    o.material = Array.isArray(o.material) ? mats.map(m => m.name === "body" ? pearl : m) : (mats[0].name === "body" ? pearl : mats[0]);
+    o.userData.isBody = mats.some(m => m.name === "body");
+    o.userData.isGlassy = mats.some(m => m.transparent);
+  });
+}
 function buildCar() {
-  // conventional notchback sedan (hood / windshield / roof / rear glass / short trunk), silver paint
-  const C = new THREE.Group(); const L = 4.95;
-  const TOP = [[0,0.62],[0.05,0.72],[0.15,0.775],[0.5,0.81],[1.0,0.85],[1.45,0.885],[1.6,0.915],[1.85,1.07],[2.1,1.23],[2.35,1.35],[2.6,1.42],[2.9,1.445],[3.2,1.432],[3.5,1.375],[3.8,1.28],[4.1,1.18],[4.35,1.11],[4.55,1.09],[4.7,1.105],[4.82,1.095],[4.9,1.0],[4.95,0.75]];
-  const yTop = x => { x = clamp(x, 0, L); let i = 0; while (i < TOP.length - 2 && TOP[i + 1][0] < x) i++;
-    const p0 = TOP[Math.max(0, i - 1)], p1 = TOP[i], p2 = TOP[i + 1], p3 = TOP[Math.min(TOP.length - 1, i + 2)]; const q = (x - p1[0]) / (p2[0] - p1[0]), q2 = q * q, q3 = q2 * q;
-    return 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * q + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * q2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * q3); };
-  const FX = 0.95, RX = 3.80, WR = 0.42, WCY = 0.34;
-  const belt = x => lerp(0.95, 1.0, clamp((x - 1.6) / 2.4));
-  const yBot = x => { let y = 0.19; if (x < 0.3) y = 0.19 + 0.15 * (1 - x / 0.3) ** 2; if (x > 4.6) y = 0.19 + 0.25 * ((x - 4.6) / 0.35) ** 2;
-    for (const c of [FX, RX]) { const d = x - c; if (Math.abs(d) < WR) y = Math.max(y, WCY + Math.sqrt(WR * WR - d * d)); } return y; };
-  const halfW = x => { const tt = (x - L / 2) / (L / 2), t = Math.abs(tt); return 0.93 * Math.pow(Math.max(0, 1 - Math.pow(t, tt < 0 ? 6.5 : 4.5)), 0.3); };
-  const sm = (a, b, x) => { const k = clamp((x - a) / (b - a)); return k * k * (3 - 2 * k); };
-  function section(x) {
-    const w = halfW(x), yt = yTop(x), yb = Math.min(yBot(x), yt - 0.06), bl = belt(x);
-    const rb = Math.min(0.12, w * 0.4, (yt - yb) * 0.3), sideTop = Math.min(yt, bl), rs = Math.min(0.14, w * 0.35, (sideTop - yb) * 0.35);
-    const cabH = Math.max(0, yt - bl), wc0 = Math.max(0, w - rs), wr = wc0 * (1 - 0.24 * sm(0, 0.3, cabH)), rr = Math.min(0.1, cabH * 0.5, wr * 0.5);
-    const pts = []; const push = (z, y) => pts.push([Math.max(0, z), y]);
-    for (let i = 0; i < 3; i++) push(lerp(0, w - rb, i / 3), yb);
-    for (let i = 0; i < 4; i++) { const a = -PI / 2 + (i / 3) * PI / 2; push(w - rb + rb * Math.cos(a), yb + rb + rb * Math.sin(a)); }
-    for (let i = 1; i < 4; i++) push(w + 0.025 * Math.sin(PI * i / 4) * Math.min(1, w / 0.6), lerp(yb + rb, sideTop - rs, i / 4));
-    for (let i = 0; i < 4; i++) { const a = (i / 3) * PI / 2; push(w - rs + rs * Math.cos(a), sideTop - rs + rs * Math.sin(a)); }
-    for (let i = 1; i < 5; i++) push(lerp(wc0, wr, i / 5), lerp(sideTop, yt - rr, i / 5));
-    for (let i = 0; i < 3; i++) { const a = (i / 2) * PI / 2; push(wr - rr + rr * Math.cos(a), yt - rr + rr * Math.sin(a)); }
-    for (let i = 1; i <= 3; i++) push(lerp(wr - rr, 0, i / 3), yt);
-    return { pts, w, yt, yb, sideTop, cabH, wc0, wr, rr, rs };
-  }
-  const wx = x => L / 2 - x;
-  const archY = x => Math.abs(x - RX) < WR ? WCY + Math.sqrt(WR * WR - (x - RX) ** 2) : 0;
-  const NX = 260, xs = []; for (let i = 0; i <= NX; i++) xs.push(L * (0.5 - 0.5 * Math.cos(PI * i / NX)));
-  const secs = xs.map(section), HN = secs[0].pts.length;
-  const rings = xs.map((x, i) => { const s = secs[i]; return s.pts.map(([z, y]) => V(wx(x), y, z)).concat(s.pts.slice(1, -1).reverse().map(([z, y]) => V(wx(x), y, -z))); });
-  const Mn = rings[0].length, halfIdx = j => j < HN ? j : 2 * HN - 2 - j;
-  const pos = [], uvs = []; rings.forEach(r => r.forEach(p => { pos.push(p.x, p.y, p.z); uvs.push((p.z + 1) / 2, (p.y - 0.15) / 1.0); }));
-  // zones: 0 paint, 1 glass, 2 gloss black, 3 matte black, 4 grille, 5 headlamp, 6 tail lamp
-  const zones = [[], [], [], [], [], [], []], film = [];
-  const doorTop = x => belt(x) - 0.06;
-  for (let i = 0; i < NX; i++) for (let j = 0; j < Mn; j++) {
-    const a = i * Mn + j, b = i * Mn + (j + 1) % Mn, c = (i + 1) * Mn + j, d = (i + 1) * Mn + (j + 1) % Mn;
-    const p = rings[i][j], q = rings[i][(j + 1) % Mn];
-    const x = (xs[i] + xs[i + 1]) / 2, h = Math.min(halfIdx(j), halfIdx((j + 1) % Mn)), y = (p.y + q.y) / 2, z = (p.z + q.z) / 2, az = Math.abs(z);
-    let zn = 0;
-    if (h < 3) zn = 3;
-    else if (h < 10 && (y < 0.25 || (y < 0.37 && x > 1.35 && x < 3.4))) zn = 3;
-    else if (x < 0.62 && y < 0.785 && y > 0.18 && h >= 4) zn = 4;
-    else if (x > 4.55 && y > 0.18 && y < 1.08 && h >= 4 && h < 19) zn = 6;
-    else if (h >= 13 && h < 18 && x > 1.66 && x < 4.35 && secs[i].cabH > 0.05) zn = (x > 2.8 && x < 2.9) || (x > 3.75 && x < 3.95) ? 2 : 1;
-    else if (h >= 18 && x > 1.66 && x < 2.4) zn = 1;
-    else if (h >= 18 && x >= 2.4 && x < 4.38) zn = x < 3.4 ? 2 : 1;
-    zones[zn].push(a, b, c, b, d, c);
-    // protective film areas (as in the reference): hood, roof, near-side front & rear doors
-    if (zn === 0) {
-      const hood = x > 0.3 && x < 1.55 && h >= 12;
-      const roof = x > 2.42 && x < 3.42 && h >= 18;
-      const fdoor = z > 0 && h >= 7 && h < 12 && x > 1.7 && x < 2.86 && y > 0.42 && y < doorTop(x);
-      const rdoor = z > 0 && h >= 7 && h < 12 && x > 2.92 && x < 3.8 && y > 0.42 && y < doorTop(x) && y > archY(x) + 0.05 && !(x > 3.49 && y < 0.42 + (x - 3.49) * 1.6);
-      if (hood || roof || fdoor || rdoor) film.push(a, b, c, b, d, c);
+  const C = new THREE.Group();
+  const model = CAR_GLTF.scene.clone(true); model.rotation.y = PI / 2; C.add(model);   // model front (+Z) -> world +X, near side (model -X) -> world +Z
+  C.updateMatrixWorld(true);
+  const body = [], solid = [];
+  model.traverse(o => { if (!o.isMesh || !o.visible) return; if (o.userData.isBody) body.push(o); if (!/interior/.test(o.name)) solid.push(o); });
+  const rc = new THREE.Raycaster();
+  const hit = (origin, dir, list, off = 0.007) => { rc.set(origin, dir); const h = rc.intersectObjects(list, false)[0]; if (!h) return null;
+    const n = h.face.normal.clone().transformDirection(h.object.matrixWorld); if (n.dot(dir) > 0) n.negate(); return { p: h.point.clone().addScaledVector(n, off), n }; };
+  const side = (x, y) => hit(V(x, y, 3), V(0, 0, -1), body);          // near-side surface at world (x, y)
+  const top = (x, z, list = body) => hit(V(x, 3, z), V(0, -1, 0), list); // upper surface at world (x, z)
+  // a closed outline given as 2D vertices -> dense surface points + normals
+  const outline = (verts2d, cast, axis, step = 0.03) => { const pts = [], nrm = [];
+    for (let i = 0; i < verts2d.length - 1; i++) { const [a, b] = [verts2d[i], verts2d[i + 1]]; const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step));
+      for (let k = 0; k < n; k++) { const t = k / n, h = cast(lerp(a[0], b[0], t), lerp(a[1], b[1], t)); if (h) { pts.push(h.p); nrm.push(h.n); } } }
+    const last = verts2d[verts2d.length - 1], h = cast(last[0], last[1]); if (h) { pts.push(h.p); nrm.push(h.n); }
+    // smooth out seam gaps: median of the depth along the cast axis only (keeps the corners sharp)
+    const n = pts.length, med = a => a.slice().sort((p, q) => p - q)[a.length >> 1];
+    const sm = pts.map((p, i) => { const w = []; for (let k = -2; k <= 2; k++) w.push(pts[Math.min(n - 1, Math.max(0, i + k))][axis]); const q = p.clone(); q[axis] = med(w); return q; });
+    const smn = nrm.map((v, i) => { const c = new THREE.Vector3(); for (let k = -2; k <= 2; k++) c.add(nrm[Math.min(n - 1, Math.max(0, i + k))]); return c.normalize(); });
+    return { pts: sm, nrm: smn, poly: verts2d }; };
+  const belt = x => 1.115 + (0.95 - x) * 0.035;
+  const arc = (cx, cy, r, a0, a1, n) => smp(a0, a1, n, a => [cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+  const frontDoor = [[0.96, belt(0.96)], [-0.06, belt(-0.06)], [-0.02, 0.42], [0.96, 0.42], [0.96, belt(0.96)]];
+  const rearDoor = [[-0.1, belt(-0.1)], [-1.19, belt(-1.19)], [-1.1, 0.79], ...arc(-1.32, 0.37, 0.47, 1.08, 0.36, 10), [-0.86, 0.42], [-0.06, 0.42], [-0.1, belt(-0.1)]];
+  const hw = x => 0.7 - 0.13 * clamp((x - 1.9) / 0.3);
+  const hood = [[1.27, -hw(1.27)], ...smp(1.27, 2.18, 12, x => [x, hw(x)]).map(([x, z]) => [x, -z]).slice(1), ...smp(2.18, 1.27, 12, x => [x, hw(x)]), [1.27, -hw(1.27)]];
+  const roof = [[0.32, -0.5], [0.32, 0.5], [-1.25, 0.5], [-1.25, -0.5], [0.32, -0.5]];
+  const paths = {
+    frontDoor: outline(frontDoor, (x, y) => side(x, y), "z"),
+    rearDoor: outline(rearDoor, (x, y) => side(x, y), "z"),
+    hood: outline(hood, (x, z) => top(x, z), "y"),
+    roof: outline(roof, (x, z) => top(x, z, solid), "y"),
+  };
+  // protective film: copies of body triangles inside the hood and near-side door outlines, nudged off the paint
+  const inPoly = (u, v, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > v) !== (yj > v) && u < (xj - xi) * (v - yi) / (yj - yi) + xi) c = !c; } return c; };
+  const fpos = []; const A = new THREE.Vector3(), B = new THREE.Vector3(), Cc = new THREE.Vector3(), N = new THREE.Vector3(), G = new THREE.Vector3();
+  for (const m of body) {
+    const g = m.geometry, pa = g.attributes.position, idx = g.index; const cnt = idx ? idx.count : pa.count;
+    for (let i = 0; i < cnt; i += 3) {
+      const ia = idx ? idx.getX(i) : i, ib = idx ? idx.getX(i + 1) : i + 1, ic = idx ? idx.getX(i + 2) : i + 2;
+      A.fromBufferAttribute(pa, ia).applyMatrix4(m.matrixWorld); B.fromBufferAttribute(pa, ib).applyMatrix4(m.matrixWorld); Cc.fromBufferAttribute(pa, ic).applyMatrix4(m.matrixWorld);
+      G.copy(A).add(B).add(Cc).multiplyScalar(1 / 3); N.subVectors(B, A).cross(Cc.clone().sub(A)).normalize();
+      const sideFace = Math.abs(N.z) > 0.45 && G.z > 0.3 && (inPoly(G.x, G.y, frontDoor) || inPoly(G.x, G.y, rearDoor));
+      const topFace = Math.abs(N.y) > 0.55 && inPoly(G.x, G.z, hood);
+      if (!sideFace && !topFace) continue;
+      const o = (sideFace ? V(0, 0, 1) : V(0, 1, 0)).multiplyScalar(0.004);
+      for (const P of [A, B, Cc]) fpos.push(P.x + o.x, P.y + o.y, P.z + o.z);
     }
   }
-  const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); bg.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
-  bg.setIndex(zones.flat()); let off = 0; zones.forEach((zz, i) => { bg.addGroup(off, zz.length, i); off += zz.length; }); bg.computeVertexNormals();
-  const hexTex = canvasTex(256, 256, (g, w, hh) => { g.fillStyle = "#0d0f11"; g.fillRect(0, 0, w, hh); g.strokeStyle = "#4a5057"; g.lineWidth = 5;
-    const r = 18, dx = r * 1.5, dy = r * Math.sqrt(3); for (let cx = 0; cx < w + r; cx += dx) for (let cy = 0; cy < hh + dy; cy += dy) { const yy = cy + ((Math.round(cx / dx) % 2) ? dy / 2 : 0);
-      g.beginPath(); for (let k = 0; k <= 6; k++) { const an = k * PI / 3; g.lineTo(cx + r * Math.cos(an), yy + r * Math.sin(an)); } g.stroke(); } }, [6, 6]);
-  const paint = phys({ color: "#e3e5e7", metalness: 0.25, roughness: 0.32, clearcoat: 0.7, clearcoatRoughness: 0.15 });
-  const glass = phys({ color: "#0b0f13", roughness: 0.04, clearcoat: 1, specularIntensity: 0.6 });
-  const gloss = phys({ color: "#08090b", roughness: 0.15, clearcoat: 1 });
-  const matte = std({ color: "#17191c", roughness: 0.6 });
-  // front & rear fascias drawn in (z, y) space (v = (y - 0.15) / 1.0)
-  const Xc = (z, w) => (z + 1) / 2 * w, Yc = (y, hh) => (1 - (y - 0.15) / 1.0) * hh;
-  const PAINT = "#e3e5e7", BLK = "#111316";
-  const drawFront = (g, w, hh, glow) => { const X = z => Xc(z, w), Y = y => Yc(y, hh);
-    g.fillStyle = glow ? "#000" : PAINT; g.fillRect(0, 0, w, hh);
-    if (!glow) {
-      // black lower bumper with angular white blades at the corners
-      g.fillStyle = BLK; g.beginPath(); g.moveTo(X(-0.98), Y(0.47)); g.lineTo(X(0.98), Y(0.47)); g.lineTo(X(0.98), Y(0.15)); g.lineTo(X(-0.98), Y(0.15)); g.closePath(); g.fill();
-      g.fillStyle = PAINT; for (const s of [1, -1]) { g.beginPath(); g.moveTo(X(s * 0.98), Y(0.42)); g.lineTo(X(s * 0.74), Y(0.42)); g.lineTo(X(s * 0.56), Y(0.27)); g.lineTo(X(s * 0.98), Y(0.27)); g.closePath(); g.fill(); }
-      g.fillStyle = "#cfd3d7"; g.fillRect(X(-0.6), Y(0.205), X(0.6) - X(-0.6), 10);
-      // slim upper slot grille
-      g.fillStyle = BLK; g.beginPath(); g.roundRect(X(-0.36), Y(0.585), X(0.36) - X(-0.36), Y(0.55) - Y(0.585), 14); g.fill();
-      // corner lamp recesses
-      g.fillStyle = BLK; for (const s of [1, -1]) { g.beginPath(); g.moveTo(X(s * 0.6), Y(0.6)); g.lineTo(X(s * 0.86), Y(0.6)); g.lineTo(X(s * 0.86), Y(0.47)); g.lineTo(X(s * 0.68), Y(0.47)); g.closePath(); g.fill(); }
-    }
-    // full-width daytime light bar and pixel lamp slats
-    g.fillStyle = glow ? "#ffffff" : "#f4f8fc";
-    g.beginPath(); g.moveTo(X(-0.97), Y(0.665)); g.lineTo(X(-0.62), Y(0.695)); g.lineTo(X(0.62), Y(0.695)); g.lineTo(X(0.97), Y(0.665)); g.lineTo(X(0.97), Y(0.656)); g.lineTo(X(0.62), Y(0.686)); g.lineTo(X(-0.62), Y(0.686)); g.lineTo(X(-0.97), Y(0.656)); g.closePath(); g.fill();
-    for (const s of [1, -1]) for (let k = 0; k < 3; k++) { const y = 0.575 - k * 0.032; g.fillRect(Math.min(X(s * 0.7), X(s * 0.83)), Y(y), Math.abs(X(s * 0.83) - X(s * 0.7)), 9); }
-  };
-  const drawRear = (g, w, hh, glow) => { const X = z => Xc(z, w), Y = y => Yc(y, hh);
-    g.fillStyle = glow ? "#000" : PAINT; g.fillRect(0, 0, w, hh);
-    if (!glow) { g.fillStyle = BLK; g.fillRect(0, Y(0.5), w, Y(0.15) - Y(0.5)); g.fillStyle = "#cfd3d7"; g.fillRect(X(-0.7), Y(0.3), X(0.7) - X(-0.7), 8); }
-    g.fillStyle = glow ? "#ff3020" : "#a3130d";
-    g.fillRect(X(-0.84), Y(0.915), X(0.84) - X(-0.84), 9);
-    for (const s of [1, -1]) g.fillRect(Math.min(X(s * 0.86), X(s * 0.9)), Y(0.95), Math.abs(X(s * 0.9) - X(s * 0.86)), Y(0.7) - Y(0.95));
-    g.fillRect(X(-0.6), Y(0.43), X(0.6) - X(-0.6), 6);
-  };
-  const fasciaTex = canvasTex(2048, 2048, (g, w, hh) => drawFront(g, w, hh, false)), fasciaGlow = canvasTex(2048, 2048, (g, w, hh) => drawFront(g, w, hh, true));
-  const rearTex = canvasTex(2048, 2048, (g, w, hh) => drawRear(g, w, hh, false)), rearGlow = canvasTex(2048, 2048, (g, w, hh) => drawRear(g, w, hh, true));
-  const grille = phys({ map: fasciaTex, emissive: "#ffffff", emissiveMap: fasciaGlow, emissiveIntensity: 0.55, metalness: 0.25, roughness: 0.32, clearcoat: 0.7 });
-  const lamp = phys({ color: "#c9d1d9", metalness: 0.85, roughness: 0.12, clearcoat: 1, emissive: "#dfe9f3", emissiveIntensity: 0.12 });
-  const tail = phys({ map: rearTex, emissive: "#ffffff", emissiveMap: rearGlow, emissiveIntensity: 0.8, metalness: 0.25, roughness: 0.32, clearcoat: 0.7 });
-  const chrome = std({ color: "#d4d9de", metalness: 1, roughness: 0.18 });
-  C.add(new THREE.Mesh(bg, [paint, glass, gloss, matte, grille, lamp, tail]));
-  // white film overlay, nudged off the paint along the normals (faded in by the shot)
-  const nrm = bg.attributes.normal.array, fpos = new Float32Array(pos.length); for (let k = 0; k < pos.length; k++) fpos[k] = pos[k] + nrm[k] * 0.004;
-  const fg = new THREE.BufferGeometry(); fg.setAttribute("position", new THREE.BufferAttribute(fpos, 3)); fg.setAttribute("normal", bg.attributes.normal); fg.setIndex(film);
-  const filmMat = phys({ color: "#d4e3ef", roughness: 0.3, clearcoat: 0.8, transparent: true, opacity: 0, depthWrite: false });
+  const fg = new THREE.BufferGeometry(); fg.setAttribute("position", new THREE.Float32BufferAttribute(fpos, 3)); fg.computeVertexNormals();
+  const filmMat = phys({ color: "#cfe0f2", roughness: 0.25, clearcoat: 0.8, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
   C.add(new THREE.Mesh(fg, filmMat));
-  const sideZ = (x, y) => { const P = section(x).pts.slice(3, 15); for (let i = 0; i < P.length - 1; i++) { const [z0, y0] = P[i], [z1, y1] = P[i + 1]; if ((y - y0) * (y - y1) <= 0 && y1 !== y0) return lerp(z0, z1, (y - y0) / (y1 - y0)); } return P[0][0]; };
-  const sp = (x, y, s = 1, o = 0.004) => V(wx(x), y, s * (sideZ(x, y) + o));
-  const roofEdge = (x, s, o = 0.006) => { const q = section(x).pts[18]; return V(wx(x), q[1] + o, s * (q[0] + o)); };
-  const hoodEdge = (x, s, o = 0.006) => { const q = section(x).pts[12]; return V(wx(x), q[1] + o, s * (q[0] + o * 0.5)); };
-  // surface path straight across the top between the two edges (from section point k inward)
-  const across = (x, k, o = 0.008) => { const R = section(x).pts.slice(k).map(([z, y]) => V(wx(x), y + o, z)); return R.map(v => V(v.x, v.y, -v.z)).concat(R.slice(0, -1).reverse()); };
-  for (const s of [1, -1]) {
-    C.add(tubeAlong(smp(1.70, 4.3, 60, x => { const q = section(x); return V(wx(x), q.sideTop + 0.004, s * (q.wc0 + 0.006)); }), 0.006, gloss));
-    C.add(tubeAlong(smp(1.62, 3.42, 40, x => sp(x, lerp(0.43, 0.7, (x - 1.62) / 1.8), s, 0.003)), 0.004, std({ color: "#b9bdc2", roughness: 0.4 })));
-    for (const dx of [1.68, 2.88]) C.add(tubeAlong(smp(0.36, belt(dx) - 0.03, 12, y => sp(dx, y, s, 0.002)), 0.0028, matte));
-    C.add(tubeAlong(smp(0.24, 1.58, 30, x => hoodEdge(x, s, 0.002)), 0.0026, matte));
-    for (const hx of [2.5, 3.55]) { const hm = rbox(0.15, 0.022, 0.012, 0.008, std({ color: "#c7cbd0", roughness: 0.35 })); hm.position.copy(sp(hx, 0.86, s, 0.004)); C.add(hm); }
-    const mx = 1.78, mg = new THREE.SphereGeometry(1, 28, 16); mg.scale(0.13, 0.075, 0.1);
-    const mir = new THREE.Mesh(mg, gloss); mir.position.set(wx(mx) - 0.03, belt(mx) + 0.07, s * (halfW(mx) + 0.1)); C.add(mir);
-    const mbase = rbox(0.09, 0.045, 0.12, 0.015, gloss); mbase.position.set(wx(mx) - 0.01, belt(mx) + 0.025, s * (halfW(mx) + 0.02)); C.add(mbase);
-  }
-  // wheels: tyre + bright 10-spoke alloy
-  const tireGeo = new THREE.LatheGeometry([[0.245, -0.115], [0.3, -0.12], [0.327, -0.11], [0.338, -0.068], [0.34, 0], [0.338, 0.068], [0.327, 0.11], [0.3, 0.12], [0.245, 0.115]].map(([r, y]) => new THREE.Vector2(r, y)), 72); tireGeo.rotateX(PI / 2);
-  const alloy = std({ color: "#d3d7dc", metalness: 1, roughness: 0.2 }), hub = std({ color: "#1b1d20", metalness: 0.6, roughness: 0.4 });
-  for (const cx of [FX, RX]) for (const s of [1, -1]) {
-    const wg = new THREE.Group(); wg.position.set(wx(cx), WCY, s * (halfW(cx) - 0.15)); C.add(wg);
-    wg.add(new THREE.Mesh(tireGeo, std({ color: "#151617", roughness: 0.85 })));
-    const well = new THREE.Mesh(new THREE.CircleGeometry(0.24, 40), hub); well.position.z = 0.04 * s; if (s < 0) well.rotation.y = PI; wg.add(well);
-    const lip = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.012, 10, 64), alloy); lip.position.z = 0.1 * s; wg.add(lip);
-    for (let i = 0; i < 5; i++) for (const d of [-1, 1]) { const sp2 = box(0.034, 0.19, 0.022, alloy); const pv = new THREE.Group(); pv.rotation.z = i / 5 * PI * 2 + d * 0.13; pv.position.z = 0.09 * s; sp2.position.y = 0.13; sp2.rotation.z = -d * 0.1; pv.add(sp2);
-      const back = box(0.02, 0.18, 0.024, hub); back.position.set(0, 0.13, -0.004 * s); pv.add(back); wg.add(pv); }
-    const cap = cyl(0.055, 0.03, alloy, 32); cap.rotation.x = PI / 2; cap.position.z = 0.095 * s; wg.add(cap);
-  }
-  C.add(contactShadow(6.2, 3.0, 0.8));
-  return { C, L, wx, section, sp, roofEdge, hoodEdge, across, belt, halfW, yTop, WCY, WR, RX, filmMat };
+  C.add(contactShadow(5.8, 2.7, 0.8));
+  return { C, filmMat, paths };
 }
 
 // ---- machining bed + jig plate + material + spindle
@@ -729,58 +662,38 @@ shot(2.0, g => {
 
 /* car tape factory: ribbons that fade in hovering above the body, then press onto it */
 function carTapes(K, defs) {
-  return defs.map(([pts, nrm, dir]) => { const r = ribbon(pts, nrm, 0.036, 0.004, M.tape.clone()); const grp = new THREE.Group(); grp.add(r); K.C.add(grp); return { grp, dir: dir.clone().normalize(), fade: fadable(grp) }; });
+  return defs.map(([path, dir]) => { const r = ribbon(path.pts, i => path.nrm[i], 0.034, 0.004, M.tape.clone()); const grp = new THREE.Group(); grp.add(r); K.C.add(grp); return { grp, dir: dir.clone().normalize(), fade: fadable(grp) }; });
 }
 function driveTapes(list, u, t0) {
   const p = eOutCubic(seg(u, t0 + 0.06, t0 + 0.42)), a = eOut(seg(u, t0, t0 + 0.12)) * lerp(0.35, 1, p);
   list.forEach(o => { o.fade(a); o.grp.position.copy(o.dir).multiplyScalar(0.2 * (1 - p)); });
 }
-// rear door: its trailing edge sweeps down and wraps around the rear wheel arch
-const rearDoorPath = K => {
-  const top = x => K.belt(x) - 0.06, arch = x => K.WCY + Math.sqrt(Math.max(0, K.WR * K.WR - (x - K.RX) ** 2)) + 0.045;
-  return [].concat(
-    smp(2.92, 3.78, 24, x => K.sp(x, top(x))),
-    smp(0, 1, 14, k => { const x = lerp(3.78, 3.43, eInOutSine(k)); return K.sp(x, lerp(top(3.78), arch(3.43), k)); }),
-    smp(3.43, 3.392, 6, x => K.sp(x, arch(x))),
-    smp(arch(3.392), 0.42, 4, y => K.sp(3.392, y)),
-    smp(3.392, 2.92, 18, x => K.sp(x, 0.42)),
-    smp(0.42, top(2.92), 8, y => K.sp(2.92, y)));
-};
-const doorPath = (K, a, b) => [].concat(smp(a, b, 24, x => K.sp(x, K.belt(x) - 0.06)), smp(K.belt(b) - 0.06, 0.42, 8, y => K.sp(b, y)), smp(b, a, 24, x => K.sp(x, 0.42)), smp(0.42, K.belt(a) - 0.06, 8, y => K.sp(a, y)));
 
 /* 07 · 자동차 — 정면에서 3/4로 도는 오빗, 테이프가 페이드 인 후 차체에 부착 */
 shot(3.6, g => {
   const K = buildCar(); g.add(K.C);
-  const sideN = () => V(0, 0.12, 1), topN = () => V(0, 1, 0.35);
-  const T = carTapes(K, [
-    [doorPath(K, 1.70, 2.86), sideN, V(0, 0.05, 1)],
-    [rearDoorPath(K), sideN, V(0, 0.05, 1)],
-    [[].concat(smp(0.3, 1.55, 36, x => K.hoodEdge(x, 1, 0.008)), K.across(1.55, 12).reverse(), smp(1.55, 0.3, 36, x => K.hoodEdge(x, -1, 0.008)), K.across(0.3, 12)), () => V(0, 1, 0), V(0, 1, 0.2)],
-    [[].concat(smp(2.42, 3.42, 36, x => K.roofEdge(x, 1, 0.008)), K.across(3.42, 18).reverse(), smp(3.42, 2.42, 36, x => K.roofEdge(x, -1, 0.008)), K.across(2.42, 18)), () => V(0, 1, 0), V(0, 1, 0.2)],
-  ]);
-  const c = V(0.3, 0.6, 0.1);
+  const T = carTapes(K, [[K.paths.frontDoor, V(0, 0.05, 1)], [K.paths.rearDoor, V(0, 0.05, 1)], [K.paths.hood, V(0, 1, 0.2)], [K.paths.roof, V(0, 1, 0.2)]]);
+  const c = V(0.25, 0.8, 0.1);
   return { update(u) {
-    driveTapes(T, u, 0.3); K.filmMat.opacity = 0.95 * eOutCubic(seg(u, 0.38, 0.72));
-    camOrbit(c, 16, 52, 12, 18, 7.3, 6.4, flow(u), 30);
-    lights(V(4, 1.2, 6), V(-3, 1.5, 3), V(-4, 1.5, -4), 0.85, 0.4, 0.5, 0.2);
-    dof(V(1.2, 0.7, 1.0), 0.0012, 0.005);
+    driveTapes(T, u, 0.3); K.filmMat.opacity = 0.55 * eOutCubic(seg(u, 0.38, 0.72));
+    camOrbit(c, 16, 52, 12, 18, 7.6, 6.7, flow(u), 30);
+    lights(V(4, 3, 6), V(-3, 1.5, 3), V(-4, 2, -4), 1.0, 0.45, 0.8, 0.35);
+    dof(V(1.0, 0.9, 1.0), 0.0012, 0.005);
   } };
 });
 
 /* 08 · 자동차 매크로 — 도어 라인을 따라가는 측면 트래킹 */
 shot(2.4, g => {
   const K = buildCar(); g.add(K.C);
-  const a = 1.70, b = 2.86;
-  const pts = [].concat(smp(K.belt(b) - 0.06, 0.4, 20, y => K.sp(b, y)), smp(b, a, 30, x => K.sp(x, 0.4)));
-  const T = carTapes(K, [[pts, () => V(0, 0.1, 1), V(0, 0.05, 1)]]);
-  const fx = K.sp(b, 0.62).x;
+  const T = carTapes(K, [[K.paths.frontDoor, V(0, 0.05, 1)], [K.paths.rearDoor, V(0, 0.05, 1)]]);
+  const fx = -0.04;
   return { update(u) {
-    driveTapes(T, u, 0.14); K.filmMat.opacity = 0.95 * eOutCubic(seg(u, 0.2, 0.56));
+    driveTapes(T, u, 0.14); K.filmMat.opacity = 0.55 * eOutCubic(seg(u, 0.2, 0.56));
     const f = flow(u);
-    camera.position.copy(vlerp(V(fx - 1.0, 0.8, 1.6), V(fx + 0.55, 0.72, 1.5), f)); camera.fov = 40; camera.updateProjectionMatrix();
-    const tg = vlerp(V(fx - 0.15, 0.55, 0.95), V(fx + 0.75, 0.48, 0.95), f); camera.lookAt(tg);
-    lights(V(2, 2, 6), V(-3, 1, 3), V(-2, 1.5, -3), 1.0, 0.4, 0.6, 0.28);
-    dof(V(fx, 0.55, 0.95), 0.012, 0.012);
+    camera.position.copy(vlerp(V(fx - 1.0, 0.95, 2.1), V(fx + 0.6, 0.85, 2.0), f)); camera.fov = 40; camera.updateProjectionMatrix();
+    const tg = vlerp(V(fx - 0.15, 0.62, 0.95), V(fx + 0.7, 0.55, 0.95), f); camera.lookAt(tg);
+    lights(V(2, 3, 6), V(-3, 1, 3), V(-2, 1.5, -3), 1.0, 0.4, 0.6, 0.35);
+    dof(V(fx, 0.6, 0.95), 0.012, 0.012);
   } };
 });
 

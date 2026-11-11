@@ -1,7 +1,7 @@
 // Frame-accurate renderer: drives window.renderFrame(t) in headless Chromium and
 // pipes PNG frames into ffmpeg.
 //
-//   node render.js <scene.html> <out-basename> [--fps=30] [--w=854 --h=480]
+//   node render.js <scene.html> <out-basename> [--fps=30] [--w=854 --h=480] [--from=0 --to=3.6] [--bg=light]
 //   node render.js <scene.html> <out-dir> --stills=0.5,2,4   (PNG stills only)
 //
 // Produces <out>.webm (VP9) and <out>.mp4 (H.264, for Safari/iOS) plus <out>-poster.jpg.
@@ -42,6 +42,7 @@ const run = (cmd, argv, input) => new Promise((res, rej) => {
   const q = new URLSearchParams();
   if (opt.w) q.set("w", opt.w);
   if (opt.h) q.set("h", opt.h);
+  if (opt.bg) q.set("bg", opt.bg);
   const root = path.dirname(path.resolve(scene));
   const srv = await serve(root);
   const url = `http://127.0.0.1:${srv.address().port}/${path.basename(scene)}?${q}`;
@@ -65,13 +66,14 @@ const run = (cmd, argv, input) => new Promise((res, rej) => {
     return;
   }
 
-  const frames = Math.round(dur * FPS);
+  const t0 = +(opt.from || 0), t1 = Math.min(dur, +(opt.to || dur));
+  const frames = Math.round((t1 - t0) * FPS);
   const raw = out + ".master.mov";
   const ff = spawn("ffmpeg", ["-v", "error", "-y", "-f", "image2pipe", "-framerate", String(FPS), "-i", "-",
     "-c:v", "qtrle", raw], { stdio: ["pipe", "inherit", "inherit"] });
   const done = new Promise((res, rej) => ff.on("exit", c => (c === 0 ? res() : rej(new Error("ffmpeg " + c)))));
   for (let i = 0; i < frames; i++) {
-    await page.evaluate(t => window.renderFrame(t), i / FPS);
+    await page.evaluate(t => window.renderFrame(t), t0 + i / FPS);
     const buf = await page.screenshot({ type: "png" });
     if (!ff.stdin.write(buf)) await new Promise(r => ff.stdin.once("drain", r));
     if (i % 30 === 0) process.stdout.write(`frame ${i}/${frames}\r`);
@@ -90,7 +92,7 @@ const run = (cmd, argv, input) => new Promise((res, rej) => {
   await run("ffmpeg", ["-v", "error", "-y", "-i", raw, "-c:v", "libx264", "-preset", "slow", "-crf", "24",
     "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-an", out + ".mp4"]);
   // poster = fully-revealed frame
-  await run("ffmpeg", ["-v", "error", "-y", "-ss", String(Math.max(0, dur - 1.2)), "-i", raw,
+  await run("ffmpeg", ["-v", "error", "-y", "-ss", String(Math.max(0, (t1 - t0) - 1.2)), "-i", raw,
     "-frames:v", "1", "-q:v", "3", out + "-poster.jpg"]);
   for (const f of fs.readdirSync(path.dirname(out)))
     if (f.startsWith(path.basename(out)) && f.endsWith(".log")) fs.unlinkSync(path.join(path.dirname(out), f));

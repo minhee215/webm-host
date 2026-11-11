@@ -90,6 +90,38 @@ const grad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMater
       gl_FragColor = vec4(c, 1.); }`,
 }));
 grad.renderOrder = -10; grad.frustumCulled = false; bgScene.add(grad);
+// optional bright brand-blue background (?bg=light): gradient + flowing light ribbons + sparkles + soft bubbles
+if (QS.get("bg") === "light") grad.material = new THREE.ShaderMaterial({
+  depthWrite: false, depthTest: false, uniforms: bgU,
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.9999, 1.); }`,
+  fragmentShader: `uniform float uT; varying vec2 vUv;
+    float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+    vec3 lin(vec3 c){ return pow(c, vec3(2.2)); }
+    void main(){ vec2 p = vUv;
+      vec3 deep = lin(vec3(0.0, 0.43, 0.73)), sky = lin(vec3(0.47, 0.77, 0.93)), mint = lin(vec3(0.58, 0.87, 0.9));
+      float g = smoothstep(-0.05, 1.05, p.x * 0.5 + (1.0 - p.y) * 0.62);
+      vec3 c = mix(deep, sky, g);
+      c = mix(c, mint, 0.22 * smoothstep(0.45, 1.0, 1.0 - p.y) * smoothstep(0.75, 0.0, p.x));
+      // flowing silk-like light ribbons
+      for (int i = 0; i < 3; i++) { float fi = float(i);
+        float y0 = 0.27 + fi * 0.06 + 0.05 * sin(p.x * 2.1 + uT * 0.22 + fi * 1.9) + 0.22 * (p.x - 0.45) * (1.0 + fi * 0.25);
+        float d = p.y - y0; float core = exp(-d * d * (14000.0 / (1.0 + fi * 1.5))); float haze = exp(-d * d * 220.0);
+        float fx = smoothstep(-0.1, 0.55, p.x);
+        c += vec3(1.0) * (core * 0.28 + haze * 0.07) * fx * (1.0 - fi * 0.28); }
+      // soft light rising from the bottom
+      vec2 b = (p - vec2(0.42, -0.06)) * vec2(1.1, 2.0); c += vec3(0.85, 0.95, 1.0) * exp(-dot(b, b) * 2.6) * 0.18;
+      // drifting translucent bubbles
+      for (int i = 0; i < 4; i++) { float fi = float(i);
+        vec2 ctr = vec2(fract(0.12 + fi * 0.29 + uT * (0.006 + fi * 0.002)), 0.18 + fract(fi * 0.37) * 0.7 + 0.02 * sin(uT * 0.4 + fi));
+        float r = 0.04 + 0.05 * fract(fi * 0.61); float dd = length((p - ctr) * vec2(1.78, 1.0));
+        float body = smoothstep(r, r - 0.006, dd); float rim = exp(-pow((dd - r) * 140.0, 2.0));
+        c += vec3(1.0) * (body * (0.025 + 0.05 * smoothstep(r * 0.3, r, dd)) + rim * 0.05); }
+      // twinkling sparkles
+      vec2 gp = p * vec2(160.0, 90.0); vec2 id = floor(gp); vec2 f = fract(gp) - 0.5; float rnd = h(id);
+      if (rnd > 0.982) { float tw = 0.5 + 0.5 * sin(uT * 2.6 + rnd * 80.0); c += vec3(1.0) * exp(-dot(f, f) * 45.0) * tw * 0.3 * smoothstep(0.0, 0.8, 1.15 - p.y); }
+      c += (h(p * 913.0 + uT) - 0.5) * 0.004;
+      gl_FragColor = vec4(c, 1.); }`,
+});
 const wave = new THREE.Mesh(new THREE.PlaneGeometry(44, 34, 220, 170).rotateX(-PI / 2), new THREE.ShaderMaterial({
   transparent: true, depthWrite: false, uniforms: { uT: bgU.uT, uA: { value: 0.16 } },
   vertexShader: `uniform float uT; varying vec3 vW; varying vec2 vP;

@@ -440,7 +440,7 @@ function buildPaperLine() {
 function buildCar() {
   // conventional notchback sedan (hood / windshield / roof / rear glass / short trunk), silver paint
   const C = new THREE.Group(); const L = 4.95;
-  const TOP = [[0,0.6],[0.05,0.7],[0.15,0.765],[0.5,0.805],[1.0,0.85],[1.45,0.9],[1.6,0.93],[1.85,1.08],[2.1,1.25],[2.35,1.37],[2.6,1.43],[2.9,1.452],[3.2,1.44],[3.5,1.38],[3.75,1.26],[3.95,1.12],[4.1,1.05],[4.4,1.03],[4.7,1.02],[4.86,0.99],[4.93,0.9],[4.95,0.72]];
+  const TOP = [[0,0.62],[0.05,0.72],[0.15,0.775],[0.5,0.81],[1.0,0.85],[1.45,0.885],[1.6,0.915],[1.85,1.07],[2.1,1.23],[2.35,1.35],[2.6,1.42],[2.9,1.445],[3.2,1.432],[3.5,1.375],[3.8,1.28],[4.1,1.18],[4.35,1.11],[4.55,1.09],[4.7,1.105],[4.82,1.095],[4.9,1.0],[4.95,0.75]];
   const yTop = x => { x = clamp(x, 0, L); let i = 0; while (i < TOP.length - 2 && TOP[i + 1][0] < x) i++;
     const p0 = TOP[Math.max(0, i - 1)], p1 = TOP[i], p2 = TOP[i + 1], p3 = TOP[Math.min(TOP.length - 1, i + 2)]; const q = (x - p1[0]) / (p2[0] - p1[0]), q2 = q * q, q3 = q2 * q;
     return 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * q + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * q2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * q3); };
@@ -470,7 +470,7 @@ function buildCar() {
   const secs = xs.map(section), HN = secs[0].pts.length;
   const rings = xs.map((x, i) => { const s = secs[i]; return s.pts.map(([z, y]) => V(wx(x), y, z)).concat(s.pts.slice(1, -1).reverse().map(([z, y]) => V(wx(x), y, -z))); });
   const Mn = rings[0].length, halfIdx = j => j < HN ? j : 2 * HN - 2 - j;
-  const pos = [], uvs = []; rings.forEach(r => r.forEach(p => { pos.push(p.x, p.y, p.z); uvs.push((p.z + 1) / 2, (p.y - 0.2) / 0.6); }));
+  const pos = [], uvs = []; rings.forEach(r => r.forEach(p => { pos.push(p.x, p.y, p.z); uvs.push((p.z + 1) / 2, (p.y - 0.15) / 1.0); }));
   // zones: 0 paint, 1 glass, 2 gloss black, 3 matte black, 4 grille, 5 headlamp, 6 tail lamp
   const zones = [[], [], [], [], [], [], []], film = [];
   const doorTop = x => belt(x) - 0.06;
@@ -480,11 +480,12 @@ function buildCar() {
     const x = (xs[i] + xs[i + 1]) / 2, h = Math.min(halfIdx(j), halfIdx((j + 1) % Mn)), y = (p.y + q.y) / 2, z = (p.z + q.z) / 2, az = Math.abs(z);
     let zn = 0;
     if (h < 3) zn = 3;
-    else if (h < 10 && y < 0.25) zn = 3;
-    else if (x < 0.62 && y < 0.775 && y > 0.2 && h >= 4) zn = 4;
-    else if (x > 4.6 && y > 0.87 && y < 0.97 && h >= 7) zn = 6;
-    else if (h >= 13 && h < 18 && x > 1.66 && x < 3.98 && secs[i].cabH > 0.05) zn = (x > 2.8 && x < 2.9) ? 2 : 1;
-    else if (h >= 18 && ((x > 1.66 && x < 2.4) || (x > 3.46 && x < 4.02))) zn = 1;
+    else if (h < 10 && (y < 0.25 || (y < 0.37 && x > 1.35 && x < 3.4))) zn = 3;
+    else if (x < 0.62 && y < 0.785 && y > 0.18 && h >= 4) zn = 4;
+    else if (x > 4.55 && y > 0.18 && y < 1.08 && h >= 4 && h < 19) zn = 6;
+    else if (h >= 13 && h < 18 && x > 1.66 && x < 4.35 && secs[i].cabH > 0.05) zn = (x > 2.8 && x < 2.9) || (x > 3.75 && x < 3.95) ? 2 : 1;
+    else if (h >= 18 && x > 1.66 && x < 2.4) zn = 1;
+    else if (h >= 18 && x >= 2.4 && x < 4.38) zn = x < 3.4 ? 2 : 1;
     zones[zn].push(a, b, c, b, d, c);
     // protective film areas (as in the reference): hood, roof, near-side front & rear doors
     if (zn === 0) {
@@ -500,40 +501,49 @@ function buildCar() {
   const hexTex = canvasTex(256, 256, (g, w, hh) => { g.fillStyle = "#0d0f11"; g.fillRect(0, 0, w, hh); g.strokeStyle = "#4a5057"; g.lineWidth = 5;
     const r = 18, dx = r * 1.5, dy = r * Math.sqrt(3); for (let cx = 0; cx < w + r; cx += dx) for (let cy = 0; cy < hh + dy; cy += dy) { const yy = cy + ((Math.round(cx / dx) % 2) ? dy / 2 : 0);
       g.beginPath(); for (let k = 0; k <= 6; k++) { const an = k * PI / 3; g.lineTo(cx + r * Math.cos(an), yy + r * Math.sin(an)); } g.stroke(); } }, [6, 6]);
-  const paint = phys({ color: "#b3b8be", metalness: 0.6, roughness: 0.36, clearcoat: 0.5, clearcoatRoughness: 0.25 });
+  const paint = phys({ color: "#e3e5e7", metalness: 0.25, roughness: 0.32, clearcoat: 0.7, clearcoatRoughness: 0.15 });
   const glass = phys({ color: "#0b0f13", roughness: 0.04, clearcoat: 1, specularIntensity: 0.6 });
   const gloss = phys({ color: "#08090b", roughness: 0.15, clearcoat: 1 });
   const matte = std({ color: "#17191c", roughness: 0.6 });
-  // front fascia drawn in (z, y) space: paint, wide hex grille, swept headlamps, lower intake, chrome strip
-  const fasciaTex = canvasTex(2048, 1024, (g, w, hh) => {
-    const X = z => (z + 1) / 2 * w, Y = y => (1 - (y - 0.2) / 0.6) * hh;
-    g.fillStyle = "#b3b8be"; g.fillRect(0, 0, w, hh);
-    const hexRow = (x0, y0, x1, y1) => { g.save(); g.clip(); g.fillStyle = "#0d0f11"; g.fillRect(x0, y0, x1 - x0, y1 - y0); g.strokeStyle = "#5a6068"; g.lineWidth = 4;
-      const r = 16, dx = r * 1.5, dy = r * Math.sqrt(3); for (let cx = x0; cx < x1 + r; cx += dx) for (let cy = y0; cy < y1 + dy; cy += dy) { const yy = cy + ((Math.round((cx - x0) / dx) % 2) ? dy / 2 : 0);
-        g.beginPath(); for (let k = 0; k <= 6; k++) { const an = k * PI / 3; g.lineTo(cx + r * Math.cos(an), yy + r * Math.sin(an)); } g.stroke(); } g.restore(); };
-    // main grille (trapezoid, rounded)
-    g.beginPath(); g.moveTo(X(-0.46), Y(0.6)); g.lineTo(X(0.46), Y(0.6)); g.quadraticCurveTo(X(0.52), Y(0.6), X(0.5), Y(0.55)); g.lineTo(X(0.43), Y(0.36)); g.quadraticCurveTo(X(0.41), Y(0.33), X(0.36), Y(0.33));
-    g.lineTo(X(-0.36), Y(0.33)); g.quadraticCurveTo(X(-0.41), Y(0.33), X(-0.43), Y(0.36)); g.lineTo(X(-0.5), Y(0.55)); g.quadraticCurveTo(X(-0.52), Y(0.6), X(-0.46), Y(0.6)); g.closePath();
-    hexRow(X(-0.6), Y(0.62), X(0.6), Y(0.3));
-    g.strokeStyle = "#dfe3e7"; g.lineWidth = 7; g.stroke();
-    // headlamps sweeping to the corners
-    for (const s of [1, -1]) { g.beginPath(); g.moveTo(X(s * 0.53), Y(0.655)); g.lineTo(X(s * 0.95), Y(0.705)); g.lineTo(X(s * 0.97), Y(0.66)); g.quadraticCurveTo(X(s * 0.8), Y(0.6), X(s * 0.56), Y(0.6)); g.closePath();
-      const lg = g.createLinearGradient(X(s * 0.53), 0, X(s * 0.97), 0); lg.addColorStop(0, "#20252b"); lg.addColorStop(0.5, "#c6cfd8"); lg.addColorStop(1, "#59626b"); g.fillStyle = lg; g.fill();
-      g.strokeStyle = "#f2f6fa"; g.lineWidth = 5; g.beginPath(); g.moveTo(X(s * 0.58), Y(0.648)); g.lineTo(X(s * 0.93), Y(0.69)); g.stroke(); }
-    // lower intake + fog recesses + chrome strip
-    g.beginPath(); g.moveTo(X(-0.5), Y(0.29)); g.lineTo(X(0.5), Y(0.29)); g.lineTo(X(0.44), Y(0.235)); g.lineTo(X(-0.44), Y(0.235)); g.closePath(); hexRow(X(-0.6), Y(0.3), X(0.6), Y(0.22));
-    for (const s of [1, -1]) { g.fillStyle = "#16181b"; g.beginPath(); g.ellipse(X(s * 0.68), Y(0.31), 70, 34, 0, 0, 7); g.fill(); }
-    g.fillStyle = "#e3e7eb"; g.fillRect(X(-0.48), Y(0.297), X(0.48) - X(-0.48), 7);
-  });
-  const grille = std({ map: fasciaTex, metalness: 0.55, roughness: 0.38 });
+  // front & rear fascias drawn in (z, y) space (v = (y - 0.15) / 1.0)
+  const Xc = (z, w) => (z + 1) / 2 * w, Yc = (y, hh) => (1 - (y - 0.15) / 1.0) * hh;
+  const PAINT = "#e3e5e7", BLK = "#111316";
+  const drawFront = (g, w, hh, glow) => { const X = z => Xc(z, w), Y = y => Yc(y, hh);
+    g.fillStyle = glow ? "#000" : PAINT; g.fillRect(0, 0, w, hh);
+    if (!glow) {
+      // black lower bumper with angular white blades at the corners
+      g.fillStyle = BLK; g.beginPath(); g.moveTo(X(-0.98), Y(0.47)); g.lineTo(X(0.98), Y(0.47)); g.lineTo(X(0.98), Y(0.15)); g.lineTo(X(-0.98), Y(0.15)); g.closePath(); g.fill();
+      g.fillStyle = PAINT; for (const s of [1, -1]) { g.beginPath(); g.moveTo(X(s * 0.98), Y(0.42)); g.lineTo(X(s * 0.74), Y(0.42)); g.lineTo(X(s * 0.56), Y(0.27)); g.lineTo(X(s * 0.98), Y(0.27)); g.closePath(); g.fill(); }
+      g.fillStyle = "#cfd3d7"; g.fillRect(X(-0.6), Y(0.205), X(0.6) - X(-0.6), 10);
+      // slim upper slot grille
+      g.fillStyle = BLK; g.beginPath(); g.roundRect(X(-0.36), Y(0.585), X(0.36) - X(-0.36), Y(0.55) - Y(0.585), 14); g.fill();
+      // corner lamp recesses
+      g.fillStyle = BLK; for (const s of [1, -1]) { g.beginPath(); g.moveTo(X(s * 0.6), Y(0.6)); g.lineTo(X(s * 0.86), Y(0.6)); g.lineTo(X(s * 0.86), Y(0.47)); g.lineTo(X(s * 0.68), Y(0.47)); g.closePath(); g.fill(); }
+    }
+    // full-width daytime light bar and pixel lamp slats
+    g.fillStyle = glow ? "#ffffff" : "#f4f8fc";
+    g.beginPath(); g.moveTo(X(-0.97), Y(0.665)); g.lineTo(X(-0.62), Y(0.695)); g.lineTo(X(0.62), Y(0.695)); g.lineTo(X(0.97), Y(0.665)); g.lineTo(X(0.97), Y(0.656)); g.lineTo(X(0.62), Y(0.686)); g.lineTo(X(-0.62), Y(0.686)); g.lineTo(X(-0.97), Y(0.656)); g.closePath(); g.fill();
+    for (const s of [1, -1]) for (let k = 0; k < 3; k++) { const y = 0.575 - k * 0.032; g.fillRect(Math.min(X(s * 0.7), X(s * 0.83)), Y(y), Math.abs(X(s * 0.83) - X(s * 0.7)), 9); }
+  };
+  const drawRear = (g, w, hh, glow) => { const X = z => Xc(z, w), Y = y => Yc(y, hh);
+    g.fillStyle = glow ? "#000" : PAINT; g.fillRect(0, 0, w, hh);
+    if (!glow) { g.fillStyle = BLK; g.fillRect(0, Y(0.5), w, Y(0.15) - Y(0.5)); g.fillStyle = "#cfd3d7"; g.fillRect(X(-0.7), Y(0.3), X(0.7) - X(-0.7), 8); }
+    g.fillStyle = glow ? "#ff3020" : "#a3130d";
+    g.fillRect(X(-0.84), Y(0.915), X(0.84) - X(-0.84), 9);
+    for (const s of [1, -1]) g.fillRect(Math.min(X(s * 0.86), X(s * 0.9)), Y(0.95), Math.abs(X(s * 0.9) - X(s * 0.86)), Y(0.7) - Y(0.95));
+    g.fillRect(X(-0.6), Y(0.43), X(0.6) - X(-0.6), 6);
+  };
+  const fasciaTex = canvasTex(2048, 2048, (g, w, hh) => drawFront(g, w, hh, false)), fasciaGlow = canvasTex(2048, 2048, (g, w, hh) => drawFront(g, w, hh, true));
+  const rearTex = canvasTex(2048, 2048, (g, w, hh) => drawRear(g, w, hh, false)), rearGlow = canvasTex(2048, 2048, (g, w, hh) => drawRear(g, w, hh, true));
+  const grille = phys({ map: fasciaTex, emissive: "#ffffff", emissiveMap: fasciaGlow, emissiveIntensity: 0.55, metalness: 0.25, roughness: 0.32, clearcoat: 0.7 });
   const lamp = phys({ color: "#c9d1d9", metalness: 0.85, roughness: 0.12, clearcoat: 1, emissive: "#dfe9f3", emissiveIntensity: 0.12 });
-  const tail = std({ color: "#7a0d0d", roughness: 0.25, emissive: "#ff2010", emissiveIntensity: 0.35 });
+  const tail = phys({ map: rearTex, emissive: "#ffffff", emissiveMap: rearGlow, emissiveIntensity: 0.8, metalness: 0.25, roughness: 0.32, clearcoat: 0.7 });
   const chrome = std({ color: "#d4d9de", metalness: 1, roughness: 0.18 });
   C.add(new THREE.Mesh(bg, [paint, glass, gloss, matte, grille, lamp, tail]));
   // white film overlay, nudged off the paint along the normals (faded in by the shot)
   const nrm = bg.attributes.normal.array, fpos = new Float32Array(pos.length); for (let k = 0; k < pos.length; k++) fpos[k] = pos[k] + nrm[k] * 0.004;
   const fg = new THREE.BufferGeometry(); fg.setAttribute("position", new THREE.BufferAttribute(fpos, 3)); fg.setAttribute("normal", bg.attributes.normal); fg.setIndex(film);
-  const filmMat = phys({ color: "#f4f6f8", roughness: 0.42, clearcoat: 0.4, transparent: true, opacity: 0, depthWrite: false });
+  const filmMat = phys({ color: "#d4e3ef", roughness: 0.3, clearcoat: 0.8, transparent: true, opacity: 0, depthWrite: false });
   C.add(new THREE.Mesh(fg, filmMat));
   const sideZ = (x, y) => { const P = section(x).pts.slice(3, 15); for (let i = 0; i < P.length - 1; i++) { const [z0, y0] = P[i], [z1, y1] = P[i + 1]; if ((y - y0) * (y - y1) <= 0 && y1 !== y0) return lerp(z0, z1, (y - y0) / (y1 - y0)); } return P[0][0]; };
   const sp = (x, y, s = 1, o = 0.004) => V(wx(x), y, s * (sideZ(x, y) + o));
@@ -542,23 +552,25 @@ function buildCar() {
   // surface path straight across the top between the two edges (from section point k inward)
   const across = (x, k, o = 0.008) => { const R = section(x).pts.slice(k).map(([z, y]) => V(wx(x), y + o, z)); return R.map(v => V(v.x, v.y, -v.z)).concat(R.slice(0, -1).reverse()); };
   for (const s of [1, -1]) {
-    C.add(tubeAlong(smp(1.70, 3.98, 60, x => { const q = section(x); return V(wx(x), q.sideTop + 0.004, s * (q.wc0 + 0.006)); }), 0.006, chrome));
+    C.add(tubeAlong(smp(1.70, 4.3, 60, x => { const q = section(x); return V(wx(x), q.sideTop + 0.004, s * (q.wc0 + 0.006)); }), 0.006, gloss));
+    C.add(tubeAlong(smp(1.62, 3.42, 40, x => sp(x, lerp(0.43, 0.7, (x - 1.62) / 1.8), s, 0.003)), 0.004, std({ color: "#b9bdc2", roughness: 0.4 })));
     for (const dx of [1.68, 2.88]) C.add(tubeAlong(smp(0.36, belt(dx) - 0.03, 12, y => sp(dx, y, s, 0.002)), 0.0028, matte));
     C.add(tubeAlong(smp(0.24, 1.58, 30, x => hoodEdge(x, s, 0.002)), 0.0026, matte));
-    for (const hx of [2.5, 3.6]) { const hm = rbox(0.17, 0.028, 0.025, 0.01, chrome); hm.position.copy(sp(hx, 0.86, s, 0.004)); C.add(hm); }
+    for (const hx of [2.5, 3.55]) { const hm = rbox(0.15, 0.022, 0.012, 0.008, std({ color: "#c7cbd0", roughness: 0.35 })); hm.position.copy(sp(hx, 0.86, s, 0.004)); C.add(hm); }
     const mx = 1.78, mg = new THREE.SphereGeometry(1, 28, 16); mg.scale(0.13, 0.075, 0.1);
-    const mir = new THREE.Mesh(mg, paint); mir.position.set(wx(mx) - 0.03, belt(mx) + 0.07, s * (halfW(mx) + 0.1)); C.add(mir);
+    const mir = new THREE.Mesh(mg, gloss); mir.position.set(wx(mx) - 0.03, belt(mx) + 0.07, s * (halfW(mx) + 0.1)); C.add(mir);
     const mbase = rbox(0.09, 0.045, 0.12, 0.015, gloss); mbase.position.set(wx(mx) - 0.01, belt(mx) + 0.025, s * (halfW(mx) + 0.02)); C.add(mbase);
   }
   // wheels: tyre + bright 10-spoke alloy
   const tireGeo = new THREE.LatheGeometry([[0.245, -0.115], [0.3, -0.12], [0.327, -0.11], [0.338, -0.068], [0.34, 0], [0.338, 0.068], [0.327, 0.11], [0.3, 0.12], [0.245, 0.115]].map(([r, y]) => new THREE.Vector2(r, y)), 72); tireGeo.rotateX(PI / 2);
-  const alloy = std({ color: "#c9ced4", metalness: 1, roughness: 0.22 }), hub = std({ color: "#3c4046", metalness: 0.7, roughness: 0.4 });
+  const alloy = std({ color: "#d3d7dc", metalness: 1, roughness: 0.2 }), hub = std({ color: "#1b1d20", metalness: 0.6, roughness: 0.4 });
   for (const cx of [FX, RX]) for (const s of [1, -1]) {
     const wg = new THREE.Group(); wg.position.set(wx(cx), WCY, s * (halfW(cx) - 0.15)); C.add(wg);
     wg.add(new THREE.Mesh(tireGeo, std({ color: "#151617", roughness: 0.85 })));
     const well = new THREE.Mesh(new THREE.CircleGeometry(0.24, 40), hub); well.position.z = 0.04 * s; if (s < 0) well.rotation.y = PI; wg.add(well);
     const lip = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.012, 10, 64), alloy); lip.position.z = 0.1 * s; wg.add(lip);
-    for (let i = 0; i < 10; i++) { const sp2 = box(0.032, 0.19, 0.022, alloy); const pv = new THREE.Group(); pv.rotation.z = i / 10 * PI * 2 + (i % 2) * 0.12; pv.position.z = 0.09 * s; sp2.position.y = 0.13; pv.add(sp2); wg.add(pv); }
+    for (let i = 0; i < 5; i++) for (const d of [-1, 1]) { const sp2 = box(0.034, 0.19, 0.022, alloy); const pv = new THREE.Group(); pv.rotation.z = i / 5 * PI * 2 + d * 0.13; pv.position.z = 0.09 * s; sp2.position.y = 0.13; sp2.rotation.z = -d * 0.1; pv.add(sp2);
+      const back = box(0.02, 0.18, 0.024, hub); back.position.set(0, 0.13, -0.004 * s); pv.add(back); wg.add(pv); }
     const cap = cyl(0.055, 0.03, alloy, 32); cap.rotation.x = PI / 2; cap.position.z = 0.095 * s; wg.add(cap);
   }
   C.add(contactShadow(6.2, 3.0, 0.8));

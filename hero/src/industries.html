@@ -217,7 +217,7 @@ const TEX = {
     for (let i = 0; i < 9000; i++) { g.strokeStyle = `rgba(${r() > .5 ? "250,248,244" : "120,115,105"},${0.12 + r() * 0.22})`; g.lineWidth = 0.6 + r() * 1.2;
       const x = r() * w, y = r() * h, a = r() * 6.28, L = 10 + r() * 40; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a + 1) * L * .6, y + Math.sin(a + 1) * L * .6, x + Math.cos(a) * L, y + Math.sin(a) * L); g.stroke(); }
     g.fillStyle = "#c41f18"; g.fillRect(0, 1180, w, 70); g.fillStyle = "rgba(255,255,255,.10)"; g.fillRect(0, 1184, w, 8); g.fillStyle = "rgba(0,0,0,.18)"; g.fillRect(0, 1246, w, 4); }),
-  stripe: canvasTex(16, 2048, (g, w, h) => { g.fillStyle = "#000"; g.fillRect(0, 0, w, h); g.fillStyle = "#4cc8ff"; g.fillRect(0, 1180, w, 70); }),
+  stripe: canvasTex(16, 2048, (g, w, h) => { g.fillStyle = "#000"; g.fillRect(0, 0, w, h); g.fillStyle = "#3a9dff"; g.fillRect(0, 1180, w, 70); }),
   rings: canvasTex(512, 512, (g, w, h) => { g.fillStyle = "#e3e0d9"; g.fillRect(0, 0, w, h); const r = rng(9);
     for (let i = 0; i < 170; i++) { g.strokeStyle = `rgba(120,110,95,${0.05 + r() * .1})`; g.lineWidth = 1 + r(); g.beginPath(); g.arc(256, 256, 30 + i * 1.33, 0, 7); g.stroke(); } }),
   brushed: canvasTex(512, 512, (g, w, h) => { g.fillStyle = "#808080"; g.fillRect(0, 0, w, h); const r = rng(2);
@@ -228,7 +228,7 @@ const TEX = {
 const std = o => new THREE.MeshStandardMaterial(o);
 const phys = o => new THREE.MeshPhysicalMaterial(o);
 const M = {
-  tape: std({ color: "#8fe2ff", roughness: 0.45, emissive: "#3cc4ff", emissiveIntensity: 2.6 }),
+  tape: std({ color: "#84c4ff", roughness: 0.45, emissive: "#2f8fff", emissiveIntensity: 2.6 }),
   phoneAlu: std({ color: "#8f959c", metalness: 1, roughness: 0.3, roughnessMap: TEX.brushed }),
   phoneDark: std({ color: "#2b2f35", metalness: 0.6, roughness: 0.45 }),
   backGlass: phys({ color: "#4a5058", roughness: 0.42, clearcoat: 0.5 }),

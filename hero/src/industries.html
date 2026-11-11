@@ -49,7 +49,7 @@ function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let
 /* ---------- renderer ---------- */
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(1); renderer.setSize(W, H);
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.88;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = QS.get("bg") === "gray" ? 0.95 : 0.88;
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, W / H, 0.005, 200);
@@ -163,6 +163,21 @@ if (QS.get("bg") === "gray") grad.material = new THREE.ShaderMaterial({
       vec2 dir = vec2(cos(uV.x), sin(uV.x)); float q = dot((p - 0.5) * vec2(1.78, 1.0), dir) - uT * uV.z + uSeed * 0.3;
       float sweep = 0.5 + 0.5 * sin(q * 4.2); float sweep2 = 0.5 + 0.5 * sin(q * 2.3 + 1.7);
       c += vec3(0.05, 0.052, 0.058) * pow(sweep, 6.0) + vec3(0.025, 0.026, 0.03) * pow(sweep2, 4.0);
+      // large soft curved surfaces drifting in from the edges (lighter inside, bright rim, soft shade just outside)
+      for (int i = 0; i < 2; i++) { float fi = float(i);
+        float side = (fract(uSeed * 0.5 + fi * 0.5) > 0.5) ? 1.0 : -1.0;
+        vec2 C = vec2(0.5 + side * (0.95 + 0.05 * sin(uT * 0.18 + fi + uSeed)), -0.35 + fi * 1.1 + 0.06 * cos(uT * 0.15 + uSeed + fi));
+        float R = 1.05 + 0.12 * fi + 0.04 * sin(uT * 0.22 + uSeed * 2.0 + fi);
+        float dd = length((p - C) * vec2(1.78, 1.0)) - R;
+        c += vec3(0.12, 0.122, 0.126) * smoothstep(0.02, -0.3, dd) + vec3(0.16, 0.162, 0.166) * exp(-pow(dd * 40.0, 2.0)) - vec3(0.07) * exp(-pow((dd - 0.04) * 18.0, 2.0)); }
+      // angular light shards fanning from a corner, slowly rotating
+      vec2 A = vec2(fract(uSeed * 0.73) > 0.5 ? -0.05 : 1.05, fract(uSeed * 0.41) > 0.5 ? 1.08 : -0.08);
+      vec2 rel = (p - A) * vec2(1.78, 1.0); float ang = atan(rel.y, rel.x); float dist = length(rel);
+      for (int i = 0; i < 3; i++) { float fi = float(i);
+        vec2 toC = (vec2(0.5) - A) * vec2(1.78, 1.0); float a0 = atan(toC.y, toC.x) + (fi - 1.0) * 0.38 + 0.12 * sin(uT * 0.2 + fi * 1.3 + uSeed); float wd = 0.09 + 0.05 * fract(fi * 0.37 + uSeed);
+        float da = abs(atan(sin(ang - a0), cos(ang - a0)));
+        float wedge = smoothstep(wd, wd * 0.82, da) * smoothstep(1.9, 0.2, dist);
+        c += vec3(0.13, 0.133, 0.138) * wedge * (0.65 + 0.35 * sin(uT * 0.35 + fi * 2.0)); }
       c += (h(p * 913.0 + uT) - 0.5) * 0.004;
       gl_FragColor = vec4(c, 1.); }`,
 });
@@ -467,7 +482,7 @@ function buildCar() {
   }
   const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   bg.setIndex(zones.flat()); let off = 0; zones.forEach((z, i) => { bg.addGroup(off, z.length, i); off += z.length; }); bg.computeVertexNormals();
-  const paint = phys({ color: "#1c2320", metalness: 0.5, roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.4 });
+  const paint = phys({ color: QS.get("bg") === "gray" ? "#47505a" : "#1c2320", metalness: 0.5, roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.4 });
   const glass = phys({ color: "#05070a", roughness: 0.03, clearcoat: 1, specularIntensity: 0.6 });
   const gloss = phys({ color: "#08090b", roughness: 0.15, clearcoat: 1 });
   const matte = std({ color: "#121315", roughness: 0.6 });
@@ -569,7 +584,8 @@ function buildCNC() {
 const SHOTS = [];
 function shot(dur, build) { const g = new THREE.Group(); g.visible = false; scene.add(g); const s = build(g); s.g = g; s.dur = dur; SHOTS.push(s); }
 function cam(p0, p1, t0, t1, k, fov = 30) { camera.position.copy(vlerp(p0, p1, k)); camera.fov = fov; camera.updateProjectionMatrix(); camera.lookAt(vlerp(t0, t1, k)); }
-function lights(k, f, r, ki = 2, fi = 0.5, ri = 1.8, env = 0.7) { scene.environmentIntensity = env; key.position.copy(k); key.intensity = ki * 0.75; fill.position.copy(f); fill.intensity = fi; rim.position.copy(r); rim.intensity = ri * 1.2; }
+function lights(k, f, r, ki = 2, fi = 0.5, ri = 1.8, env = 0.7) {
+  if (QS.get("bg") === "gray") { ki *= 1.6; fi *= 2.2; ri *= 1.2; env = Math.min(1.4, env * 2.2); } scene.environmentIntensity = env; key.position.copy(k); key.intensity = ki * 0.75; fill.position.copy(f); fill.intensity = fi; rim.position.copy(r); rim.intensity = ri * 1.2; }
 function dof(point, aperture = 0.004, maxblur = 0.006) { bokeh.uniforms.focus.value = camera.position.distanceTo(point); bokeh.uniforms.aperture.value = aperture; bokeh.uniforms.maxblur.value = maxblur; }
 
 /* camera helpers: motion never comes to a full stop, so hard cuts carry momentum */

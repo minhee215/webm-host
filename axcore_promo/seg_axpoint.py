@@ -1202,7 +1202,7 @@ def ceiling_ui(c, t):
 
 def caption(c, t):
     """Lower-left title over the shot (reference look)."""
-    for t0, t1, small, big in ((44.00, WS0 - 0.1, "필요한 기능만 골라 켜는", "M-AI Works"),
+    for t0, t1, small, big in ((44.00, WS0 - 0.1, "필요한 기능만 골라 켜는", "AXunion"),
                                (WS0 + 0.2, 99, "우리 회사에 맞게 구성된", "AI 워크스페이스")):
         k = e_out_cubic(prog(t, t0, 0.5)) * (1 - e_io_cubic(prog(t, t1, 0.3)))
         if k <= 0:

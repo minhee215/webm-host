@@ -52,7 +52,8 @@ def badge(scale):
 
 def main():
     src, dst = sys.argv[1], sys.argv[2]
-    args = [a for a in sys.argv[3:] if not a.startswith("--")]
+    argv = sys.argv[3:]
+    args = [a for j, a in enumerate(argv) if not a.startswith("--") and not (j and argv[j - 1].startswith("--"))]
     first = int(args[0]) if args else 0
     count = int(args[1]) if len(args) > 1 else 10 ** 6
     pas = None

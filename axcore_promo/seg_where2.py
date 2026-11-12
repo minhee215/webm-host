@@ -10,8 +10,9 @@ opening's first three shots are cut, so the scene no longer opens on the logisti
   E 5.05-6.08  the brackets close on the inspection panel in the constellation again (the hand-over target)
 Panels, footage, look, letterbox and helpers are seg_where's (same clips: the client keeps the inspection / monitor /
 factory / logistics panels).
-10 s version (client): G 0-1.9, H 1.95-3.6, L 3.65-5.05 (lock), the camera closes in and a scan beam runs down the
-target 5.05-6.4, P 6.45-7.75, connectors / count-up to 9.1, the constellation drifts sideways, E 8.95-10.0.
+10 s version (client), timed to the narration: G 0-1.8, H 1.6-3.3, L 3.5-5.0 (lock), the camera closes in and a scan
+beam runs down the target 5.0-6.0, P 6.0-7.3, connectors / count-up to 8.65, the constellation drifts sideways,
+E 8.7-10.0. seg_insight's hand-over renders this scene on past its last frame (target_quad gives the panel).
 Usage: python3 seg_where2.py <out.mp4> [height=480] [frames=240] [first last]
 """
 import math
@@ -25,14 +26,21 @@ import seg_where as SW
 from engine import W, H, R, clamp, lerp, prog, e_io_cubic, e_out_cubic, e_io_sine, paint_fill, paint_stroke
 
 # 10 s version (client: about 10 s, with more action) - 240 frames
-GRID_IN, GRID_STAG = 0.1, 0.11        # windows fill one by one
-HOPS = (("n1_pharma", 1.95), ("n3_evline", 2.40), ("op3_factory", 2.85), ("10_datacenter", 3.30))
-SCAN_IN, SCAN_MOVE, SCAN_MOVE_D = 3.65, 4.20, 0.85
-SCAN_LOCK = SCAN_MOVE + SCAN_MOVE_D   # 5.05
-SWEEP_T, SWEEP_D = 5.35, 0.75         # after the lock: the camera closes in, a scan beam runs down the target window
-OPEN_T, OPEN_D = 6.45, 1.3            # facade -> constellation
-PERF_T = 6.85                         # the performance panel's own clock starts here (its count-up runs 0.75-2.25)
-END_LOCK = 8.95
+# timed to the client's narration for this part (3 phrases: 0.00-3.29, 3.83-5.68, 6.01-9.01 s from the scene start):
+# phrase 1 - the windows fill and the brackets hop; phrase 2 - the crosshair finds the target and locks; the camera
+# closes in and scans in the pause; phrase 3 - the facade opens into the performance constellation, the KPI climbs
+GRID_IN, GRID_STAG = 0.1, 0.1         # windows fill one by one
+HOPS = (("n1_pharma", 1.60), ("n3_evline", 2.05), ("op3_factory", 2.50), ("10_datacenter", 2.95))
+SCAN_IN, SCAN_MOVE, SCAN_MOVE_D = 3.50, 4.15, 0.85
+SCAN_LOCK = SCAN_MOVE + SCAN_MOVE_D   # 5.00
+CLOSE_D = 1.0                         # the camera closes in on the locked window
+SWEEP_T, SWEEP_D = 5.20, 0.70         # a scan beam runs down the target window
+OPEN_T, OPEN_D = 6.00, 1.3            # facade -> constellation (on phrase 3)
+PERF_T = 6.40                         # the performance panel's own clock starts here (its count-up runs 0.75-2.25)
+END_LOCK = 8.70
+NF_DEF = 240
+SCENE_T = NF_DEF * SW.DT
+SW.SCENE_T = SCENE_T
 EXTRA = [n for n in SW.SLOTS if n not in SW.CELLS]      # constellation-only panels
 # the target plays the inspection take from the start: the light and PASS are on as the crosshair locks (source
 # 2.3 s at the lock), then it runs on slower so it never stops (also through seg_insight's hand-over frames)
@@ -46,7 +54,7 @@ def clip_time(n, i, t):
     a, b = SW.CLIP_SPAN.get(n, (0.12 * (i % 4), SW._dur(n) - 0.08))
     if n == SW.OPENER:                 # (now an ordinary panel: plays through its usable part)
         a, b = -0.5, SW._dur(n) - 0.08
-    return a + (b - a) * max(0.0, t / SW.SCENE_T)
+    return a + (b - a) * max(0.0, t / SCENE_T)
 
 
 def panel_pose(n, i, t, det):
@@ -65,19 +73,30 @@ def panel_pose(n, i, t, det):
     return p, k_in
 
 
-def render(c, t):
+def camera(t):
+    """Eases in on the facade, closes in on the locked window, pulls back as it opens up, then drifts across the
+    constellation with a slow push, which carries on at its last speed past the scene (seg_insight's hand-over)."""
     det = e_io_cubic(prog(t, OPEN_T, OPEN_D))
-    wall = 1.0 - det
-    lock = e_out_cubic(prog(t, SCAN_LOCK, 0.4)) * (1 - e_io_cubic(prog(t, OPEN_T - 0.1, 0.45)))
-    end = e_out_cubic(prog(t, END_LOCK, 0.45))
-    # camera: eases in on the facade, closes in on the locked window, pulls back as it opens up, then drifts
-    # across the constellation with a slow push
-    z_grid = lerp(-260.0, 110.0, e_io_sine(prog(t, 0.0, SCAN_LOCK))) + 230.0 * e_io_sine(prog(t, SCAN_LOCK, 1.3))
-    k_c = e_io_sine(prog(t, OPEN_T + OPEN_D - 0.3, SW.SCENE_T - OPEN_T - OPEN_D + 0.3))
+    z_grid = lerp(-260.0, 110.0, e_io_sine(prog(t, 0.0, SCAN_LOCK))) + 230.0 * e_io_sine(prog(t, SCAN_LOCK, CLOSE_D))
+    k_c = e_io_sine(prog(t, OPEN_T + OPEN_D - 0.3, SCENE_T - OPEN_T - OPEN_D + 0.3))
     z_cons = lerp(-90.0, 40.0, k_c)
     x_cons = lerp(-110.0, 110.0, k_c) + math.sin(t * 0.6) * 12
     y_cons = lerp(25.0, -15.0, k_c)
-    cam = (x_cons * det, y_cons * det, lerp(z_grid, z_cons, det))
+    return (x_cons * det, y_cons * det, lerp(z_grid, z_cons, det)), det
+
+
+def target_quad(t):
+    """The target panel's screen quad at time t (seg_insight's hand-over starts from it)."""
+    cam, det = camera(t)
+    i = SW.ORDER.index(SW.TARGET)
+    return SW.project(panel_pose(SW.TARGET, i, t, det)[0], cam)
+
+
+def render(c, t):
+    cam, det = camera(t)
+    wall = 1.0 - det
+    lock = e_out_cubic(prog(t, SCAN_LOCK, 0.4)) * (1 - e_io_cubic(prog(t, OPEN_T - 0.1, 0.45)))
+    end = e_out_cubic(prog(t, END_LOCK, 0.45))
 
     SW.background(c, t, wall)
     SW.facade_wall(c, wall, cam)
@@ -182,7 +201,6 @@ if __name__ == "__main__":
     if len(argv) < 4:
         argv += ["480", "240"][len(argv) - 2:]
     SW.setup(argv)
-    SW.SCENE_T = SW.NF * SW.DT
     E.configure(E.SEED, E.CHAOS)
     SC = max(1.0, SW.height / H)
     SWD, SHD = int(round(W * SC)), int(round(H * SC))

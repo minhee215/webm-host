@@ -12,6 +12,7 @@
 Frame f is timeline frame 340 + f; film time = timeline frame / 24. 23.976 fps, 21:9 letterbox.
 Usage: python3 seg_insight.py <out.mp4> [height=480] [first last]
 """
+import os
 import subprocess
 import sys
 
@@ -22,6 +23,12 @@ import engine as E
 import media
 import scenes as S
 import seg_where as SW
+# the 8:02 scene this one comes out of: the reordered 10 s version (seg_where2, default) or the first one (AXP_WHERE=1)
+WHERE2 = os.environ.get("AXP_WHERE", "2") == "2"
+if WHERE2:
+    import seg_where2 as SW2
+WHERE_LAST = (SW2.NF_DEF - 1) if WHERE2 else 145      # the 8:02 scene's last frame
+WHERE_RENDER = SW2.render if WHERE2 else SW.render
 from engine import W, H, R, lerp, prog, e_io_cubic, e_out_cubic, e_out_expo, e_io_sine, paint_fill, paint_stroke
 
 FPS_NUM, FPS_DEN = 24000, 1001
@@ -64,29 +71,32 @@ _WHERE = {}
 
 def where_live(f):
     """seg_where rendered on past its last frame (so its footage keeps playing under the hand-over)."""
-    t = (145 + f) * SW.DT
+    t = (WHERE_LAST + f) * SW.DT
     surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(int(W * SCV), int(H * SCV), skia.ColorType.kRGBA_8888_ColorType,
                                                        skia.AlphaType.kPremul_AlphaType))
     cc = surf.getCanvas()
     cc.clear(skia.Color4f(0, 0, 0, 1))
     cc.scale(SCV, SCV)
-    SW.render(cc, t)
+    WHERE_RENDER(cc, t)
     return surf.makeImageSnapshot()
 
 
 def where_end():
     """seg_where's last frame (image) and its target-window centre."""
     if "img" not in _WHERE:
-        t = 145 * SW.DT
+        t = WHERE_LAST * SW.DT
         surf = skia.Surface.MakeRaster(skia.ImageInfo.Make(int(W * SCV), int(H * SCV), skia.ColorType.kRGBA_8888_ColorType,
                                                            skia.AlphaType.kPremul_AlphaType))
         cc = surf.getCanvas()
         cc.clear(skia.Color4f(0, 0, 0, 1))
         cc.scale(SCV, SCV)
-        SW.render(cc, t)
+        WHERE_RENDER(cc, t)
         _WHERE["img"] = surf.makeImageSnapshot()
-        cam = (0.0, 0.0, 150 * e_io_sine(prog(t, 2.6, 3.5)))
-        q = SW.project(SW.cell_params(SW.TARGET), cam)
+        if WHERE2:
+            q = SW2.target_quad(t)
+        else:
+            cam = (0.0, 0.0, 150 * e_io_sine(prog(t, 2.6, 3.5)))
+            q = SW.project(SW.cell_params(SW.TARGET), cam)
         _WHERE["q"] = q
         _WHERE["c"] = (sum(p[0] for p in q) / 4, sum(p[1] for p in q) / 4)
     return _WHERE["img"], _WHERE["c"]

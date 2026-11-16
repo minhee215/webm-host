@@ -41,6 +41,7 @@ END_LOCK = 8.70
 NF_DEF = 240
 SCENE_T = NF_DEF * SW.DT
 SW.SCENE_T = SCENE_T
+SW.FACADE_LIT = False          # client: no filled (lit) windows on the facade around the grid
 EXTRA = [n for n in SW.SLOTS if n not in SW.CELLS]      # constellation-only panels
 # the target plays the inspection take from the start: the light and PASS are on as the crosshair locks (source
 # 2.3 s at the lock), then it runs on slower so it never stops (also through seg_insight's hand-over frames)

@@ -201,6 +201,9 @@ def background(c, t, wall):
         c.restore()
 
 
+FACADE_LIT = True             # a few of the facade's small windows lit (seg_where2: off, client)
+
+
 def facade_wall(c, a, cam):
     """Dark glass facade around the 3x3 windows: spandrels, mullions, faint reflections."""
     if a <= 0.003:
@@ -219,7 +222,7 @@ def facade_wall(c, a, cam):
             if abs(r) <= 1 and abs(k) <= 1:
                 continue
             q = project((k * GX, r * GY, Z_WALL, CW, CH, 0.0), cam)
-            lit = rng.uniform() < 0.22
+            lit = rng.uniform() < 0.22 and FACADE_LIT
             c.drawPath(E.poly(q, True), paint_fill("#1B3550" if lit else "#0D1C2E", 0.9))
             if lit:
                 c.drawPath(E.poly(q, True), paint_fill("#F2D7A8", 0.10))

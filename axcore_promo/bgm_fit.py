@@ -7,7 +7,11 @@ hit (143.43 s) at 108.82 s, on the rush into the white flash before the outro, a
 The client's final cut (2869 frames, 119.66 s) runs 3 frames shorter from the OCR scene on; the splice stays (a
 shift of a fraction of a beat would break the rhythm), so the hit falls 3 frames later in the same white rush, and
 the music is cut to the new length (pass it as the third argument).
-Usage: python3 bgm_fit.py <AXCORE_BGM.mp3/wav> <out.wav> [length s]
+The client's edit of 2026-11-16 (103.896 s, 2491 frames; the new 10 s facade -> performance opening, sped-up
+passages): 22 bars (50.77 s) out in one splice at 30.98 s -> 81.75 s (a bar line, the best-matching 22-bar shift in
+the first half, under the narration on the AXpoint flow page), so the final hit lands at 92.66 s, as the logo
+network starts its rush into the white flash before the outro.
+Usage: python3 bgm_fit.py <AXCORE_BGM.mp3/wav> <out.wav> [length s] [splice_at s] [removed s]
 """
 import subprocess
 import sys
@@ -23,10 +27,11 @@ A, R = 39.40, 34.61
 def main():
     src, out = sys.argv[1], sys.argv[2]
     dur = float(sys.argv[3]) if len(sys.argv) > 3 else DUR
+    a_, r_ = (float(sys.argv[4]), float(sys.argv[5])) if len(sys.argv) > 5 else (A, R)
     raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", src, "-ac", "2", "-ar", str(SR), "-f", "f32le", "-"],
                          capture_output=True, check=True).stdout
     x = np.frombuffer(raw, np.float32).reshape(-1, 2).astype(np.float64)
-    ia, ib = int(A * SR), int((A + R) * SR)
+    ia, ib = int(a_ * SR), int((a_ + r_) * SR)
     w, s = int(0.08 * SR), int(0.015 * SR)
     ref = x[ia - w // 2:ia + w // 2].mean(1)
     ib += max(range(-s, s + 1, 4), key=lambda d: np.dot(ref, x[ib + d - w // 2:ib + d + w // 2].mean(1)))

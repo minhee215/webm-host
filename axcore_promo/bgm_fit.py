@@ -28,6 +28,10 @@ from its start to the end of its intro (bar 8), then on from bar 32 (24 bars out
 intro's end); the 2 bars that the repeat used to add come instead from starting the track 4.40 s into the film (its
 first seconds are a fade-in from silence anyway). The body kicks in at 23.84 s, as the new transition's white page
 opens; the final hit lands at 92.45 s in the white flash's rise.
+(v7d, client: music from the very start, the intro not slowed, and the stretch from ~01:05 is too calm) From the
+start; at the intro's end (bar 8, 19.44 s, under SC05's move into the flow) on from bar 16 (8 bars out, chroma
+0.89 / 0.97); then the calm part goes: from bar 41 (77.14 s in the film) on from bar 55 (14 bars out, 0.79 / 0.88,
+level within 1.8 dB), the louder part, the breakdown and the hit as before. 22 bars out in all: the hit at 92.66 s.
   --edl a:b,c:d,...  play these spans of the track (s) one after another, crossfaded (xfade s) at sample-aligned joins
   --delay s          the track starts this far into the film
 Usage: python3 bgm_fit.py <AXCORE_BGM.mp3/wav> <out.wav> [length s] [splice_at s] [removed s] [start s] [xfade s]

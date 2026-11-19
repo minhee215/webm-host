@@ -1204,10 +1204,15 @@ def ceiling_ui(c, t):
         c.restore()
 
 
+CAPTION_WS = False
+
+
 def caption(c, t):
     """Lower-left title over the shot (reference look)."""
-    for t0, t1, small, big in ((44.00, WS0 - 0.1, "필요한 기능만 골라 켜는", "AXunion"),
-                               (WS0 + 0.2, 99, "우리 회사에 맞게 구성된", "AI 워크스페이스")):
+    caps = [(44.00, WS0 - 0.1, "필요한 기능만 골라 켜는", "AXunion")]
+    if CAPTION_WS:                        # (client: off - the workspace page shows the same title right after)
+        caps.append((WS0 + 0.2, 99, "우리 회사에 맞게 구성된", "AI 워크스페이스"))
+    for t0, t1, small, big in caps:
         k = e_out_cubic(prog(t, t0, 0.5)) * (1 - e_io_cubic(prog(t, t1, 0.3)))
         if k <= 0:
             continue

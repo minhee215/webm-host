@@ -18,7 +18,14 @@ cut is 16 bars (36.92 s), from the start of a phrase (bar 16, 37.905 s) to the s
 200 ms crossfade; it falls under the new transition's white opening (23.80 s). The rest of the length comes off the
 start: the track begins 14.107 s in (inside its intro), faded in over 1.2 s. The final hit lands at 92.40 s, as the
 white flash before the outro builds (the same place against it as before), and the music's own ending at the end.
+(v7b, client: the music must start quiet and build as before, not start mid-way) The track plays from its start
+again. Its intro (bars 0-7) runs in 2-bar patterns (bars 2/3 and 4 nearly the same, chroma 0.87-0.91): bars 2-3 are
+played twice, which adds 2 bars inside the quiet intro; then at the intro's end (bar 8, 19.44 s, a phrase start) it
+goes on from bar 32 (74.83 s), the same material (0.89 / 0.95), so 24 bars (3 phrases) come out. The body kicks in at
+24.06 s, as the new transition's white page opens; the final hit lands at 92.66 s in the white flash's rise.
+  --edl a:b,c:d,...  play these spans of the track (s) one after another, crossfaded (xfade s) at sample-aligned joins
 Usage: python3 bgm_fit.py <AXCORE_BGM.mp3/wav> <out.wav> [length s] [splice_at s] [removed s] [start s] [xfade s]
+       python3 bgm_fit.py <AXCORE_BGM.mp3/wav> <out.wav> <length s> --edl a:b,c:d,... [xfade s]
 """
 import subprocess
 import sys
@@ -31,8 +38,41 @@ DUR = 119.786
 A, R = 39.40, 34.61
 
 
+def edl_join(x, spans, xfs):
+    """The track's spans one after another, each join an equal-power crossfade between the old span running on
+    past its end and the new one already running before its start (aligned to the sample by correlation)."""
+    xf, s, w = int(xfs * SR), int(0.015 * SR), int(0.08 * SR)
+    h = xf // 2
+    pe = int(spans[0][1] * SR)
+    parts = [x[int(spans[0][0] * SR):pe - h]]
+    for a, b in spans[1:]:
+        ia, ib = int(a * SR), int(b * SR)
+        ref = x[pe - w // 2:pe + w // 2].mean(1)
+        ia += max(range(-s, s + 1, 4), key=lambda d: np.dot(ref, x[ia + d - w // 2:ia + d + w // 2].mean(1)))
+        g = np.linspace(0, 1, 2 * h)
+        parts.append(x[pe - h:pe + h] * np.cos(g * np.pi / 2)[:, None] + x[ia - h:ia + h] * np.sin(g * np.pi / 2)[:, None])
+        parts.append(x[ia + h:min(ib, len(x)) - h] if ib < len(x) else x[ia + h:])
+        pe = ib
+    return np.concatenate(parts)
+
+
 def main():
     src, out = sys.argv[1], sys.argv[2]
+    if "--edl" in sys.argv:
+        k = sys.argv.index("--edl")
+        spans = [tuple(float(v) for v in q.split(":")) for q in sys.argv[k + 1].split(",")]
+        xfs = float(sys.argv[k + 2]) if len(sys.argv) > k + 2 else 0.2
+        raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", src, "-ac", "2", "-ar", str(SR), "-f", "f32le",
+                              "-"], capture_output=True, check=True).stdout
+        x = np.frombuffer(raw, np.float32).reshape(-1, 2).astype(np.float64)
+        spans = [(a, min(b, len(x) / SR)) for a, b in spans]
+        y = edl_join(x, spans, xfs)
+        n = int(round(float(sys.argv[3]) * SR))
+        y = np.pad(y, ((0, max(0, n - len(y))), (0, 0)))[:n]
+        fo = int(0.5 * SR)
+        y[-fo:] *= np.linspace(1, 0, fo)[:, None] ** 2
+        sf.write(out, y, SR, subtype="PCM_24")
+        return
     dur = float(sys.argv[3]) if len(sys.argv) > 3 else DUR
     a_, r_ = (float(sys.argv[4]), float(sys.argv[5])) if len(sys.argv) > 5 else (A, R)
     s0 = float(sys.argv[6]) if len(sys.argv) > 6 else 0.0

@@ -202,11 +202,15 @@ def blur_in(t, t0, d=0.5):
 STEPS = ["파일 업로드", "자료 확인", "진단 결과", "개선 과제", "보고서"]
 
 
+NAV_LOGO = False
+
+
 def nav(c, t, a, cur):
     """Top bar of the product page: logo, stepper (cur = active step or -1), the company."""
     if a <= 0.003:
         return
-    text(c, "AXpoint", 96, 186, 22, "Bold", INK, a)
+    if NAV_LOGO:                          # (client: the product name taken off the page)
+        text(c, "AXpoint", 96, 186, 22, "Bold", INK, a)
     if cur >= 0:
         x0, step = 960 - 2 * 128, 128
         for i, lab in enumerate(STEPS):
@@ -439,7 +443,7 @@ def docs(c, t, dx_head=0.0, dx_box=0.0, a_in=1.0, bg=True):
     ha = 1 - e_io_cubic(prog(t, GRAPH0 - 0.05, 0.4))
     if ha > 0:
         mixed(c, [(COMPANY, "g"), (" 자료를 올려 주세요", None)], 960, 332, 36, "Bold", ha, "center")
-        text(c, "문서 · 엑셀 · PDF · 한글 파일을 그대로 올리면 AXpoint가 읽고 분류해요", 960, 372, 17, "Medium", STEEL,
+        text(c, "문서 · 엑셀 · PDF · 한글 파일을 그대로 올리면 AI가 읽고 분류해요", 960, 372, 17, "Medium", STEEL,
              ha, "center")
     c.restore()
     c.save()
@@ -478,7 +482,7 @@ def docs(c, t, dx_head=0.0, dx_box=0.0, a_in=1.0, bg=True):
             p_.setPathEffect(skia.DashPathEffect.Make([9, 7], 0))
             c.drawRRect(skia.RRect.MakeRectXY(BOX.makeInset(6, 6), 20, 20), p_)
             icon(c, "scan", 960, BOX.top() + 70, 30, BLUE, dz)
-            text(c, "AXpoint가 파일을 분석해 진단에 활용해요", 960, BOX.top() + 128, 20, "Bold", INK, dz, "center")
+            text(c, "AI가 파일을 분석해 진단에 활용해요", 960, BOX.top() + 128, 20, "Bold", INK, dz, "center")
             text(c, "한 번 올리면 이후 진단과 과제 도출에 계속 쓰여요", 960, BOX.top() + 156, 14, "Medium", STEEL, dz,
                  "center")
         sk = clamp((t - (PROMPT0 + PROMPT_D)) / 0.15)

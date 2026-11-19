@@ -23,7 +23,13 @@ again. Its intro (bars 0-7) runs in 2-bar patterns (bars 2/3 and 4 nearly the sa
 played twice, which adds 2 bars inside the quiet intro; then at the intro's end (bar 8, 19.44 s, a phrase start) it
 goes on from bar 32 (74.83 s), the same material (0.89 / 0.95), so 24 bars (3 phrases) come out. The body kicks in at
 24.06 s, as the new transition's white page opens; the final hit lands at 92.66 s in the white flash's rise.
+(v7c, client: the 2-bar repeat inside the intro is heard - a phrase coming back at 10 s) No repeat: the track plays
+from its start to the end of its intro (bar 8), then on from bar 32 (24 bars out, one phrase-aligned join at the
+intro's end); the 2 bars that the repeat used to add come instead from starting the track 4.40 s into the film (its
+first seconds are a fade-in from silence anyway). The body kicks in at 23.84 s, as the new transition's white page
+opens; the final hit lands at 92.45 s in the white flash's rise.
   --edl a:b,c:d,...  play these spans of the track (s) one after another, crossfaded (xfade s) at sample-aligned joins
+  --delay s          the track starts this far into the film
 Usage: python3 bgm_fit.py <AXCORE_BGM.mp3/wav> <out.wav> [length s] [splice_at s] [removed s] [start s] [xfade s]
        python3 bgm_fit.py <AXCORE_BGM.mp3/wav> <out.wav> <length s> --edl a:b,c:d,... [xfade s]
 """
@@ -61,12 +67,14 @@ def main():
     if "--edl" in sys.argv:
         k = sys.argv.index("--edl")
         spans = [tuple(float(v) for v in q.split(":")) for q in sys.argv[k + 1].split(",")]
-        xfs = float(sys.argv[k + 2]) if len(sys.argv) > k + 2 else 0.2
+        xfs = float(sys.argv[k + 2]) if len(sys.argv) > k + 2 and not sys.argv[k + 2].startswith("--") else 0.2
         raw = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", src, "-ac", "2", "-ar", str(SR), "-f", "f32le",
                               "-"], capture_output=True, check=True).stdout
         x = np.frombuffer(raw, np.float32).reshape(-1, 2).astype(np.float64)
         spans = [(a, min(b, len(x) / SR)) for a, b in spans]
         y = edl_join(x, spans, xfs)
+        if "--delay" in sys.argv:
+            y = np.concatenate([np.zeros((int(float(sys.argv[sys.argv.index("--delay") + 1]) * SR), 2)), y])
         n = int(round(float(sys.argv[3]) * SR))
         y = np.pad(y, ((0, max(0, n - len(y))), (0, 0)))[:n]
         fo = int(0.5 * SR)

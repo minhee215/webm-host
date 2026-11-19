@@ -1,0 +1,1668 @@
+"""AXCORE promo film - rendering engine (skia-python, CPU raster).
+
+Shared building blocks used by every scene:
+palette, easing and stop-motion entrances, seeded chaos, plates with a 2.5D
+camera, frosted glass cards, typography, glowing connection lines, icons, the
+AXCORE logo rig, scene transitions and the film finish.
+"""
+import math
+import os
+import zlib
+
+import numpy as np
+import skia
+
+W, H, FPS = 1920, 1080, 24
+HERE = os.path.dirname(os.path.abspath(__file__))
+PLATE_DIR = os.environ.get("AXP_PLATES", os.path.join(HERE, "plates"))
+
+# ------------------------------------------------------------------ palette
+NAVY_950 = "#050B1C"
+NAVY_900 = "#081229"
+NAVY_800 = "#0C1A3A"
+NAVY_700 = "#13264F"
+NAVY = "#0A2C73"        # reference-style navy blocks
+BLUE = "#0054FE"        # AXCORE logo blue (hero accent on light scenes)
+INDIGO = "#4C57E6"
+CYAN = "#3CD3FF"        # controlled AXCORE cyan highlight (hero accent on dark scenes)
+CYAN_SOFT = "#9BE6FF"
+STEEL = "#5E6064"       # AXCORE logo gray
+STEEL_400 = "#8C939D"
+STEEL_200 = "#C9CED5"
+WARM_W = "#F5F4EF"
+PAPER = "#FBFAF6"
+WHITE = "#FFFFFF"
+INK = "#1A2233"
+
+
+def col(h, a=1.0):
+    h = h.lstrip("#")
+    return skia.Color4f(int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255, a)
+
+
+def colint(h, a=1.0):
+    return col(h, a).toColor()
+
+
+# ------------------------------------------------------------- seed / chaos
+SEED = 20261007
+CHAOS = 0.35
+
+
+def configure(seed=None, chaos=None):
+    global SEED, CHAOS
+    if seed is not None:
+        SEED = int(seed)
+    if chaos is not None:
+        CHAOS = float(chaos)
+
+
+def rng(key):
+    """Deterministic generator per (seed, key): same seed + chaos -> identical frame."""
+    return np.random.default_rng([SEED, zlib.crc32(key.encode())])
+
+
+def jit(key, n=1, scale=1.0):
+    """Chaos-scaled jitter in [-scale, scale]. At chaos 0 everything is registered."""
+    v = rng(key).uniform(-1, 1, n) * scale * CHAOS
+    return v if n > 1 else float(v[0])
+
+
+# ------------------------------------------------------------------- easing
+def clamp(x, a=0.0, b=1.0):
+    return a if x < a else b if x > b else x
+
+
+def lerp(a, b, t):
+    return a + (b - a) * t
+
+
+def prog(t, t0, d):
+    if d <= 0:
+        return 1.0 if t >= t0 else 0.0
+    return clamp((t - t0) / d)
+
+
+def e_out_expo(x):
+    x = clamp(x)
+    return 1.0 if x >= 1 else 1 - 2 ** (-10 * x)
+
+
+def e_in_expo(x):
+    x = clamp(x)
+    return 0.0 if x <= 0 else 2 ** (10 * x - 10)
+
+
+def e_out_cubic(x):
+    x = clamp(x)
+    return 1 - (1 - x) ** 3
+
+
+def e_in_cubic(x):
+    x = clamp(x)
+    return x ** 3
+
+
+def e_io_cubic(x):
+    x = clamp(x)
+    return 4 * x ** 3 if x < 0.5 else 1 - (-2 * x + 2) ** 3 / 2
+
+
+def e_io_sine(x):
+    x = clamp(x)
+    return -(math.cos(math.pi * x) - 1) / 2
+
+
+def e_io_expo(x):
+    x = clamp(x)
+    if x <= 0 or x >= 1:
+        return x
+    return 2 ** (20 * x - 10) / 2 if x < 0.5 else (2 - 2 ** (-20 * x + 10)) / 2
+
+
+def settle(x, over=0.045):
+    """Ease-out expo with a small overshoot, then settle back to 1."""
+    x = clamp(x)
+    if x < 0.62:
+        return (1 + over) * e_out_expo(x / 0.62)
+    return 1 + over * (1 - e_io_sine((x - 0.62) / 0.38)) - over * 0.0
+
+
+def enter(t, t0, d=0.6, step=True, over=0.045):
+    """Entrance progress (0..1+overshoot).
+
+    Stop-motion cadence is applied only at the moment of entrance: the first 40%
+    of the entrance is sampled on 12 fps steps, after that it interpolates smoothly.
+    """
+    if t <= t0:
+        return 0.0
+    dt = t - t0
+    if step and dt < 0.4 * d:
+        dt = math.floor(dt * 12) / 12
+    return settle(dt / d, over)
+
+
+def leave(t, t1, d=0.4):
+    """1 -> 0 exit fade starting at t1."""
+    return 1 - e_in_cubic(prog(t, t1, d))
+
+
+def vis(t, t0, d_in=0.6, t1=1e9, d_out=0.4, step=True):
+    return clamp(enter(t, t0, d_in, step)) * leave(t, t1, d_out)
+
+
+def drift(t, dur):
+    """Never-still drift parameter: mostly linear (continues past the cut for
+    transitions) with a gentle eased component inside the shot."""
+    p = t / dur
+    return 0.72 * p + 0.28 * e_io_sine(p)
+
+
+# ------------------------------------------------------------------- fonts
+# Pretendard (gothic) for Korean and Latin. Letter-spacing is always 0 %.
+FONT_DIR = os.path.join(HERE, "fonts")
+_TF = {}
+_FONTS = {}
+
+
+def typeface(w="Medium"):
+    if w not in _TF:
+        _TF[w] = skia.Typeface.MakeFromFile(os.path.join(FONT_DIR, "Pretendard-%s.otf" % w))
+    return _TF[w]
+
+
+def font(size, w="Medium"):
+    k = (round(size * 4) / 4, w)
+    if k not in _FONTS:
+        f = skia.Font(typeface(w), k[0])
+        f.setSubpixel(True)
+        f.setEdging(skia.Font.Edging.kAntiAlias)
+        f.setHinting(skia.FontHinting.kNone)
+        _FONTS[k] = f
+    return _FONTS[k]
+
+
+def text_w(s, size, w="Medium"):
+    return font(size, w).measureText(s)
+
+
+def text(c, s, x, y, size=20, w="Medium", color=WHITE, alpha=1.0, align="left"):
+    if alpha <= 0.003 or not s:
+        return 0.0
+    f = font(size, w)
+    tw = f.measureText(s)
+    if align == "center":
+        x -= tw / 2
+    elif align == "right":
+        x -= tw
+    c.drawString(s, x, y, f, skia.Paint(AntiAlias=True, Color4f=col(color, clamp(alpha))))
+    return tw
+
+
+# ------------------------------------------------------------------ shapes
+def paint_fill(color, alpha=1.0, blur=0.0, blend=None):
+    p = skia.Paint(AntiAlias=True, Color4f=col(color, clamp(alpha)))
+    if blur > 0:
+        p.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, blur))
+    if blend is not None:
+        p.setBlendMode(blend)
+    return p
+
+
+def paint_stroke(color, alpha=1.0, width=1.5, blur=0.0, cap=skia.Paint.kRound_Cap, blend=None):
+    p = skia.Paint(AntiAlias=True, Color4f=col(color, clamp(alpha)), Style=skia.Paint.kStroke_Style,
+                   StrokeWidth=width, StrokeCap=cap, StrokeJoin=skia.Paint.kRound_Join)
+    if blur > 0:
+        p.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, blur))
+    if blend is not None:
+        p.setBlendMode(blend)
+    return p
+
+
+def R(x, y, w, h):
+    return skia.Rect.MakeXYWH(x, y, w, h)
+
+
+def rrect(c, rect, r, color, alpha=1.0, blur=0.0):
+    if alpha > 0.003:
+        c.drawRRect(skia.RRect.MakeRectXY(rect, r, r), paint_fill(color, alpha, blur))
+
+
+def rrect_stroke(c, rect, r, color, alpha=1.0, width=1.2, blur=0.0):
+    if alpha > 0.003:
+        c.drawRRect(skia.RRect.MakeRectXY(rect, r, r), paint_stroke(color, alpha, width, blur))
+
+
+def square(c, x, y, s, color=NAVY, alpha=1.0):
+    if alpha > 0.003:
+        c.drawRect(R(x - s / 2, y - s / 2, s, s), paint_fill(color, alpha))
+
+
+def glow_dot(c, x, y, r, color=CYAN, alpha=1.0, core=0.35):
+    if alpha <= 0.003:
+        return
+    cc = col(color, 1.0)
+    shader = skia.GradientShader.MakeRadial(
+        skia.Point(x, y), r,
+        [skia.Color4f(cc.fR, cc.fG, cc.fB, clamp(alpha)).toColor(),
+         skia.Color4f(cc.fR, cc.fG, cc.fB, clamp(alpha) * 0.35).toColor(),
+         skia.Color4f(cc.fR, cc.fG, cc.fB, 0).toColor()],
+        [0.0, core, 1.0])
+    c.drawCircle(x, y, r, skia.Paint(AntiAlias=True, Shader=shader, BlendMode=skia.BlendMode.kScreen))
+    c.drawCircle(x, y, max(1.2, r * 0.12), paint_fill(WHITE, alpha * 0.9))
+
+
+def corner_brackets(c, rect, ln=18, color=WHITE, alpha=1.0, width=2.0):
+    if alpha <= 0.003:
+        return
+    p = paint_stroke(color, alpha, width, cap=skia.Paint.kSquare_Cap)
+    l, t, r_, b = rect.left(), rect.top(), rect.right(), rect.bottom()
+    ln = min(ln, rect.width() / 2.5, rect.height() / 2.5)
+    for (x, y, dx, dy) in ((l, t, 1, 1), (r_, t, -1, 1), (l, b, 1, -1), (r_, b, -1, -1)):
+        c.drawLine(x, y, x + dx * ln, y, p)
+        c.drawLine(x, y, x, y + dy * ln, p)
+
+
+def dot_grid(c, spacing=44, color=STEEL_400, alpha=0.35, radius=1.3, ox=0.0, oy=0.0, scale=1.0, cx=W / 2, cy=H / 2):
+    if alpha <= 0.003:
+        return
+    sp = spacing * scale
+    x0 = (cx + ox) % sp - sp
+    y0 = (cy + oy) % sp - sp
+    xs = np.arange(x0, W + sp, sp)
+    ys = np.arange(y0, H + sp, sp)
+    pts = [skia.Point(float(x), float(y)) for y in ys for x in xs]
+    p = paint_stroke(color, alpha, radius * 2 * scale)
+    c.drawPoints(skia.Canvas.kPoints_PointMode, pts, p)
+
+
+def vgrad(c, rect, top, bot, a_top=1.0, a_bot=1.0, blend=None):
+    sh = skia.GradientShader.MakeLinear(
+        [skia.Point(rect.left(), rect.top()), skia.Point(rect.left(), rect.bottom())],
+        [colint(top, a_top), colint(bot, a_bot)])
+    p = skia.Paint(Shader=sh)
+    if blend is not None:
+        p.setBlendMode(blend)
+    c.drawRect(rect, p)
+
+
+def radial(c, x, y, r, color, alpha, blend=skia.BlendMode.kScreen):
+    if alpha <= 0.003:
+        return
+    sh = skia.GradientShader.MakeRadial(skia.Point(x, y), r, [colint(color, alpha), colint(color, 0)])
+    c.drawCircle(x, y, r, skia.Paint(AntiAlias=True, Shader=sh, BlendMode=blend))
+
+
+# ------------------------------------------------------------------- paths
+def poly(points, closed=False):
+    p = skia.Path()
+    p.moveTo(*points[0])
+    for pt in points[1:]:
+        p.lineTo(*pt)
+    if closed:
+        p.close()
+    return p
+
+
+def curve(p0, p1, bend=0.35, horizontal=True):
+    """Smooth S-curve (connector) between two points."""
+    p = skia.Path()
+    p.moveTo(*p0)
+    if horizontal:
+        dx = (p1[0] - p0[0]) * bend * 2
+        p.cubicTo(p0[0] + dx, p0[1], p1[0] - dx, p1[1], p1[0], p1[1])
+    else:
+        dy = (p1[1] - p0[1]) * bend * 2
+        p.cubicTo(p0[0], p0[1] + dy, p1[0], p1[1] - dy, p1[0], p1[1])
+    return p
+
+
+def arc_path(p0, p1, lift=0.25):
+    """Quadratic arc used for flying cards / dragged chips."""
+    p = skia.Path()
+    p.moveTo(*p0)
+    mx, my = (p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2
+    dx, dy = p1[0] - p0[0], p1[1] - p0[1]
+    p.quadTo(mx - dy * lift, my + dx * lift, p1[0], p1[1])
+    return p
+
+
+def path_len(path):
+    return skia.PathMeasure(path, False, 1).getLength()
+
+
+def path_seg(path, a, b):
+    pm = skia.PathMeasure(path, False, 1)
+    L = pm.getLength()
+    dst = skia.Path()
+    a, b = clamp(a), clamp(b)
+    if b > a:
+        pm.getSegment(a * L, b * L, dst, True)
+    return dst
+
+
+def path_at(path, f):
+    pm = skia.PathMeasure(path, False, 1)
+    L = pm.getLength()
+    pos, tan = pm.getPosTan(clamp(f) * L)
+    return pos.x(), pos.y(), math.atan2(tan.y(), tan.x())
+
+
+def line(c, path, color=CYAN, alpha=1.0, width=1.6, trim=(0.0, 1.0), glow=0.0, glow_w=6.0, dash=None):
+    """Precise connection line: crisp core + optional localized glow."""
+    if alpha <= 0.003 or trim[1] <= trim[0]:
+        return
+    seg = path if (trim[0] <= 0 and trim[1] >= 1) else path_seg(path, trim[0], trim[1])
+    if glow > 0:
+        c.drawPath(seg, paint_stroke(color, alpha * glow, width * 3.2, blur=glow_w, blend=skia.BlendMode.kScreen))
+    p = paint_stroke(color, alpha, width)
+    if dash:
+        p.setPathEffect(skia.DashPathEffect.Make(dash, 0))
+    c.drawPath(seg, p)
+
+
+def pulse(c, path, f, color=CYAN, alpha=1.0, r=14, tail=0.12, width=2.2):
+    """Light pulse travelling along a path with a fading tail."""
+    if alpha <= 0.003 or f <= 0 or f >= 1.0:
+        return
+    steps = 6
+    for i in range(steps):
+        a0 = f - tail * (i + 1) / steps
+        a1 = f - tail * i / steps
+        line(c, path, color, alpha * (1 - i / steps) * 0.8, width, (a0, a1))
+    x, y, _ = path_at(path, f)
+    glow_dot(c, x, y, r, color, alpha)
+
+
+def streak(c, p0, p1, head, length=0.35, width=3.0, color=CYAN, alpha=1.0):
+    """Cinematic light streak (reference-style) running from p0 to p1; head in 0..1+length."""
+    if alpha <= 0.003:
+        return
+    a, b = head - length, head
+    if b <= 0 or a >= 1:
+        return
+    a, b = clamp(a), clamp(b)
+    x0, y0 = lerp(p0[0], p1[0], a), lerp(p0[1], p1[1], a)
+    x1, y1 = lerp(p0[0], p1[0], b), lerp(p0[1], p1[1], b)
+    cc = col(color)
+    sh = skia.GradientShader.MakeLinear(
+        [skia.Point(x0, y0), skia.Point(x1, y1)],
+        [skia.Color4f(cc.fR, cc.fG, cc.fB, 0).toColor(), skia.Color4f(cc.fR, cc.fG, cc.fB, alpha).toColor()])
+    for wmul, blur, am in ((7.0, 14.0, 0.55), (2.6, 4.0, 0.9), (1.0, 0.0, 1.0)):
+        p = skia.Paint(AntiAlias=True, Shader=sh, Style=skia.Paint.kStroke_Style, StrokeWidth=width * wmul,
+                       StrokeCap=skia.Paint.kRound_Cap, BlendMode=skia.BlendMode.kScreen)
+        p.setAlphaf(am)
+        if blur:
+            p.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, blur))
+        c.drawLine(x0, y0, x1, y1, p)
+    sh2 = skia.GradientShader.MakeLinear(
+        [skia.Point(x0, y0), skia.Point(x1, y1)], [colint(WHITE, 0), colint(WHITE, alpha)])
+    c.drawLine(x0, y0, x1, y1, skia.Paint(AntiAlias=True, Shader=sh2, Style=skia.Paint.kStroke_Style,
+                                          StrokeWidth=width * 0.45, StrokeCap=skia.Paint.kRound_Cap))
+    if b < 1:
+        glow_dot(c, x1, y1, width * 9, color, alpha * 0.9)
+
+
+# ---------------------------------------------------------- line particles
+def spline(pts, n=220):
+    """Catmull-Rom curve through control points -> (samples Nx2, arc-length fraction s, length, index of
+    each control point in the samples)."""
+    P = np.array(pts, float)
+    if len(P) == 2:
+        P = np.array([P[0], (P[0] + P[1]) / 2, P[1]])
+    E = np.vstack([2 * P[0] - P[1], P, 2 * P[-1] - P[-2]])
+    segs = len(P) - 1
+    per = max(6, n // segs)
+    out, ctrl = [], []
+    t = np.linspace(0, 1, per, endpoint=False)[:, None]
+    t2, t3 = t * t, t * t * t
+    for i in range(segs):
+        p0, p1, p2, p3 = E[i:i + 4]
+        ctrl.append(len(out) * per)
+        out.append(0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
+                          (-p0 + 3 * p1 - 3 * p2 + p3) * t3))
+    ctrl.append(segs * per)
+    Q = np.vstack(out + [P[-1][None]])
+    d = np.linalg.norm(np.diff(Q, axis=0), axis=1)
+    s = np.concatenate([[0.0], np.cumsum(d)])
+    L = max(s[-1], 1e-6)
+    return Q, s / L, L, [s[i] / L for i in ctrl]
+
+
+def line_flow(c, pts, head, length=0.5, n=9, spread=14.0, twist=1.6, width=1.3, color=CYAN, alpha=1.0,
+              key="lf", glow=0.7, sparks=10, tsec=0.0, behind=None, occluder=None, blend="screen",
+              core=WHITE, segs=28):
+    """Line particles (reference: SK AX): a bundle of hair-thin light lines flowing along a curve, twisting
+    around each other like a ribbon, bright heads, long fading tails and a few sparks.
+    head: 0..1+length travel of the bundle front (arc-length fraction).
+    behind: per-control-point flags; spans between two flagged points pass behind `occluder` (screen path),
+    which is how the lines wrap around buildings."""
+    if alpha <= 0.003 or head <= 0 or head - length >= 1.0:
+        return
+    Q, s, L, sc = spline(pts)
+    tx = np.gradient(Q[:, 0])
+    ty = np.gradient(Q[:, 1])
+    tn = np.hypot(tx, ty) + 1e-9
+    nx, ny = -ty / tn, tx / tn
+    spans = []
+    if behind is not None and occluder is not None:
+        for i in range(len(behind) - 1):
+            if behind[i] and behind[i + 1]:
+                spans.append((sc[i], sc[i + 1]))
+    bm = skia.BlendMode.kScreen if blend == "screen" else skia.BlendMode.kSrcOver
+    r = rng(key)
+    front, back = [], []
+    heads = []
+    for i in range(n):
+        ph = r.uniform(0, 2 * math.pi)
+        amp = spread * r.uniform(0.2, 1.0)
+        tw = twist * r.uniform(0.7, 1.3)
+        dh = r.uniform(-0.07, 0.025)
+        ln = length * r.uniform(0.55, 1.15)
+        wi = width * r.uniform(0.5, 1.35)
+        ai = r.uniform(0.45, 1.0)
+        h = head + dh
+        a0, a1 = max(0.0, h - ln), min(1.0, h)
+        if a1 <= a0:
+            continue
+        ss = np.linspace(a0, a1, segs + 1)
+        x = np.interp(ss, s, Q[:, 0])
+        y = np.interp(ss, s, Q[:, 1])
+        nxi = np.interp(ss, s, nx)
+        nyi = np.interp(ss, s, ny)
+        ang = ph + 2 * math.pi * tw * ss + tsec * 0.9
+        off = amp * np.cos(ang)
+        depth = np.sin(ang)
+        px, py = x + nxi * off, y + nyi * off
+        u = np.clip((ss - (h - ln)) / ln, 0, 1)
+        for k in range(segs):
+            uk = (u[k] + u[k + 1]) / 2
+            a = alpha * ai * uk ** 1.25 * (0.62 + 0.38 * (depth[k] + 1) / 2)
+            if a < 0.01:
+                continue
+            w = wi * (0.7 + 0.35 * (depth[k] + 1) / 2) * (0.45 + 0.55 * uk)
+            seg = (px[k], py[k], px[k + 1], py[k + 1], a, w, i % 3 == 0)
+            sm = (ss[k] + ss[k + 1]) / 2
+            (back if any(p0 <= sm <= p1 for p0, p1 in spans) else front).append(seg)
+        if a1 >= h - 1e-6:
+            hb = any(p0 <= a1 <= p1 for p0, p1 in spans)
+            heads.append((px[-1], py[-1], wi, ai, hb))
+    paint = skia.Paint(AntiAlias=True, Style=skia.Paint.kStroke_Style, StrokeCap=skia.Paint.kRound_Cap, BlendMode=bm)
+    cc = col(color)
+    cw = col(core)
+    hi = (lerp(cc.fR, cw.fR, 0.6), lerp(cc.fG, cw.fG, 0.6), lerp(cc.fB, cw.fB, 0.6))   # bright core lines
+
+    def draw(lst):
+        for (x0, y0, x1, y1, a, w, bright) in lst:
+            r_, g_, b_ = hi if bright else (cc.fR, cc.fG, cc.fB)
+            paint.setColor4f(skia.Color4f(r_, g_, b_, min(1.0, a)))
+            paint.setStrokeWidth(w)
+            c.drawLine(x0, y0, x1, y1, paint)
+
+    # soft bundle glow along the centre line
+    if glow > 0:
+        g0, g1 = max(0.0, head - length * 0.8), min(1.0, head)
+        if g1 > g0:
+            ss = np.linspace(g0, g1, 40)
+            pth = poly(list(zip(np.interp(ss, s, Q[:, 0]), np.interp(ss, s, Q[:, 1]))))
+            gp = paint_stroke(color, alpha * glow * 0.24, spread * 1.5 + 8, blur=16, blend=skia.BlendMode.kScreen)
+            c.drawPath(pth, gp)
+    draw(front)
+    if back:
+        c.save()
+        c.clipPath(occluder, skia.ClipOp.kDifference, True)
+        draw(back)
+        c.restore()
+    for (x, y, wi, ai, hb) in heads:
+        if hb:
+            continue
+        glow_dot(c, x, y, wi * 6, color, alpha * ai * 0.7)
+        c.drawCircle(x, y, wi * 0.9, paint_fill(core, alpha * ai * 0.9))
+    if sparks:
+        r2 = rng(key + "sp")
+        for j in range(sparks):
+            sj = head - r2.uniform(0.0, length * 0.9)
+            if not 0 <= sj <= 1:
+                continue
+            k = int(np.searchsorted(s, sj))
+            k = min(k, len(Q) - 1)
+            o = r2.uniform(-1.4, 1.4) * spread
+            x, y = Q[k, 0] + nx[k] * o, Q[k, 1] + ny[k] * o
+            if spans and occluder is not None and any(p0 <= sj <= p1 for p0, p1 in spans) and occluder.contains(x, y):
+                continue
+            tw_ = 0.5 + 0.5 * math.sin(tsec * 7 + j * 1.7)
+            u = 1 - (head - sj) / length
+            c.drawCircle(x, y, r2.uniform(0.8, 2.0), paint_fill(core if blend == "screen" else color,
+                                                                  alpha * 0.85 * tw_ * u, blend=bm))
+
+
+def light_line(c, pts, head_px, tail_px=1500.0, width=2.4, alpha=1.0, behind=None, occluders=None,
+               key="ll", tsec=0.0, strands=3, core="#F2F8FF", glow="#2E7BFF", halo="#1757E6", segs=90, mb_px=0.0):
+    """A thin, refined light line (one bright strand + two hairline companions) drawn along a curve.
+    head_px: arc length (screen px) the head has travelled; the line is visible from head_px - tail_px to
+    head_px and fades toward its tail. behind: per-control-point flags; spans between two flagged points
+    pass behind the occluder polygons (screen space), so the line wraps around objects.
+    mb_px: motion blur - the head is smeared over this much travel (shutter-centred linear ramp)."""
+    if alpha <= 0.003:
+        return
+    Q, s, L, sc = spline(pts)
+    mbf = mb_px / L
+    h, t0 = (head_px + mb_px / 2) / L, (head_px - tail_px) / L
+    if h <= 0 or t0 >= 1:
+        return
+    tx, ty = np.gradient(Q[:, 0]), np.gradient(Q[:, 1])
+    tn = np.hypot(tx, ty) + 1e-9
+    nx, ny = -ty / tn, tx / tn
+    spans = []
+    if behind is not None and occluders:
+        for i in range(len(behind) - 1):
+            if behind[i] and behind[i + 1]:
+                spans.append((sc[i], sc[i + 1]))
+    occ = None
+    if spans:
+        occ = skia.Path()
+        for o in occluders:
+            occ.addPath(poly(o, True))
+    r = rng(key)
+    lines = []          # (xs, ys, alphas, widths, behind_flags, weight)
+    for k in range(strands):
+        main = k == 0
+        off_amp = 0.0 if main else r.uniform(3.0, 8.0)
+        ph, fr = r.uniform(0, 2 * math.pi), r.uniform(1.2, 2.4)
+        ln = tail_px * (1.0 if main else r.uniform(0.45, 0.75)) / L
+        dh = 0.0 if main else -r.uniform(0.0, 0.03)
+        hk = h + dh
+        a0, a1 = max(0.0, hk - ln), min(1.0, hk)
+        if a1 <= a0:
+            continue
+        ss = np.linspace(a0, a1, segs + 1)
+        x, y = np.interp(ss, s, Q[:, 0]), np.interp(ss, s, Q[:, 1])
+        off = off_amp * np.sin(ph + 2 * math.pi * fr * ss + tsec * 1.3) * (1 if k % 2 else -1)
+        x, y = x + np.interp(ss, s, nx) * off, y + np.interp(ss, s, ny) * off
+        u = np.clip((ss - (hk - ln)) / ln, 0, 1)
+        au = u ** 1.25
+        if mbf > 0:
+            au = au * np.clip((hk - ss) / mbf, 0, 1)
+        lines.append((x, y, au, 0.5 + 0.5 * u, [any(p0 <= v <= p1 for p0, p1 in spans) for v in ss],
+                      1.0 if main else 0.42))
+    if not lines:
+        return
+    allx = np.concatenate([l_[0] for l_ in lines])
+    ally = np.concatenate([l_[1] for l_ in lines])
+    bounds = R(allx.min() - 60, ally.min() - 60, allx.max() - allx.min() + 120, ally.max() - ally.min() + 120)
+
+    def strokes(wmul, amul, colr, wmin=0.0):
+        paint = skia.Paint(AntiAlias=True, Style=skia.Paint.kStroke_Style, StrokeCap=skia.Paint.kRound_Cap)
+        for back in (False, True):
+            if back and occ is None:
+                continue
+            if back:
+                c.save()
+                c.clipPath(occ, skia.ClipOp.kDifference, True)
+            for (x, y, a, w, bf, wt) in lines:
+                for i in range(len(x) - 1):
+                    if bf[i] != back:
+                        continue
+                    ai = alpha * amul * wt * (a[i] + a[i + 1]) / 2
+                    if ai < 0.008:
+                        continue
+                    paint.setColor4f(col(colr, clamp(ai)))
+                    paint.setStrokeWidth(max(wmin, width * wmul * (w[i] + w[i + 1]) / 2 * (1 if wt == 1 else 0.6)))
+                    c.drawLine(x[i], y[i], x[i + 1], y[i + 1], paint)
+            if back:
+                c.restore()
+
+    def glow_layer(sigma, wmul, amul, colr, blend):
+        lp = skia.Paint()
+        lp.setImageFilter(skia.ImageFilters.Blur(sigma, sigma, skia.TileMode.kDecal))
+        lp.setBlendMode(blend)
+        c.saveLayer(bounds, lp)
+        strokes(wmul, amul, colr)
+        c.restore()
+
+    # saturated blue body (normal blend so it reads over bright skies), then a screen bloom and a white core
+    glow_layer(16, 8.0, 0.5, halo, skia.BlendMode.kSrcOver)
+    glow_layer(4.5, 3.0, 0.95, glow, skia.BlendMode.kSrcOver)
+    glow_layer(2.0, 1.8, 0.6, "#8FC2FF", skia.BlendMode.kScreen)
+    strokes(1.0, 1.0, core, 0.8)
+    # head: a small soft flare where the line is being drawn
+    x, y, a, w, bf, wt = lines[0]
+    if h - mbf / 2 <= 1.0 and not bf[-1]:
+        k = max(1, int(mbf * len(x) / max(1e-6, h - max(0.0, t0))) + 1) if mbf > 0 else 1
+        k = min(k, 8)
+        for j in range(k):  # the flare is smeared along the path like the head
+            i = max(0, len(x) - 1 - int(j * (len(x) - 1) * mbf / max(1e-6, h - max(0.0, t0)) / max(1, k - 1)))
+            hx, hy = x[i], y[i]
+            c.drawCircle(hx, hy, 16, paint_fill(glow, 0.35 * alpha / k, blur=10, blend=skia.BlendMode.kScreen))
+            c.drawCircle(hx, hy, 3.2, paint_fill(core, 0.95 * alpha / k, blur=1.5, blend=skia.BlendMode.kScreen))
+
+
+def light_beam(c, pts, head_px, tail_px=2300.0, width=4.4, alpha=1.0, mb_px=0.0, core="#FFFFFF",
+               inner="#B8F1FF", color="#1EC8FF", bloom="#0B7DFF", segs=140):
+    """One continuous, luminous light line (reference look: white-hot core, saturated cyan body, wide soft
+    bloom). Never occluded, no companion strands. head_px: arc length the head has travelled (screen px);
+    the line fades out over tail_px behind it. mb_px: motion blur - the head is smeared over the shutter."""
+    if alpha <= 0.003:
+        return
+    Q, s, L, _ = spline(pts)
+    h, t0 = (head_px + mb_px / 2) / L, (head_px - tail_px) / L
+    if h <= 0 or t0 >= 1:
+        return
+    a0, a1 = max(0.0, t0), min(1.0, h)
+    if a1 <= a0:
+        return
+    ss = np.linspace(a0, a1, segs + 1)
+    x, y = np.interp(ss, s, Q[:, 0]), np.interp(ss, s, Q[:, 1])
+    u = np.clip((ss - t0) / max(1e-6, h - t0), 0, 1)          # 0 at the tail end, 1 at the head
+    av = u * u * (3 - 2 * u)                                     # smooth fade toward the tail
+    if mb_px > 0:
+        av = av * np.clip((h - ss) * L / mb_px, 0, 1)            # shutter smear at the head
+    wv = 0.55 + 0.45 * u
+    bounds = R(x.min() - 90, y.min() - 90, x.max() - x.min() + 180, y.max() - y.min() + 180)
+
+    def strokes(wmul, amul, colr):
+        paint = skia.Paint(AntiAlias=True, Style=skia.Paint.kStroke_Style, StrokeCap=skia.Paint.kRound_Cap)
+        for i in range(segs):
+            ai = alpha * amul * (av[i] + av[i + 1]) / 2
+            if ai < 0.006:
+                continue
+            paint.setColor4f(col(colr, clamp(ai)))
+            paint.setStrokeWidth(width * wmul * (wv[i] + wv[i + 1]) / 2)
+            c.drawLine(x[i], y[i], x[i + 1], y[i + 1], paint)
+
+    def layer(sigma, wmul, amul, colr, blend):
+        lp = skia.Paint()
+        lp.setImageFilter(skia.ImageFilters.Blur(sigma, sigma, skia.TileMode.kDecal))
+        lp.setBlendMode(blend)
+        c.saveLayer(bounds, lp)
+        strokes(wmul, amul, colr)
+        c.restore()
+
+    layer(30, 14.0, 0.55, bloom, skia.BlendMode.kScreen)        # wide soft bloom
+    layer(9, 5.0, 0.80, color, skia.BlendMode.kSrcOver)         # saturated cyan body
+    layer(3, 2.4, 0.90, color, skia.BlendMode.kScreen)          # tight glow
+    layer(1.2, 1.6, 0.95, inner, skia.BlendMode.kSrcOver)       # pale cyan rim
+    strokes(1.0, 1.0, core)                                      # white-hot core
+    if h - (mb_px / 2) / L <= 1.0:                               # head flare, smeared like the head
+        n = 6
+        for j in range(n):
+            q = h - (mb_px / L) * (j / (n - 1)) if mb_px > 0 else h
+            if q < a0 or q > 1.0:
+                continue
+            hx, hy = float(np.interp(q, s, Q[:, 0])), float(np.interp(q, s, Q[:, 1]))
+            c.drawCircle(hx, hy, 22, paint_fill(color, 0.30 * alpha / n * 2, blur=14, blend=skia.BlendMode.kScreen))
+            c.drawCircle(hx, hy, 4.5, paint_fill(core, 0.9 * alpha / n * 2, blur=2, blend=skia.BlendMode.kScreen))
+
+
+def light_streak(c, pts, head_px, tail_px=1400.0, width=3.4, alpha=1.0, mb_px=0.0, core="#FFFFFF",
+                 color="#3CCBFF", bloom="#1A7BFF", flare=1.0, segs=120):
+    """Reference look (client still): a thin, near-straight beam with a white-hot core and cyan glow that fades
+    out toward its tail, led by a bright star flare with a horizontal anamorphic streak at the head.
+    head_px may run past the path end (the head then leaves the frame and the tail follows)."""
+    if alpha <= 0.003:
+        return
+    Q, s, L, _ = spline(pts)
+    h, t0 = (head_px + mb_px / 2) / L, (head_px - tail_px) / L
+    if h <= 0 or t0 >= 1:
+        return
+    a0, a1 = max(0.0, t0), min(1.0, h)
+    if a1 <= a0:
+        return
+    ss = np.linspace(a0, a1, segs + 1)
+    x, y = np.interp(ss, s, Q[:, 0]), np.interp(ss, s, Q[:, 1])
+    u = np.clip((ss - t0) / max(1e-6, h - t0), 0, 1)
+    av = u ** 1.6
+    if mb_px > 0:
+        av = av * np.clip((h - ss) * L / mb_px, 0, 1)
+    wv = 0.3 + 0.7 * u
+    bounds = R(x.min() - 80, y.min() - 80, x.max() - x.min() + 160, y.max() - y.min() + 160)
+
+    def strokes(wmul, amul, colr):
+        paint = skia.Paint(AntiAlias=True, Style=skia.Paint.kStroke_Style, StrokeCap=skia.Paint.kRound_Cap)
+        for i in range(segs):
+            ai = alpha * amul * (av[i] + av[i + 1]) / 2
+            if ai < 0.006:
+                continue
+            paint.setColor4f(col(colr, clamp(ai)))
+            paint.setStrokeWidth(width * wmul * (wv[i] + wv[i + 1]) / 2)
+            c.drawLine(x[i], y[i], x[i + 1], y[i + 1], paint)
+
+    def layer(sigma, wmul, amul, colr, blend):
+        lp = skia.Paint()
+        lp.setImageFilter(skia.ImageFilters.Blur(sigma, sigma, skia.TileMode.kDecal))
+        lp.setBlendMode(blend)
+        c.saveLayer(bounds, lp)
+        strokes(wmul, amul, colr)
+        c.restore()
+
+    layer(18, 10.0, 0.60, bloom, skia.BlendMode.kScreen)
+    layer(5, 3.6, 0.85, color, skia.BlendMode.kSrcOver)       # saturated cyan body reads on light surfaces too
+    layer(2, 2.2, 0.9, color, skia.BlendMode.kScreen)
+    layer(0.8, 1.6, 0.95, "#C8F4FF", skia.BlendMode.kSrcOver)
+    strokes(1.0, 1.0, core)
+    # the head: star flare + horizontal anamorphic streak
+    if flare > 0 and head_px <= L + 40:
+        q = min(1.0, max(0.0, head_px / L))
+        hx, hy = float(np.interp(q, s, Q[:, 0])), float(np.interp(q, s, Q[:, 1]))
+        k = alpha * flare
+        sb = skia.BlendMode.kScreen
+        for half, aa in ((640, 0.45), (300, 0.65)):
+            sh = skia.GradientShader.MakeLinear(
+                [skia.Point(hx - half, hy), skia.Point(hx + half, hy)],
+                [colint(color, 0.0), colint(color, aa * k), colint("#FFFFFF", min(1.0, aa * 1.6 * k)),
+                 colint(color, aa * k), colint(color, 0.0)], [0.0, 0.42, 0.5, 0.58, 1.0])
+            pp = skia.Paint(AntiAlias=True, Shader=sh, BlendMode=sb, Style=skia.Paint.kStroke_Style,
+                            StrokeWidth=3.0 if half > 400 else 1.8)
+            pp.setMaskFilter(skia.MaskFilter.MakeBlur(skia.kNormal_BlurStyle, 1.6))
+            c.drawLine(hx - half, hy, hx + half, hy, pp)
+        for ang, ln in ((90, 70), (45, 38), (-45, 38)):
+            dx, dy = math.cos(math.radians(ang)) * ln, math.sin(math.radians(ang)) * ln
+            c.drawLine(hx - dx, hy - dy, hx + dx, hy + dy, paint_stroke("#FFFFFF", 0.7 * k, 1.8, blur=1.4, blend=sb))
+        c.drawCircle(hx, hy, 80, paint_fill(bloom, 0.45 * k, blur=40, blend=sb))
+        c.drawCircle(hx, hy, 28, paint_fill(color, 0.85 * k, blur=14, blend=sb))
+        c.drawCircle(hx, hy, 10, paint_fill(core, 1.0 * k, blur=4, blend=sb))
+        c.drawCircle(hx, hy, 4.5, paint_fill(core, 1.0 * k, blur=1.2))
+
+
+def light_ribbon(c, pts, head, tail=0.45, behind=None, occluder=None, width=3.0, alpha=1.0, core="#FFFFFF",
+                 color="#3E9BFF", bloom="#1F6BFF", mb=0.0, segs=260, back_dim=None):
+    """Smooth luminous line for dense, analytically generated curves (helices, loops): no control-point
+    kinks. head / tail / mb are arc-length fractions of the path (head may run past 1). behind: per-point
+    flags; spans flagged True are hidden inside `occluder` (screen path) so the line wraps around objects,
+    or, with back_dim and no occluder, simply dimmed (depth cue without breaking the line)."""
+    if alpha <= 0.003 or head <= 0 or head - tail >= 1:
+        return
+    P = np.asarray(pts, float)
+    d = np.concatenate([[0.0], np.cumsum(np.hypot(*np.diff(P, axis=0).T))])
+    L = max(d[-1], 1e-6)
+    sfrac = d / L
+    h = head + mb / 2
+    a0, a1 = max(0.0, head - tail), min(1.0, h)
+    if a1 <= a0:
+        return
+    ss = np.linspace(a0, a1, segs + 1)
+    x, y = np.interp(ss, sfrac, P[:, 0]), np.interp(ss, sfrac, P[:, 1])
+    bf = np.interp(ss, sfrac, np.asarray(behind, float)) > 0.5 if behind is not None and occluder is not None \
+        else np.zeros(len(ss), bool)
+    u = np.clip((ss - (head - tail)) / max(1e-6, tail), 0, 1)
+    av = u * u * (3 - 2 * u)
+    if mb > 0:
+        av = av * np.clip((h - ss) / mb, 0, 1)
+    if back_dim is not None and behind is not None:
+        far = np.interp(ss, sfrac, np.convolve(np.asarray(behind, float), np.ones(9) / 9, mode="same"))
+        av = av * (1 - (1 - back_dim) * far)                      # smooth fade into / out of the far side
+    wv = 0.45 + 0.55 * u
+    bounds = R(x.min() - 90, y.min() - 90, x.max() - x.min() + 180, y.max() - y.min() + 180)
+
+    def strokes(wmul, amul, colr):
+        paint = skia.Paint(AntiAlias=True, Style=skia.Paint.kStroke_Style, StrokeCap=skia.Paint.kRound_Cap)
+        for back in (False, True):
+            if back and not bf.any():
+                continue
+            if back:
+                c.save()
+                c.clipPath(occluder, skia.ClipOp.kDifference, True)
+            for i in range(segs):
+                if bool(bf[i] and bf[i + 1]) != back:
+                    continue
+                ai = alpha * amul * (av[i] + av[i + 1]) / 2
+                if ai < 0.006:
+                    continue
+                paint.setColor4f(col(colr, clamp(ai)))
+                paint.setStrokeWidth(width * wmul * (wv[i] + wv[i + 1]) / 2)
+                c.drawLine(x[i], y[i], x[i + 1], y[i + 1], paint)
+            if back:
+                c.restore()
+
+    def layer(sigma, wmul, amul, colr, blend):
+        lp = skia.Paint()
+        lp.setImageFilter(skia.ImageFilters.Blur(sigma, sigma, skia.TileMode.kDecal))
+        lp.setBlendMode(blend)
+        c.saveLayer(bounds, lp)
+        strokes(wmul, amul, colr)
+        c.restore()
+
+    layer(22, 11.0, 0.55, bloom, skia.BlendMode.kScreen)        # soft bloom
+    layer(6, 4.0, 0.85, color, skia.BlendMode.kScreen)          # blue glow
+    layer(1.5, 2.0, 0.9, "#BFE0FF", skia.BlendMode.kScreen)     # pale rim
+    strokes(1.0, 1.0, core)                                      # white core
+    if head <= 1.0 and not bf[-1]:
+        hx, hy = x[-1], y[-1]
+        c.drawCircle(hx, hy, 26, paint_fill(color, 0.45 * alpha, blur=14, blend=skia.BlendMode.kScreen))
+        c.drawCircle(hx, hy, 6, paint_fill(core, 0.9 * alpha, blur=2.5, blend=skia.BlendMode.kScreen))
+
+
+def bspline(ctrl, n=600):
+    """Clamped uniform cubic B-spline through a control polygon (C2-smooth: it can never form a corner).
+    ctrl rows may carry extra columns (e.g. a 'behind' weight) that are smoothed along with the position."""
+    P = np.asarray(ctrl, float)
+    P = np.vstack([P[:1], P[:1], P, P[-1:], P[-1:]])
+    segs = len(P) - 3
+    t = np.linspace(0, segs, n, endpoint=False)
+    i = np.minimum(t.astype(int), segs - 1)
+    u = (t - i)[:, None]
+    b0, b1 = (1 - u) ** 3 / 6, (3 * u ** 3 - 6 * u ** 2 + 4) / 6
+    b2, b3 = (-3 * u ** 3 + 3 * u ** 2 + 3 * u + 1) / 6, u ** 3 / 6
+    out = b0 * P[i] + b1 * P[i + 1] + b2 * P[i + 2] + b3 * P[i + 3]
+    return np.vstack([out, P[-1:]])
+
+
+def path_len(pts):
+    return spline(pts)[2]
+
+
+def flow_pts(cam, uv, region=None):
+    """Control points given in frame uv -> screen (follows the tracked plate)."""
+    return [cam.map(u, v, region) for (u, v) in uv]
+
+
+def resample_poly(pts, n=48):
+    """Closed polygon resampled to n points by arc length, starting at the top-most (then left-most)
+    vertex, consistent orientation - used to morph one shape into another."""
+    P = np.array(pts, float)
+    area = 0.5 * np.sum(P[:, 0] * np.roll(P[:, 1], -1) - np.roll(P[:, 0], -1) * P[:, 1])
+    if area < 0:
+        P = P[::-1]
+    k = min(range(len(P)), key=lambda i: (round(P[i, 1], 4), P[i, 0]))
+    P = np.roll(P, -k, axis=0)
+    C = np.vstack([P, P[:1]])
+    d = np.linalg.norm(np.diff(C, axis=0), axis=1)
+    s = np.concatenate([[0], np.cumsum(d)])
+    t = np.linspace(0, s[-1], n, endpoint=False)
+    return np.stack([np.interp(t, s, C[:, 0]), np.interp(t, s, C[:, 1])], 1)
+
+
+_ICONS = {}
+
+
+def brand_icon(c, name, cx, cy, size, alpha=1.0):
+    """Official app icon (assets/icons/<name>.png, rasterized from the vendor SVG)."""
+    if alpha <= 0.003:
+        return
+    if name not in _ICONS:
+        from PIL import Image
+        _ICONS[name] = _to_skimage(np.asarray(Image.open(os.path.join(HERE, "assets", "icons", name + ".png"))
+                                              .convert("RGBA")))
+    img = _ICONS[name]
+    p = skia.Paint(AntiAlias=True)
+    p.setAlphaf(clamp(alpha))
+    c.drawImageRect(img, skia.Rect.MakeXYWH(cx - size / 2, cy - size / 2, size, size), SAMP, p)
+
+
+# ------------------------------------------------------------------ plates
+SAMP = skia.SamplingOptions(skia.FilterMode.kLinear, skia.MipmapMode.kLinear)
+_PLATES = {}
+
+
+def _to_skimage(arr):
+    if arr.shape[2] == 3:
+        arr = np.dstack([arr, np.full(arr.shape[:2], 255, np.uint8)])
+    arr = np.ascontiguousarray(arr)
+    return skia.Image.fromarray(arr, colorType=skia.ColorType.kRGBA_8888_ColorType).withDefaultMipmaps()
+
+
+def plate(name, blurred=False):
+    key = (name, blurred)
+    if key not in _PLATES:
+        from PIL import Image, ImageFilter
+        path = os.path.join(PLATE_DIR, name + ".jpg")
+        if os.path.exists(path):
+            im = Image.open(path).convert("RGB")
+        else:  # placeholder so the engine can run without plates (layout tests)
+            im = placeholder_plate(name)
+        if blurred:
+            im = im.resize((im.width // 4, im.height // 4), Image.BILINEAR).filter(ImageFilter.GaussianBlur(6))
+        _PLATES[key] = _to_skimage(np.asarray(im))
+    return _PLATES[key]
+
+
+def placeholder_plate(name):
+    from PIL import Image, ImageDraw
+    r = rng("ph" + name)
+    a = np.zeros((1296, 2304, 3), np.uint8)
+    top = r.integers(20, 200, 3)
+    bot = r.integers(20, 200, 3)
+    g = np.linspace(0, 1, 1296)[:, None, None]
+    a[:] = (top * (1 - g) + bot * g).astype(np.uint8)
+    im = Image.fromarray(a)
+    d = ImageDraw.Draw(im)
+    for i in range(0, 2304, 230):
+        d.line([(i, 0), (i, 1296)], fill=(255, 255, 255), width=2)
+    for j in range(0, 1296, 130):
+        d.line([(0, j), (2304, j)], fill=(255, 255, 255), width=2)
+    d.text((40, 40), name, fill=(255, 255, 0))
+    return im
+
+
+class Cam:
+    """2.5D camera for a plate or clip frame: scale s (1 = cover fit), screen offset (ox, oy),
+    roll in degrees. map(u, v) converts frame-0 normalized coordinates to screen pixels; for
+    clips it first follows the tracked surface (homography) so overlays stay locked."""
+
+    def __init__(self, img, s=1.0, ox=0.0, oy=0.0, rot=0.0):
+        self.iw, self.ih = img.width(), img.height()
+        self.k = max(W / self.iw, H / self.ih) * s
+        m = skia.Matrix()
+        m.setTranslate(W / 2 + ox, H / 2 + oy)
+        m.preRotate(rot)
+        m.preScale(self.k, self.k)
+        m.preTranslate(-self.iw / 2, -self.ih / 2)
+        self.m = m
+        self.s = s
+        self.trk = None
+        self.fi = 0
+
+    def attach(self, trk, fi):
+        self.trk, self.fi = trk, fi
+        return self
+
+    def screen(self, u, v):
+        p = self.m.mapXY(u * self.iw, v * self.ih)
+        return p.x(), p.y()
+
+    def map(self, u, v, region=None):
+        if self.trk is not None:
+            u, v = self.trk.apply(region or "global", self.fi, u, v)
+        return self.screen(u, v)
+
+    def rect(self, u0, v0, u1, v1, region=None):
+        pts = [self.map(u, v, region) for u, v in ((u0, v0), (u1, v0), (u1, v1), (u0, v1))]
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        return skia.Rect.MakeLTRB(min(xs), min(ys), max(xs), max(ys))
+
+    def hand(self, lm=8, dt=0):
+        """Screen position of a tracked hand landmark and pinch strength, or None."""
+        if self.trk is None:
+            return None
+        h = self.trk.hand(self.fi + dt, lm)
+        if h is None:
+            return None
+        x, y = self.screen(h[0], h[1])
+        return x, y, h[2]
+
+    def point(self, name):
+        if self.trk is None:
+            return None
+        p = self.trk.point(name, self.fi)
+        return None if p is None else self.screen(*p)
+
+
+def grade_filter(bright=1.0, contrast=1.0, sat=1.0, tint=(0.0, 0.0, 0.0)):
+    """Colour matrix: saturation, contrast around mid grey, brightness, additive tint (0..1)."""
+    lr, lg, lb = 0.2126, 0.7152, 0.0722
+    s = sat
+    m = np.array([
+        [lr * (1 - s) + s, lg * (1 - s), lb * (1 - s)],
+        [lr * (1 - s), lg * (1 - s) + s, lb * (1 - s)],
+        [lr * (1 - s), lg * (1 - s), lb * (1 - s) + s]]) * contrast * bright
+    off = (0.5 - 0.5 * contrast) * bright
+    rows = []
+    for i in range(3):
+        rows += list(m[i]) + [0.0, off + tint[i]]
+    rows += [0, 0, 0, 1, 0]
+    return skia.ColorFilters.Matrix([float(v) for v in rows])
+
+
+def draw_plate(c, name, t, dur, s=(1.0, 1.04), x=(0, 0), y=(0, 0), r=(0, 0), alpha=1.0,
+               defocus=0.0, grade=None, beats=(), stab=False):
+    """Draw the shot: the live-action clip made from this plate when it exists (falls back to
+    the still plate), with a gentle digital drift on top. Returns the Cam for tracked overlays.
+    beats: [(time, extra_scale)] decisive push-ins landing on the hero."""
+    import media
+    fi = 0
+    if media.clip_info(name):
+        img, fi = media.frame(name, t)
+    else:
+        img = plate(name)
+    p = drift(t, dur)
+    if media.clip_info(name):  # the footage moves on its own: keep the digital move gentle
+        s = (1 + (s[0] - 1) * 0.5, 1 + (s[1] - 1) * 0.5)
+    sc = lerp(s[0], s[1], p)
+    for bt, amt in beats:
+        sc += amt * e_out_expo(prog(t, bt, 0.9))
+    cam = Cam(img, sc, lerp(x[0], x[1], p), lerp(y[0], y[1], p), lerp(r[0], r[1], p))
+    lock = None
+    if media.clip_info(name):
+        trk = media.track(name)
+        if stab and trk is not None and trk.H("global", fi) is not None:
+            # stabilise: undo the footage's own camera drift so the set stays put (frame-0 geometry);
+            # overlays then map straight to frame-0 coordinates
+            S = np.diag([img.width(), img.height(), 1.0])
+            Mi = S @ np.linalg.inv(trk.H("global", fi)) @ np.linalg.inv(S)
+            Mi = Mi / Mi[2, 2]
+            lock = skia.Matrix.MakeAll(*[float(v) for v in Mi.flatten()])
+        else:
+            cam.attach(trk, fi)
+    if alpha <= 0.003:
+        return cam
+    paint = skia.Paint(AntiAlias=True)
+    paint.setAlphaf(clamp(alpha))
+    if grade is not None:
+        paint.setColorFilter(grade)
+    c.save()
+    c.concat(cam.m)
+    if lock is not None:
+        c.concat(lock)
+    c.drawImage(img, 0, 0, SAMP, paint)
+    if defocus > 0.01:
+        pb = skia.Paint(AntiAlias=True)
+        pb.setAlphaf(clamp(alpha * defocus))
+        pb.setImageFilter(skia.ImageFilters.Blur(14, 14, skia.TileMode.kClamp))
+        if grade is not None:
+            pb.setColorFilter(grade)
+        c.drawImage(img, 0, 0, SAMP, pb)
+    c.restore()
+    return cam
+
+
+def draw_image_cover(c, name, rect, alpha=1.0, zoom=1.0, focus=(0.5, 0.5), radius=0.0, grade=None, t=None):
+    """Plate (or its playing clip proxy when t is given) cropped into a rect: tiles / thumbnails."""
+    if alpha <= 0.003 or rect.width() < 1 or rect.height() < 1:
+        return
+    img = None
+    if t is not None:
+        import media
+        img = media.proxy_frame(name, t)
+    if img is None:
+        img = plate(name)
+    iw, ih = img.width(), img.height()
+    k = max(rect.width() / iw, rect.height() / ih) * zoom
+    sw, sh = rect.width() / k, rect.height() / k
+    sx = clamp(focus[0] * iw - sw / 2, 0, iw - sw)
+    sy = clamp(focus[1] * ih - sh / 2, 0, ih - sh)
+    p = skia.Paint(AntiAlias=True)
+    p.setAlphaf(clamp(alpha))
+    if grade is not None:
+        p.setColorFilter(grade)
+    c.save()
+    if radius > 0:
+        c.clipRRect(skia.RRect.MakeRectXY(rect, radius, radius), skia.ClipOp.kIntersect, True)
+    c.drawImageRect(img, skia.Rect.MakeXYWH(sx, sy, sw, sh), rect, SAMP, p)
+    c.restore()
+
+
+HAND_CHAINS = [(0, 1, 2, 3, 4), (0, 5, 6, 7, 8), (9, 10, 11, 12), (13, 14, 15, 16), (0, 17, 18, 19, 20), (5, 9, 13, 17)]
+
+
+def hand_mask(cam, forearm=1.0):
+    """Path covering the tracked hand (finger capsules + palm) and the forearm, in screen space."""
+    if cam.trk is None or cam.hand(0) is None:
+        return None
+    pts = [cam.hand(i) for i in range(21)]
+    P = [(p[0], p[1]) for p in pts]
+    palm = math.hypot(P[0][0] - P[9][0], P[0][1] - P[9][1])
+    mask = poly([P[i] for i in (0, 1, 5, 9, 13, 17)], True)
+    for chain in HAND_CHAINS:
+        src = poly([P[i] for i in chain])
+        sp = skia.Paint(Style=skia.Paint.kStroke_Style, StrokeWidth=palm * 0.27, StrokeCap=skia.Paint.kRound_Cap,
+                        StrokeJoin=skia.Paint.kRound_Join)
+        fill = skia.Path()
+        sp.getFillPath(src, fill)
+        mask = skia.Op(mask, fill, skia.PathOp.kUnion_PathOp) or mask
+    if forearm > 0:
+        dx, dy = P[0][0] - P[9][0], P[0][1] - P[9][1]
+        n = math.hypot(dx, dy) + 1e-6
+        dx, dy = dx / n, dy / n
+        nx, ny = -dy, dx
+        hw = palm * 0.40
+        far = palm * 3.5 * forearm
+        arm = poly([(P[0][0] + nx * hw, P[0][1] + ny * hw), (P[0][0] + dx * far + nx * hw * 1.15, P[0][1] + dy * far + ny * hw * 1.15),
+                    (P[0][0] + dx * far - nx * hw * 1.15, P[0][1] + dy * far - ny * hw * 1.15),
+                    (P[0][0] - nx * hw, P[0][1] - ny * hw)], True)
+        mask = skia.Op(mask, arm, skia.PathOp.kUnion_PathOp) or mask
+    return mask
+
+
+def hand_in_front(c, name, t, cam, grade=None, forearm=1.0):
+    """Re-draw the live-action hand and arm on top of the graphics so the person interacts in front."""
+    import media
+    m = hand_mask(cam, forearm)
+    if m is None or not media.clip_info(name):
+        return
+    img, _ = media.frame(name, t)
+    c.save()
+    c.clipPath(m, skia.ClipOp.kIntersect, True)
+    c.concat(cam.m)
+    p = skia.Paint(AntiAlias=True)
+    if grade is not None:
+        p.setColorFilter(grade)
+    c.drawImage(img, 0, 0, SAMP, p)
+    c.restore()
+
+
+# ------------------------------------------------------------- glass cards
+def glass(c, rect, radius=18, alpha=1.0, tint=WHITE, tint_a=0.14, blur=22, border=0.55,
+          shadow=0.22, glow=0.0, glow_col=CYAN, solid=0.0, solid_col=None, highlight=0.18):
+    """Frosted translucent card (glassmorphism): backdrop blur, tint, specular top edge,
+    hairline border, soft contact shadow, optional localized edge glow.
+    solid 0..1 morphs the card into an opaque UI surface."""
+    if alpha <= 0.003 or rect.width() < 2 or rect.height() < 2:
+        return
+    rr = skia.RRect.MakeRectXY(rect, radius, radius)
+    if shadow > 0:
+        sr = skia.RRect.MakeRectXY(rect.makeOffset(0, 14), radius, radius)
+        c.drawRRect(sr, paint_fill(NAVY_950, shadow * alpha, blur=26))
+    c.save()
+    c.clipRRect(rr, skia.ClipOp.kIntersect, True)
+    lp = skia.Paint()
+    lp.setAlphaf(clamp(alpha))
+    bf = skia.ImageFilters.Blur(blur, blur, skia.TileMode.kClamp)
+    rec = skia.Canvas.SaveLayerRec(rect, lp, bf, 0)
+    c.saveLayer(rec)
+    fill_a = lerp(tint_a, 1.0, clamp(solid))
+    c.drawRect(rect, paint_fill(tint if solid_col is None or solid <= 0 else solid_col, fill_a))
+    if highlight > 0:
+        vgrad(c, skia.Rect.MakeLTRB(rect.left(), rect.top(), rect.right(), rect.top() + min(90, rect.height())),
+              WHITE, WHITE, highlight, 0.0)
+    c.restore()
+    c.restore()
+    if border > 0:
+        sh = skia.GradientShader.MakeLinear(
+            [skia.Point(rect.left(), rect.top()), skia.Point(rect.right(), rect.bottom())],
+            [colint(WHITE, border * alpha), colint(WHITE, border * alpha * 0.25), colint(WHITE, border * alpha * 0.6)],
+            [0.0, 0.6, 1.0])
+        bp = skia.Paint(AntiAlias=True, Shader=sh, Style=skia.Paint.kStroke_Style, StrokeWidth=1.2)
+        c.drawRRect(rr, bp)
+    if glow > 0:
+        c.drawRRect(rr, paint_stroke(glow_col, glow * alpha * 0.85, 5, blur=9, blend=skia.BlendMode.kScreen))
+        c.drawRRect(rr, paint_stroke(glow_col, glow * alpha, 1.6))
+
+
+def layer_alpha(c, alpha, bounds=None):
+    """Begin a group fade (pair with c.restore())."""
+    p = skia.Paint()
+    p.setAlphaf(clamp(alpha))
+    c.saveLayer(bounds, p)
+
+
+# -------------------------------------------------------------------- icons
+def icon(c, kind, cx, cy, s=22, color=WHITE, alpha=1.0, width=None):
+    """Minimal line icons drawn on a s x s grid."""
+    if alpha <= 0.003:
+        return
+    w = width or max(1.4, s * 0.085)
+    p = paint_stroke(color, alpha, w)
+    pf = paint_fill(color, alpha)
+    h = s / 2
+    L, T, Rr, B = cx - h, cy - h, cx + h, cy + h
+    if kind == "doc":
+        pa = poly([(L + s * .2, T), (L + s * .62, T), (Rr - s * .15, T + s * .25), (Rr - s * .15, B), (L + s * .2, B)], True)
+        c.drawPath(pa, p)
+        for k in (.45, .62, .79):
+            c.drawLine(L + s * .35, T + s * k, Rr - s * .3, T + s * k, p)
+    elif kind == "search":
+        c.drawCircle(cx - s * .08, cy - s * .08, s * .3, p)
+        c.drawLine(cx + s * .14, cy + s * .14, Rr - s * .05, B - s * .05, p)
+    elif kind == "chart":
+        c.drawPath(poly([(L + s * .05, B - s * .2), (L + s * .35, cy), (L + s * .58, cy + s * .15), (Rr - s * .05, T + s * .15)]), p)
+        c.drawLine(L, B, Rr, B, p)
+    elif kind == "bars":
+        for i, hh in enumerate((.35, .6, .85)):
+            x = L + s * (.18 + i * .3)
+            c.drawRect(skia.Rect.MakeLTRB(x - s * .08, B - s * hh, x + s * .08, B), pf)
+    elif kind == "scan":
+        corner_brackets(c, skia.Rect.MakeLTRB(L, T, Rr, B), s * .28, color, alpha, w)
+        c.drawLine(L + s * .15, cy, Rr - s * .15, cy, p)
+    elif kind == "flow":
+        c.drawRect(R(L, T, s * .34, s * .3), p)
+        c.drawRect(R(Rr - s * .34, B - s * .3, s * .34, s * .3), p)
+        c.drawPath(poly([(L + s * .17, T + s * .3), (L + s * .17, cy + s * .15), (Rr - s * .34, cy + s * .15)]), p)
+    elif kind == "report":
+        c.drawRect(skia.Rect.MakeLTRB(L + s * .12, T, Rr - s * .12, B), p)
+        c.drawRect(skia.Rect.MakeLTRB(L + s * .3, cy, L + s * .42, B - s * .15), pf)
+        c.drawRect(skia.Rect.MakeLTRB(L + s * .55, cy - s * .2, L + s * .67, B - s * .15), pf)
+    elif kind == "chat":
+        c.drawRRect(skia.RRect.MakeRectXY(skia.Rect.MakeLTRB(L, T + s * .1, Rr, B - s * .2), s * .18, s * .18), p)
+        c.drawPath(poly([(L + s * .25, B - s * .2), (L + s * .2, B), (L + s * .45, B - s * .2)]), p)
+    elif kind == "robot":
+        c.drawPath(poly([(L + s * .1, B), (L + s * .3, cy + s * .05), (cx + s * .05, T + s * .25), (Rr - s * .1, T + s * .1)]), p)
+        c.drawCircle(L + s * .3, cy + s * .05, s * .08, pf)
+        c.drawCircle(cx + s * .05, T + s * .25, s * .08, pf)
+        c.drawLine(L, B, L + s * .3, B, p)
+    elif kind == "mail":
+        c.drawRect(skia.Rect.MakeLTRB(L, T + s * .18, Rr, B - s * .18), p)
+        c.drawPath(poly([(L, T + s * .18), (cx, cy + s * .05), (Rr, T + s * .18)]), p)
+    elif kind == "hash":
+        for k in (.38, .62):
+            c.drawLine(L + s * k + s * .05, T + s * .1, L + s * k - s * .05, B - s * .1, p)
+            c.drawLine(L + s * .12, T + s * k, Rr - s * .12, T + s * k, p)
+    elif kind == "note":
+        c.drawRect(skia.Rect.MakeLTRB(L + s * .1, T, Rr - s * .1, B), p)
+        c.drawPath(poly([(L + s * .32, B - s * .25), (L + s * .32, T + s * .25), (Rr - s * .32, B - s * .25), (Rr - s * .32, T + s * .25)]), p)
+    elif kind == "calendar":
+        c.drawRect(skia.Rect.MakeLTRB(L, T + s * .12, Rr, B), p)
+        c.drawLine(L, T + s * .38, Rr, T + s * .38, p)
+        c.drawLine(L + s * .28, T, L + s * .28, T + s * .22, p)
+        c.drawLine(Rr - s * .28, T, Rr - s * .28, T + s * .22, p)
+    elif kind == "drive":
+        c.drawPath(poly([(cx, T + s * .08), (Rr, B - s * .15), (L, B - s * .15)], True), p)
+    elif kind == "db":
+        c.drawOval(skia.Rect.MakeLTRB(L + s * .1, T, Rr - s * .1, T + s * .3), p)
+        c.drawLine(L + s * .1, T + s * .15, L + s * .1, B - s * .15, p)
+        c.drawLine(Rr - s * .1, T + s * .15, Rr - s * .1, B - s * .15, p)
+        c.drawArc(skia.Rect.MakeLTRB(L + s * .1, B - s * .3, Rr - s * .1, B), 0, 180, False, p)
+        c.drawArc(skia.Rect.MakeLTRB(L + s * .1, cy - s * .15, Rr - s * .1, cy + s * .15), 0, 180, False, p)
+    elif kind == "gear":
+        c.drawCircle(cx, cy, s * .2, p)
+        for k in range(8):
+            a = k * math.pi / 4
+            c.drawLine(cx + math.cos(a) * s * .3, cy + math.sin(a) * s * .3,
+                       cx + math.cos(a) * s * .45, cy + math.sin(a) * s * .45, p)
+    elif kind == "check":
+        c.drawPath(poly([(L + s * .15, cy), (L + s * .42, B - s * .22), (Rr - s * .12, T + s * .22)]), p)
+    elif kind == "plus":
+        c.drawLine(cx, T + s * .2, cx, B - s * .2, p)
+        c.drawLine(L + s * .2, cy, Rr - s * .2, cy, p)
+    elif kind == "minus":
+        c.drawLine(L + s * .2, cy, Rr - s * .2, cy, p)
+    elif kind == "alert":
+        c.drawPath(poly([(cx, T + s * .05), (Rr, B - s * .05), (L, B - s * .05)], True), p)
+        c.drawLine(cx, cy - s * .12, cx, cy + s * .12, p)
+        c.drawCircle(cx, B - s * .2, w * .7, pf)
+    elif kind == "box":
+        c.drawPath(poly([(cx, T), (Rr, T + s * .25), (Rr, B - s * .25), (cx, B), (L, B - s * .25), (L, T + s * .25)], True), p)
+        c.drawPath(poly([(L, T + s * .25), (cx, T + s * .5), (Rr, T + s * .25)]), p)
+        c.drawLine(cx, T + s * .5, cx, B, p)
+    elif kind == "user":
+        c.drawCircle(cx, T + s * .3, s * .2, p)
+        c.drawArc(skia.Rect.MakeLTRB(L + s * .1, cy + s * .05, Rr - s * .1, B + s * .45), 180, 180, False, p)
+    elif kind == "cube":
+        icon(c, "box", cx, cy, s, color, alpha, width)
+    elif kind == "factory":
+        c.drawPath(poly([(L, B), (L, cy), (L + s * .3, cy - s * .2), (L + s * .3, cy), (L + s * .6, cy - s * .2),
+                         (L + s * .6, cy), (Rr, cy - s * .2), (Rr, B)], True), p)
+        c.drawLine(Rr - s * .15, cy - s * .15, Rr - s * .15, T, p)
+    elif kind == "spark":
+        c.drawPath(poly([(cx, T), (cx + s * .12, cy - s * .12), (Rr, cy), (cx + s * .12, cy + s * .12), (cx, B),
+                         (cx - s * .12, cy + s * .12), (L, cy), (cx - s * .12, cy - s * .12)], True), pf)
+    elif kind == "link":
+        c.drawRRect(skia.RRect.MakeRectXY(R(L, cy - s * .16, s * .55, s * .32), s * .16, s * .16), p)
+        c.drawRRect(skia.RRect.MakeRectXY(R(Rr - s * .55, cy - s * .16, s * .55, s * .32), s * .16, s * .16), p)
+    elif kind == "more":
+        for k in (-0.3, 0, 0.3):
+            c.drawCircle(cx + s * k, cy, w * 0.9, pf)
+    else:
+        c.drawCircle(cx, cy, s * .35, p)
+
+
+# ------------------------------------------------------------------- logo
+class Logo:
+    """AXCORE logo rig built from the supplied artwork.
+    Splits the mark into: gray glyphs, blue diamond, the three blue bars (the 'E').
+    The hero (blue) parts can be animated separately and arrive last."""
+
+    def __init__(self):
+        from PIL import Image
+        a = np.asarray(Image.open(os.path.join(HERE, "assets", "axcore_logo.png")).convert("RGBA")).copy()
+        self.h, self.w = a.shape[:2]
+        rgb = a[..., :3].astype(int)
+        blue = (rgb[..., 2] > 180) & (rgb[..., 0] < 90) & (a[..., 3] > 0)
+        gray = (a[..., 3] > 0) & ~blue
+        ys, xs = np.where(blue)
+        split = self.w * 0.5
+        dia = blue & (np.arange(self.w)[None, :] < split)
+        bars = blue & ~dia
+        rows = np.where(bars.any(1))[0]
+        groups, start = [], rows[0]
+        for i in range(1, len(rows)):
+            if rows[i] != rows[i - 1] + 1:
+                groups.append((start, rows[i - 1]))
+                start = rows[i]
+        groups.append((start, rows[-1]))
+        self.bar_rows = groups[:3]
+
+        def masked(m, recolor=None):
+            b = np.zeros_like(a)
+            b[m] = a[m]
+            if recolor is not None:
+                rc = np.array([int(recolor[1:3], 16), int(recolor[3:5], 16), int(recolor[5:7], 16)], np.uint8)
+                b[m, :3] = rc
+            return b
+
+        self.gray = _to_skimage(masked(gray))
+        self.gray_w = _to_skimage(masked(gray, "#E9EEF6"))
+        self.dia = _to_skimage(masked(dia))
+        self.dia_c = _to_skimage(masked(dia, "#3CC8FF"))
+        self.bars = []
+        for (r0, r1) in self.bar_rows:
+            m = bars.copy()
+            m[:r0] = False
+            m[r1 + 1:] = False
+            self.bars.append(_to_skimage(masked(m)))
+        dys, dxs = np.where(dia)
+        self.dia_c_xy = (dxs.mean(), dys.mean())
+        bxs = np.where(bars.any(0))[0]
+        self.bar_x = (bxs.min(), bxs.max())
+        self.kor_bottom = groups[0][0] - 4  # Korean caption sits above the first bar
+
+    def draw(self, c, cx, cy, width, reveal=1.0, dia=1.0, bars=(1.0, 1.0, 1.0), on_dark=False, alpha=1.0,
+             glint=-1.0):
+        """reveal: gray glyph wipe 0..1; dia: diamond pop; bars: per-bar slide-in."""
+        if alpha <= 0.003:
+            return
+        k = width / self.w
+        c.save()
+        c.translate(cx - width / 2, cy - self.h * k / 2)
+        c.scale(k, k)
+        p = skia.Paint(AntiAlias=True)
+        p.setAlphaf(clamp(alpha))
+        if reveal > 0:
+            c.save()
+            soft = 60
+            edge = lerp(-soft, self.w + soft, clamp(reveal))
+            c.clipRect(skia.Rect.MakeLTRB(-10, -10, edge, self.h + 10), True)
+            c.drawImage(self.gray_w if on_dark else self.gray, 0, 0, SAMP, p)
+            c.restore()
+            if reveal < 1 and reveal > 0:
+                pass
+        if dia > 0:
+            dx, dy = self.dia_c_xy
+            c.save()
+            c.translate(dx, dy)
+            sc = clamp(dia, 0, 1.3)
+            c.scale(sc, sc)
+            c.rotate((1 - clamp(dia)) * 90)
+            c.translate(-dx, -dy)
+            c.drawImage(self.dia_c if on_dark else self.dia, 0, 0, SAMP, p)
+            c.restore()
+        for i, b in enumerate(bars):
+            if b <= 0:
+                continue
+            off = (1 - clamp(b)) * 160
+            pb = skia.Paint(AntiAlias=True)
+            pb.setAlphaf(clamp(alpha * clamp(b * 1.6)))
+            c.save()
+            c.translate(off, 0)
+            c.drawImage(self.bars[i], 0, 0, SAMP, pb)
+            c.restore()
+        if 0 <= glint <= 1:
+            gx = lerp(-200, self.w + 200, glint)
+            sh = skia.GradientShader.MakeLinear([skia.Point(gx - 120, 0), skia.Point(gx + 120, self.h)],
+                                                [colint(WHITE, 0), colint(WHITE, 0.75), colint(WHITE, 0)])
+            gp = skia.Paint(Shader=sh, BlendMode=skia.BlendMode.kSrcATop)
+            c.saveLayer(skia.Rect.MakeWH(self.w, self.h), None)
+            c.drawImage(self.gray_w if on_dark else self.gray, 0, 0, SAMP, p)
+            c.drawRect(skia.Rect.MakeWH(self.w, self.h), gp)
+            c.restore()
+        c.restore()
+
+
+_LOGO = None
+
+
+def logo():
+    global _LOGO
+    if _LOGO is None:
+        _LOGO = Logo()
+    return _LOGO
+
+
+# -------------------------------------------------------------- transitions
+def _img_paint(alpha=1.0):
+    p = skia.Paint(AntiAlias=True)
+    p.setAlphaf(clamp(alpha))
+    return p
+
+
+def blit(c, img, paint=None):
+    """Draw a full-frame snapshot in frame coordinates (works for supersampled snapshots too)."""
+    c.drawImageRect(img, skia.Rect.MakeWH(W, H), SAMP, paint if paint is not None else skia.Paint(AntiAlias=True))
+
+
+def draw_scaled(c, img, scale, fx=W / 2, fy=H / 2, alpha=1.0, dx=0.0, dy=0.0):
+    c.save()
+    c.translate(fx + dx, fy + dy)
+    c.scale(scale, scale)
+    c.translate(-fx, -fy)
+    blit(c, img, _img_paint(alpha))
+    c.restore()
+
+
+def light_leak(c, p, color="#FFC9A0", x=0.78, y=0.25, amount=0.32):
+    a = math.sin(math.pi * clamp(p)) * amount
+    if a > 0.003:
+        radial(c, W * x, H * y, W * 0.75, color, a)
+        radial(c, W * (1 - x) * 0.6, H * (1 - y), W * 0.5, "#7FD8FF", a * 0.45)
+
+
+def tr_dissolve(c, A, B, p, leak=False, **kw):
+    blit(c, A)
+    blit(c, B, _img_paint(e_io_sine(p)))
+    if leak:
+        light_leak(c, p)
+
+
+def tr_zoom(c, A, B, p, focus=(W / 2, H / 2), leak=True, **kw):
+    """Zoom-through: the outgoing shot pushes into a focus point while the next one settles in."""
+    fx, fy = focus
+    draw_scaled(c, A, 1 + 0.32 * e_in_cubic(p), fx, fy, 1.0)
+    draw_scaled(c, B, lerp(1.14, 1.0, e_out_cubic(p)), fx, fy, e_io_sine(p))
+    if leak:
+        light_leak(c, p, amount=0.2)
+
+
+def tr_whip(c, A, B, p, direction=-1, **kw):
+    """Horizontal whip pan with directional (velocity) blur only along the move."""
+    q = e_io_expo(p)
+    vel = math.sin(math.pi * p)
+    off = direction * W * q
+    for k, a in ((0, 1.0), (1, 0.35), (2, 0.2), (3, 0.12)):
+        sh = -direction * k * 28 * vel
+        c.drawImage(A, off + sh, 0, SAMP, _img_paint(a if k == 0 else a * vel))
+        c.drawImage(B, off - direction * W + sh, 0, SAMP, _img_paint(a if k == 0 else a * vel))
+
+
+def tr_streak(c, A, B, p, angle=-28.0, color=CYAN, reverse=False, **kw):
+    """A cyan light bar sweeps across; the next shot is revealed behind it."""
+    q = e_io_cubic(p)
+    ang = math.radians(angle)
+    nx, ny = math.cos(ang), math.sin(ang)          # bar direction
+    px_, py_ = -ny, nx                              # sweep normal
+    if reverse:
+        px_, py_ = -px_, -py_
+    span = abs(px_) * W + abs(py_) * H
+    d = lerp(-span / 2 - 120, span / 2 + 120, q)
+    cx, cy = W / 2 + px_ * d, H / 2 + py_ * d
+    blit(c, A)
+    big = 4000
+    poly_pts = [(cx + nx * big, cy + ny * big), (cx - nx * big, cy - ny * big),
+                (cx - nx * big - px_ * big, cy - ny * big - py_ * big),
+                (cx + nx * big - px_ * big, cy + ny * big - py_ * big)]
+    c.save()
+    c.clipPath(poly(poly_pts, True), skia.ClipOp.kIntersect, True)
+    draw_scaled(c, B, lerp(1.06, 1.0, q), alpha=1.0)
+    c.restore()
+    a = math.sin(math.pi * p)
+    p0 = (cx + nx * 1400, cy + ny * 1400)
+    p1 = (cx - nx * 1400, cy - ny * 1400)
+    for wmul, blur, am in ((60, 40, 0.25), (14, 10, 0.6), (3, 2, 1.0)):
+        c.drawLine(p0[0], p0[1], p1[0], p1[1],
+                   paint_stroke(color, a * am, wmul, blur=blur, blend=skia.BlendMode.kScreen))
+    c.drawLine(p0[0], p0[1], p1[0], p1[1], paint_stroke(WHITE, a * 0.9, 1.4))
+
+
+def tr_blocks(c, A, B, p, color=NAVY, cols=12, key="blocks", **kw):
+    """Reference-style navy mosaic: squares cover the outgoing shot, then clear off the next."""
+    rows = math.ceil(H / (W / cols))
+    s = W / cols
+    order = rng(key).permutation(cols * rows)
+    rank = np.empty_like(order)
+    rank[order] = np.arange(len(order))
+    n = len(order)
+    if p < 0.5:
+        blit(c, A)
+        q = p / 0.5
+    else:
+        blit(c, B)
+        q = (p - 0.5) / 0.5
+    paint = paint_fill(color, 1.0)
+    paint2 = paint_fill(BLUE, 1.0)
+    for idx in range(n):
+        i, j = idx % cols, idx // cols
+        f = rank[idx] / n
+        if p < 0.5:
+            k = clamp((q - f * 0.65) / 0.35)
+            k = math.floor(k * 6) / 6 if k < 1 else 1.0
+        else:
+            k = 1 - clamp((q - f * 0.65) / 0.35)
+            k = math.floor(k * 6) / 6 if k > 0 else 0.0
+        if k <= 0:
+            continue
+        ss = s * k
+        x = i * s + (s - ss) / 2
+        y = j * s + (s - ss) / 2
+        c.drawRect(R(x, y, ss + 0.5, ss + 0.5), paint2 if (idx * 7 + 3) % 23 == 0 else paint)
+
+
+def _lerp_rect(r0, r1, q):
+    return skia.Rect.MakeLTRB(lerp(r0.left(), r1.left(), q), lerp(r0.top(), r1.top(), q),
+                              lerp(r0.right(), r1.right(), q), lerp(r0.bottom(), r1.bottom(), q))
+
+
+def _draw_cover_in(c, img, rect, radius, alpha=1.0):
+    k = max(rect.width() / W, rect.height() / H)
+    sw, sh = rect.width() / k, rect.height() / k
+    q = img.width() / W
+    src = skia.Rect.MakeXYWH((W - sw) / 2 * q, (H - sh) / 2 * q, sw * q, sh * q)
+    c.save()
+    c.clipRRect(skia.RRect.MakeRectXY(rect, radius, radius), skia.ClipOp.kIntersect, True)
+    c.drawImageRect(img, src, rect, SAMP, _img_paint(alpha))
+    c.restore()
+
+
+def tr_shrink(c, A, B, p, rect=None, radius=10, **kw):
+    """The whole outgoing frame shrinks into a tile of the incoming layout."""
+    q = e_io_expo(p)
+    c.drawImage(B, 0, 0, SAMP, _img_paint(clamp(p * 3)))
+    r = _lerp_rect(skia.Rect.MakeWH(W, H), rect, q)
+    c.drawRRect(skia.RRect.MakeRectXY(r.makeOffset(0, 18), radius, radius), paint_fill(NAVY_950, 0.25 * q, blur=30))
+    _draw_cover_in(c, A, r, radius * q)
+
+
+def tr_expand(c, A, B, p, rect=None, radius=12, **kw):
+    """A card of the outgoing layout expands to become the next shot."""
+    q = e_io_expo(p)
+    blit(c, A)
+    r = _lerp_rect(rect, skia.Rect.MakeWH(W, H), q)
+    c.drawRRect(skia.RRect.MakeRectXY(r.makeOffset(0, 18), radius, radius), paint_fill(NAVY_950, 0.3 * (1 - q), blur=30))
+    _draw_cover_in(c, B, r, radius * (1 - q))
+
+
+def tr_lines(c, A, B, p, angle=-14.0, color=CYAN, key="tl", bend=0.10, bundles=5, light=False, **kw):
+    """Match cut on line particles: a wave of light lines sweeps through the frame; the next shot is
+    carried in behind their heads, so the cut happens under the passing lines."""
+    q = e_io_cubic(p)
+    ang = math.radians(angle)
+    dx, dy = math.cos(ang), math.sin(ang)
+    nx, ny = -dy, dx
+    span = abs(dx) * W + abs(dy) * H
+    perp = abs(nx) * W + abs(ny) * H
+    front = lerp(-span / 2 - 260, span / 2 + 260, q)
+    blit(c, A)
+    fx, fy = W / 2 + dx * front, H / 2 + dy * front
+    c.saveLayer(None, None)
+    draw_scaled(c, B, lerp(1.05, 1.0, e_out_cubic(p)))
+    sh = skia.GradientShader.MakeLinear([skia.Point(fx - dx * 220, fy - dy * 220), skia.Point(fx + dx * 30, fy + dy * 30)],
+                                        [colint(WHITE, 1.0), colint(WHITE, 0.0)])
+    c.drawPaint(skia.Paint(Shader=sh, BlendMode=skia.BlendMode.kDstIn))
+    c.restore()
+    a = math.sin(math.pi * clamp(p))
+    # light band at the cut line
+    band = skia.GradientShader.MakeLinear([skia.Point(fx - dx * 260, fy - dy * 260), skia.Point(fx + dx * 120, fy + dy * 120)],
+                                          [colint(color, 0), colint(color, 0.22 * a), colint(color, 0)], [0.0, 0.68, 1.0])
+    c.drawPaint(skia.Paint(Shader=band, BlendMode=skia.BlendMode.kScreen if not light else skia.BlendMode.kSrcOver))
+    r = rng(key)
+    L = span * 0.95
+    for b in range(bundles):
+        o = lerp(-0.5, 0.5, (b + 0.5) / bundles) * perp + r.uniform(-0.06, 0.06) * perp
+        phs = r.uniform(0, 2 * math.pi)
+        amp = bend * perp * r.uniform(0.6, 1.2)
+        pts = []
+        for i in range(7):
+            u = lerp(-1, 1, i / 6)
+            w = o + amp * math.sin(math.pi * u + phs)
+            pts.append((W / 2 + dx * u * L + nx * w, H / 2 + dy * u * L + ny * w))
+        hd = (front + L) / (2 * L) + r.uniform(-0.03, 0.02)
+        line_flow(c, pts, hd, 0.42, n=12, spread=r.uniform(16, 46), twist=1.2, width=1.9, color=color,
+                  alpha=1.0, key="%s%d" % (key, b), glow=0.9, sparks=14, tsec=p * 3,
+                  blend="normal" if light else "screen", core=WHITE if not light else color)
+
+
+def tr_match(c, A, B, p, push=0.035, **kw):
+    """Match cut: the composition carries over; a hard cut softened over ~2 frames, the camera push continues."""
+    k = clamp((p - 0.45) / 0.1)
+    if k < 1:
+        draw_scaled(c, A, 1 + push * p)
+    if k > 0:
+        draw_scaled(c, B, 1 + push * (1 - p) * 0.5, alpha=k)
+
+
+def tr_flow(c, A, B, p, angle=-9.0, feather=0.38, **kw):
+    """Directional soft wipe that travels with the light line (left to right, along its slope): the next
+    shot flows in behind the line that just left the frame. Wide feather, no hard edge."""
+    q = e_io_sine(p)
+    ang = math.radians(angle)
+    dx, dy = math.cos(ang), math.sin(ang)
+    span = abs(dx) * W + abs(dy) * H
+    fw = feather * W
+    front = lerp(-span / 2 - fw / 2, span / 2 + fw / 2, q)
+    blit(c, A)
+    c.saveLayer(None, None)
+    blit(c, B)
+    p0 = skia.Point(W / 2 + dx * (front - fw / 2), H / 2 + dy * (front - fw / 2))
+    p1 = skia.Point(W / 2 + dx * (front + fw / 2), H / 2 + dy * (front + fw / 2))
+    sh = skia.GradientShader.MakeLinear([p0, p1], [skia.Color4f(1, 1, 1, 1).toColor(), skia.Color4f(1, 1, 1, 0).toColor()])
+    mp = skia.Paint(Shader=sh, BlendMode=skia.BlendMode.kDstIn)
+    c.drawRect(R(-W, -H, 3 * W, 3 * H), mp)
+    c.restore()
+
+
+TRANSITIONS = {
+    "lines": tr_lines, "match": tr_match, "flow": tr_flow,
+    "dissolve": tr_dissolve, "zoom": tr_zoom, "whip": tr_whip, "streak": tr_streak,
+    "blocks": tr_blocks, "shrink": tr_shrink, "expand": tr_expand,
+}
+
+
+# ------------------------------------------------------------- film finish
+class Finish:
+    """Film finish applied to every frame:
+    - restrained radial chromatic aberration (edges only)
+    - soft focusing vignette
+    - fine grain gated to shadows/midtones so highlights and white UI stay clean."""
+
+    def __init__(self, grain=0.022, vignette=0.15, ca=1.0013, lift=0.93, size=(W, H)):
+        self.grain_amt = grain
+        self.w, self.h = size
+        # gentle overall lift (gamma < 1): opens shadows and midtones, whites stay put
+        self.lut = (255.0 * (np.arange(256) / 255.0) ** lift).astype(np.float32)
+        self.ca = ca
+        yy, xx = np.mgrid[0:self.h, 0:self.w].astype(np.float32)
+        r2 = ((xx - self.w / 2) / (self.w / 2)) ** 2 + ((yy - self.h / 2) / (self.h / 2)) ** 2
+        self.vig = (1 - vignette * np.clip(r2 / 2, 0, 1) ** 1.35)[..., None].astype(np.float32)
+        g = rng("grain").standard_normal((4, self.h // 2, self.w // 2)).astype(np.float32)
+        self.grain = [np.repeat(np.repeat(x, 2, 0), 2, 1)[..., None] for x in g]
+        self.cf_gb = skia.ColorFilters.Matrix([0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0])
+        self.cf_r = skia.ColorFilters.Matrix([1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0])
+
+    def apply(self, surface, fidx, grain_scale=1.0):
+        c = surface.getCanvas()
+        if self.ca and self.ca != 1.0:
+            img = surface.makeImageSnapshot()
+            c.clear(skia.Color4f(0, 0, 0, 1))
+            c.drawImage(img, 0, 0, SAMP, skia.Paint(ColorFilter=self.cf_gb))
+            c.save()
+            c.translate(self.w / 2, self.h / 2)
+            c.scale(self.ca, self.ca)
+            c.translate(-self.w / 2, -self.h / 2)
+            c.drawImage(img, 0, 0, SAMP, skia.Paint(ColorFilter=self.cf_r, BlendMode=skia.BlendMode.kPlus))
+            c.restore()
+        a = self.lut[surface.makeImageSnapshot().toarray()[..., :3]]
+        luma = (a[..., 0:1] * 0.2126 + a[..., 1:2] * 0.7152 + a[..., 2:3] * 0.0722) / 255.0
+        gate = np.clip(1.15 - luma, 0, 1) ** 1.3
+        # the vignette relaxes on bright (white UI / paper) frames so whites stay clean
+        mean = float(a[::16, ::16].mean()) / 255.0
+        k = 1.0 - 0.7 * clamp((mean - 0.55) / 0.3)
+        a *= 1.0 - k * (1.0 - self.vig)
+        a += self.grain[fidx % 4] * (self.grain_amt * grain_scale * 255) * gate
+        return np.clip(a, 0, 255).astype(np.uint8)

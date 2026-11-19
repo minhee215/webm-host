@@ -57,18 +57,35 @@ def render(c, k):
     # timeline of the move
     g = e_io_cubic(prog(k, 0, 12))                      # line draws back, diamond glides to the middle
     m = e_io_cubic(prog(k, 5, 7))                       # diamond -> dot (fully round before the page shows)
-    rev = e_io_cubic(prog(k, 12, 8))                    # white page opens from the dot
-    pull = e_io_cubic(prog(k, 18, 35 - 18))             # camera pulls back onto the page
+    rv = prog(k, 11, 16)
+    rev = rv * rv * (3 - 2 * rv)                         # white page opens from the dot: eased in and out                            # white page opens from the dot: a quick burst, settling
+    pull = e_io_cubic(prog(k, 18, 35 - 18))             # the camera's travel up to the page's stepper position
+    # one continuous camera move from the dot: it starts closer than Z0 as the page opens and eases back all the
+    # way to the page (log-zoom, so the speed of the pull-back feels even)
+    zk = e_io_sine(prog(k, 12, 35 - 12))
+    z = math.exp(lerp(math.log(Z0 * 1.45), 0.0, zk))
     # the dot on screen at the end (page camera at tp) and the zoom anchor now
     dsx, dsy, r_dot = dot_screen(tp)
     ax_, ay_ = lerp(MID[0], dsx, pull), lerp(MID[1], dsy, pull)
-    z = lerp(Z0, 1.0, pull)
     # 1) the navy stage (the previous segment's, line left out) until the page has covered it
     if rev < 1:
+        # (as the page bursts open, the navy stage behind is pushed through: it grows past the camera, softens and
+        # darkens)
+        push = e_io_cubic(rv)
+        lp = skia.Paint()
+        if push > 0.01:
+            lp.setImageFilter(skia.ImageFilters.Blur(10 * push, 10 * push, skia.TileMode.kClamp))
+        c.saveLayer(None, lp)
+        c.translate(MID[0], MID[1])
+        c.scale(1 + 0.6 * push, 1 + 0.6 * push)
+        c.translate(-MID[0], -MID[1])
         S.S5_FRONT, S.S5_FRONT_END, S.S5_LINE_HIDE = True, "line", True
         T = t_nav - 1.0
         S.sc05(c, T, T - S.SC05_T0, 10.0)
         S.S5_LINE_HIDE = False
+        c.restore()
+        if push > 0:
+            c.drawRect(R(0, 0, W, H), paint_fill("#020814", 0.35 * push))
         # the line drawing back into the diamond
         bx, by = lerp(LINE_X1, MID[0], g), lerp(LINE_Y, MID[1], g)
         la = 1 - e_io_sine(prog(k, 4, 8))
@@ -78,19 +95,26 @@ def render(c, k):
                 c.drawLine(x0, by, bx, by, paint_stroke(A.LINE_BLUE, al * la, wdt, blur=bl))
     # 2) the page, opening from the dot inside a growing circle, seen through the zoom about the dot
     if rev > 0:
-        rad = lerp(0, 2600, rev ** 1.6)
+        rad = lerp(20, 1700, rev)
+        feather = 40 + 0.35 * rad                       # a soft, wide edge (no hard disc)
+        c.saveLayer(None, None)
         c.save()
-        if rev < 1:
-            path = skia.Path()
-            path.addCircle(ax_, ay_, rad)
-            c.clipPath(path, skia.ClipOp.kIntersect, True)
         c.translate(ax_, ay_)
         c.scale(z, z)
         c.translate(-dsx, -dsy)
         A.docs(c, tp)
         c.restore()
         if rev < 1:
-            c.drawCircle(ax_, ay_, rad, paint_stroke("#9DB8FF", 0.7 * (1 - rev), 3, blur=6))
+            r_in, r_out = max(0.0, rad - feather / 2), rad + feather / 2
+            sh = skia.GradientShader.MakeRadial(skia.Point(ax_, ay_), r_out,
+                                                [skia.Color4f(0, 0, 0, 1), skia.Color4f(0, 0, 0, 1),
+                                                 skia.Color4f(0, 0, 0, 0)], [0.0, r_in / r_out, 1.0])
+            c.drawRect(R(-200, -200, W + 400, H + 400), skia.Paint(Shader=sh, BlendMode=skia.BlendMode.kDstIn))
+        c.restore()
+        if rev < 1:                                     # light blooming on the opening edge
+            ga = math.sin(math.pi * rev) * 0.55
+            c.drawCircle(ax_, ay_, rad, paint_stroke("#CFE0FF", ga, 26 + 0.12 * rad, blur=24 + 0.05 * rad,
+                                                     blend=skia.BlendMode.kScreen))
     # 3) the diamond turning into the dot (until the page's own dot is under it)
     da = 1 - e_io_sine(prog(k, 15, 3))                  # (gone before the camera moves; the page dot is under it)
     if da > 0:

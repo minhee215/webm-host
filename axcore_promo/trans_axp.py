@@ -18,7 +18,8 @@ import scenes as S
 import seg_axpoint as A
 from engine import W, H, R, lerp, prog, clamp, e_io_cubic, e_io_sine, e_out_cubic, paint_fill, paint_stroke
 
-N = 36                     # frames (1.5 s)
+N = 48                     # frames (2.0 s; client: a little slower)
+K_ = N / 36.0              # the move's beats were laid out for 36 frames
 F_START, F_END = 1, 88     # seg_axpoint frames this hands over from / lands on
 LINE_X0, LINE_X1, LINE_Y = S.BAR_LINE[1], S.BAR_LINE[0], S.BAR_LINE[2]
 Z0 = 3.0                   # camera zoom on the stepper when the page opens
@@ -35,18 +36,31 @@ def dot_page():
     return x - A.text_w(A.STEPS[0], 13, "SemiBold") / 2 - 12, 181.0
 
 
+def dot_screen(tp):
+    """The page dot on screen at page time tp, through seg_axpoint's page camera exactly (its small tilt
+    included), and its radius there."""
+    fx, fy, z, yaw, pitch = A.cam(A.CAM_DOCS, tp)
+    m = skia.Matrix.Translate(W / 2, H / 2)
+    m.preConcat(A.persp(yaw, pitch))
+    m.preScale(z, z)
+    m.preTranslate(-fx, -fy)
+    dpx, dpy = dot_page()
+    p = m.mapXY(dpx, dpy)
+    q = m.mapXY(dpx + 7.5, dpy)
+    return p.x(), p.y(), math.hypot(q.x() - p.x(), q.y() - p.y())
+
+
 def render(c, k):
-    u = k / (N - 1)
-    t_nav = A.ft(F_START) + (k + 1) / 24.0
-    tp = page_t(k)
+    k = k / K_                 # beats below in 36-frame units
+    t_nav = A.ft(F_START) + (k * K_ + 1) / 24.0
+    tp = page_t(k * K_)
     # timeline of the move
     g = e_io_cubic(prog(k, 0, 12))                      # line draws back, diamond glides to the middle
-    m = e_io_cubic(prog(k, 6, 8))                       # diamond -> dot
-    rev = e_io_cubic(prog(k, 10, 9))                    # white page opens from the dot
-    pull = e_io_cubic(prog(k, 17, N - 1 - 17))          # camera pulls back onto the page
+    m = e_io_cubic(prog(k, 5, 7))                       # diamond -> dot (fully round before the page shows)
+    rev = e_io_cubic(prog(k, 12, 8))                    # white page opens from the dot
+    pull = e_io_cubic(prog(k, 18, 35 - 18))             # camera pulls back onto the page
     # the dot on screen at the end (page camera at tp) and the zoom anchor now
-    dpx, dpy = dot_page()
-    dsx, dsy = A.to_screen(A.CAM_DOCS, tp, dpx, dpy)
+    dsx, dsy, r_dot = dot_screen(tp)
     ax_, ay_ = lerp(MID[0], dsx, pull), lerp(MID[1], dsy, pull)
     z = lerp(Z0, 1.0, pull)
     # 1) the navy stage (the previous segment's, line left out) until the page has covered it
@@ -78,10 +92,10 @@ def render(c, k):
         if rev < 1:
             c.drawCircle(ax_, ay_, rad, paint_stroke("#9DB8FF", 0.7 * (1 - rev), 3, blur=6))
     # 3) the diamond turning into the dot (until the page's own dot is under it)
-    da = 1 - e_io_sine(prog(k, 15, 4))
+    da = 1 - e_io_sine(prog(k, 15, 3))                  # (gone before the camera moves; the page dot is under it)
     if da > 0:
-        bx, by = lerp(LINE_X1, MID[0], g), lerp(LINE_Y, MID[1], g)
-        size = lerp(15.6, 15.0 * Z0, m)
+        bx, by = lerp(LINE_X1, ax_, g), lerp(LINE_Y, ay_, g)
+        size = lerp(15.6, 2 * r_dot * z, m)            # ends exactly the page dot's size
         col_ = A.LINE_BLUE if m < 0.5 else A.BLUE
         c.save()
         c.translate(bx, by)

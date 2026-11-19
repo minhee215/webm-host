@@ -32,6 +32,11 @@ opens; the final hit lands at 92.45 s in the white flash's rise.
 start; at the intro's end (bar 8, 19.44 s, under SC05's move into the flow) on from bar 16 (8 bars out, chroma
 0.89 / 0.97); then the calm part goes: from bar 41 (77.14 s in the film) on from bar 55 (14 bars out, 0.79 / 0.88,
 level within 1.8 dB), the louder part, the breakdown and the hit as before. 22 bars out in all: the hit at 92.66 s.
+(v7e, client: from 01:17 it suddenly goes calm) Bars 55-58 belong to the same calm part as 48-54 (same chords, sparse),
+so the whole calm part (bars 48-58) goes: the loud body runs to the end of its phrase (bar 47) and drops straight
+into the breakdown (bar 59) before the hit, at 86.37 s, where it was before. 8 bars at the intro's end (bar 8 -> 16) +
+11 calm bars = 19; the other 3 come off the track's start (it opens 6.92 s in, inside the quiet intro, faded in
+over 1 s), so the music still sounds from the first second, the body starts at 12.52 s and the hit stays at 92.66 s.
   --edl a:b,c:d,...  play these spans of the track (s) one after another, crossfaded (xfade s) at sample-aligned joins
   --delay s          the track starts this far into the film
 Usage: python3 bgm_fit.py <AXCORE_BGM.mp3/wav> <out.wav> [length s] [splice_at s] [removed s] [start s] [xfade s]
@@ -77,6 +82,9 @@ def main():
         x = np.frombuffer(raw, np.float32).reshape(-1, 2).astype(np.float64)
         spans = [(a, min(b, len(x) / SR)) for a, b in spans]
         y = edl_join(x, spans, xfs)
+        if spans[0][0] > 0:                      # opening inside the track: faded in
+            fi = int(1.0 * SR)
+            y[:fi] *= np.sin(np.linspace(0, np.pi / 2, fi))[:, None] ** 2
         if "--delay" in sys.argv:
             y = np.concatenate([np.zeros((int(float(sys.argv[sys.argv.index("--delay") + 1]) * SR), 2)), y])
         n = int(round(float(sys.argv[3]) * SR))

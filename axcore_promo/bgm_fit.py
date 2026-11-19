@@ -37,6 +37,9 @@ so the whole calm part (bars 48-58) goes: the loud body runs to the end of its p
 into the breakdown (bar 59) before the hit, at 86.37 s, where it was before. 8 bars at the intro's end (bar 8 -> 16) +
 11 calm bars = 19; the other 3 come off the track's start (it opens 6.92 s in, inside the quiet intro, faded in
 over 1 s), so the music still sounds from the first second, the body starts at 12.52 s and the hit stays at 92.66 s.
+(v7f, client: keep the whole quiet intro) The intro plays from the track's start, untouched; the 3 bars that came
+off the start come out of the body instead: it drops into the breakdown 3 bars earlier in the music (from bar 45 into
+bar 59), at the same moment in the film (86.37 s). 8 + 14 = 22 bars out; the hit at 92.66 s.
   --edl a:b,c:d,...  play these spans of the track (s) one after another, crossfaded (xfade s) at sample-aligned joins
   --delay s          the track starts this far into the film
 Usage: python3 bgm_fit.py <AXCORE_BGM.mp3/wav> <out.wav> [length s] [splice_at s] [removed s] [start s] [xfade s]

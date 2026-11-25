@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HNKENG Hero Preview</title>
+<link rel="preload" as="image" href="dist/hero-poster.webp" type="image/webp">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  html,body{margin:0;background:#0f1a24}
+  body{font-family:Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif}
+  .demo-next{min-height:60vh;padding:80px 24px;color:#cfd9e1;background:#f3f6f8;color:#22303c;text-align:center}
+</style>
+</head>
+<body>
+<!-- ===== hero-section.html 시작 ===== -->
+<!--
+  HNKENG 메인 히어로 섹션 (배경 영상 + HTML 텍스트)
+  - 아임웹: [코드] 위젯 또는 섹션 HTML에 이 파일 전체를 붙여넣으면 됩니다.
+  - 영상/포스터 주소는 아래 data-* 속성 4곳만 바꾸면 됩니다. (절대경로 권장)
+  - 텍스트·로고·버튼은 영상에 굽지 않고 모두 HTML로 분리되어 있습니다.
+-->
+<section class="hnk-hero" aria-label="HNKENG 메인 비주얼"
+  data-webm="dist/hero-video-web.webm"
+  data-mp4="dist/hero-video-web.mp4">
+
+  <div class="hnk-hero__media" aria-hidden="true">
+    <picture>
+      <source srcset="dist/hero-poster.webp" type="image/webp">
+      <img class="hnk-hero__poster" src="dist/hero-poster.jpg" alt="" decoding="async" fetchpriority="high">
+    </picture>
+    <video class="hnk-hero__video" muted loop playsinline preload="none" tabindex="-1"
+      disablepictureinpicture disableremoteplayback></video>
+  </div>
+  <div class="hnk-hero__shade" aria-hidden="true"></div>
+
+  <div class="hnk-hero__inner">
+    <p class="hnk-hero__eyebrow">INTELLIGENCE IN MOTION</p>
+    <h1 class="hnk-hero__title">산업을 이해하는 기술,<br>미래를 연결하는 지능</h1>
+    <p class="hnk-hero__sub">Engineering Intelligence, Empowering Industry</p>
+    <div class="hnk-hero__actions">
+      <a class="hnk-hero__btn hnk-hero__btn--primary" href="#business">사업분야 보기</a>
+      <a class="hnk-hero__btn" href="#contact">프로젝트 문의</a>
+    </div>
+  </div>
+
+  <button class="hnk-hero__toggle" type="button" aria-label="배경 영상 일시정지" hidden>
+    <span class="hnk-hero__icon" aria-hidden="true"></span>
+  </button>
+</section>
+
+<style>
+.hnk-hero{
+  --hnk-ink:#f4f8fb; --hnk-sub:rgba(226,236,243,.86); --hnk-accent:#3fb6c6;
+  --hnk-shade:8,20,30;
+  position:relative; isolation:isolate; overflow:hidden;
+  width:100%; height:100vh; height:100svh; min-height:700px;
+  display:flex; align-items:center;
+  color:var(--hnk-ink); background:#1b2733;
+  font-family:inherit;
+}
+/* 아임웹 등 폭이 제한된 컨테이너 안에서 화면 전체 폭으로 펼칠 때 사용 */
+.hnk-hero--bleed{width:100vw; margin-left:calc(50% - 50vw)}
+
+.hnk-hero__media,.hnk-hero__shade{position:absolute; inset:0}
+.hnk-hero__media{z-index:-2}
+.hnk-hero__poster,.hnk-hero__video{
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; object-position:60% 50%; display:block;
+}
+.hnk-hero__video{opacity:0; transition:opacity .8s ease}
+.hnk-hero.is-playing .hnk-hero__video{opacity:1}
+
+/* 가독성용 은은한 그라데이션: 왼쪽 35~45% 텍스트 영역 + 하단 */
+.hnk-hero__shade{
+  z-index:-1; pointer-events:none;
+  background:
+    linear-gradient(90deg, rgba(var(--hnk-shade),.72) 0%, rgba(var(--hnk-shade),.52) 32%, rgba(var(--hnk-shade),.14) 58%, rgba(var(--hnk-shade),0) 75%),
+    linear-gradient(0deg, rgba(var(--hnk-shade),.45) 0%, rgba(var(--hnk-shade),0) 30%);
+}
+
+.hnk-hero__inner{
+  width:100%; max-width:1280px; margin:0 auto;
+  padding:0 clamp(20px,5vw,64px);
+}
+.hnk-hero__inner > *{max-width:min(620px,46vw)}
+.hnk-hero__eyebrow{
+  margin:0 0 20px; font-size:13px; font-weight:600; letter-spacing:.22em;
+  color:var(--hnk-accent);
+}
+.hnk-hero__title{
+  margin:0; font-size:clamp(30px,4.2vw,60px); line-height:1.22; font-weight:700;
+  letter-spacing:-.025em; word-break:keep-all; text-wrap:balance;
+}
+.hnk-hero__sub{
+  margin:20px 0 0; font-size:clamp(15px,1.35vw,19px); line-height:1.5;
+  color:var(--hnk-sub); letter-spacing:.01em;
+}
+.hnk-hero__actions{display:flex; flex-wrap:wrap; gap:12px; margin-top:40px}
+.hnk-hero__btn{
+  display:inline-flex; align-items:center; min-height:48px; padding:0 24px;
+  border:1px solid rgba(255,255,255,.45); border-radius:2px;
+  color:#fff; text-decoration:none; font-size:15px; font-weight:600;
+  transition:background-color .2s, border-color .2s;
+}
+.hnk-hero__btn:hover{background:rgba(255,255,255,.1); border-color:#fff}
+.hnk-hero__btn--primary{background:var(--hnk-accent); border-color:var(--hnk-accent); color:#06222a}
+.hnk-hero__btn--primary:hover{background:#5cc6d4; border-color:#5cc6d4}
+.hnk-hero__btn:focus-visible,.hnk-hero__toggle:focus-visible{outline:2px solid #fff; outline-offset:3px}
+
+/* 접근성: 자동 재생 영상 일시정지 버튼 (WCAG 2.2.2) */
+.hnk-hero__toggle{
+  position:absolute; right:clamp(16px,3vw,40px); bottom:clamp(16px,3vw,40px);
+  width:40px; height:40px; border-radius:50%; cursor:pointer;
+  border:1px solid rgba(255,255,255,.4); background:rgba(var(--hnk-shade),.35);
+  display:grid; place-items:center; padding:0;
+}
+.hnk-hero__toggle[hidden]{display:none}
+.hnk-hero__icon{width:10px; height:12px; border-left:3px solid #fff; border-right:3px solid #fff; box-sizing:border-box}
+.hnk-hero__toggle.is-paused .hnk-hero__icon{
+  width:0; height:0; border-style:solid; border-width:6px 0 6px 10px;
+  border-color:transparent transparent transparent #fff; margin-left:3px;
+}
+
+/* 태블릿 */
+@media (max-width:1024px){
+  .hnk-hero__inner > *{max-width:min(560px,60vw)}
+}
+/* 모바일: 피사체(화면 오른쪽 설비)가 남도록 초점을 우측으로, 텍스트는 하단 정렬 */
+@media (max-width:767px){
+  .hnk-hero{min-height:600px; align-items:flex-end}
+  .hnk-hero__poster,.hnk-hero__video{object-position:70% 50%}
+  .hnk-hero__shade{
+    background:linear-gradient(0deg, rgba(var(--hnk-shade),.82) 0%, rgba(var(--hnk-shade),.55) 45%, rgba(var(--hnk-shade),.12) 75%, rgba(var(--hnk-shade),0) 100%);
+  }
+  .hnk-hero__inner{padding-bottom:88px}
+  .hnk-hero__inner > *{max-width:100%}
+  .hnk-hero__eyebrow{font-size:11px; margin-bottom:14px}
+  .hnk-hero__actions{margin-top:28px}
+  .hnk-hero__btn{flex:1 1 auto; justify-content:center}
+}
+/* 동작 줄이기 설정: 영상 대신 정적 포스터 */
+@media (prefers-reduced-motion:reduce){
+  .hnk-hero__video{display:none}
+  .hnk-hero__toggle{display:none}
+}
+</style>
+
+<script>
+(function () {
+  var reduce = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+  var conn = navigator.connection || {};
+
+  function setup(hero) {
+    if (hero.__hnkInit) return;
+    hero.__hnkInit = true;
+    var video = hero.querySelector('.hnk-hero__video');
+    var toggle = hero.querySelector('.hnk-hero__toggle');
+    var loaded = false, userPaused = false, inView = true;
+
+    // iOS 자동재생 조건: muted + playsinline 을 속성/프로퍼티 모두로 지정
+    video.muted = true; video.defaultMuted = true; video.playsInline = true;
+    video.setAttribute('muted', ''); video.setAttribute('playsinline', ''); video.setAttribute('webkit-playsinline', '');
+
+    function load() {
+      if (loaded) return;
+      loaded = true;
+      [['webm', 'video/webm; codecs="vp9"'], ['mp4', 'video/mp4; codecs="avc1.640028"']].forEach(function (s) {
+        var url = hero.getAttribute('data-' + s[0]);
+        if (!url) return;
+        var el = document.createElement('source');
+        el.src = url; el.type = s[1];
+        video.appendChild(el);
+      });
+      video.preload = 'auto';
+      video.load();
+    }
+    function play() {
+      if (reduce.matches || conn.saveData || userPaused || !inView) return;
+      load();
+      var p = video.play();
+      if (p && p.catch) p.catch(function () { /* 자동재생 차단(저전력 모드 등) 시 포스터 유지 */ });
+    }
+    function pause() { if (!video.paused) video.pause(); }
+    function syncToggle() {
+      toggle.classList.toggle('is-paused', userPaused);
+      toggle.setAttribute('aria-label', userPaused ? '배경 영상 재생' : '배경 영상 일시정지');
+    }
+
+    video.addEventListener('playing', function () { hero.classList.add('is-playing'); toggle.hidden = false; });
+    toggle.addEventListener('click', function () {
+      userPaused = !userPaused; syncToggle();
+      userPaused ? pause() : play();
+    });
+
+    // 화면 밖에서는 일시정지해 CPU·배터리 절약
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function (entries) {
+        inView = entries[0].isIntersecting;
+        inView ? play() : pause();
+      }, { threshold: 0.05 }).observe(hero);
+    }
+
+    var onReduce = function () {
+      if (reduce.matches) { pause(); hero.classList.remove('is-playing'); } else { play(); }
+    };
+    if (reduce.addEventListener) reduce.addEventListener('change', onReduce);
+    else if (reduce.addListener) reduce.addListener(onReduce);
+
+    // 데이터 절약 모드 / 동작 줄이기 설정이면 영상을 받지 않고 포스터만 표시
+    play();
+  }
+
+  function init() { Array.prototype.forEach.call(document.querySelectorAll('.hnk-hero'), setup); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+</script>
+<!-- ===== hero-section.html 끝 ===== -->
+<section class="demo-next" id="business"><p>(다음 섹션 자리 — 미리보기용)</p></section>
+</body>
+</html>

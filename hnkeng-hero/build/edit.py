@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 """
-HNKENG main hero background film — edit & encode.
+HNKENG main hero background film — edit & encode (v3, bright, 5 scenes).
 
-Structure follows the reference brand film's editing grammar:
-  1) fast macro inserts in low-key teal light (0.8-1.4 s each)
-  2) one held "hero" macro: an HMI trend with an AI forecast band
-  3) wide, slow, human-scale site shots (~2 s each), ending on the widest
-Hard cuts only. Shot 11 cuts back to shot 1 for the loop.
+Brand direction: people, data, robots and automation connected.
+Five scenes, one per business pillar, each ~3.6 s, hard cuts, the camera
+always travelling right so the scenes read as one continuous flow:
 
-Input : clips/NN.mp4 — 3 s image-to-video clips (Kling 3.0, 1280x720 24 fps),
-        animated from photoreal stills in stills/NN.png.
-Output: dist/hero-video.mp4 (master), dist/hero-video-web.mp4, dist/hero-video-web.webm,
-        dist/hero-poster.jpg/.webp, dist/hero-video-mobile.mp4 (640x360).
+  1 process plant  — engineers + PLC panel + live data on a tablet
+  2 FA line        — EV compressor line, operator on the HMI
+  3 robotics       — collaborative robot hands a part to a technician
+  4 logistics      — AMR moves battery modules past robot cells
+  5 smart factory  — engineers overlook the connected plant (widest)
 
-Usage:  python3 build/edit.py [--width 1280 --height 720]
+Input : clips/NN.mp4 — 5 s image-to-video clips (Kling 3.0, 720p 24 fps)
+        animated from stills/NN.jpg.
+Output: dist/hero-video.mp4 (master), hero-video-web.mp4/.webm,
+        hero-video-mobile.mp4 (640x360), hero-poster.jpg/.webp
+
+Usage:  python3 build/edit.py
 """
 import argparse
 import subprocess
@@ -27,40 +31,29 @@ CLIPS = ROOT / "clips"
 FPS = 24
 SRC_W, SRC_H = 1280, 720
 
-# (clip, first source frame, length in frames, zoom start, zoom end)
-# A gentle extra push (zoom) keeps every shot alive even where the
-# generated camera move settles; centre stays on the subject (right side).
+# (clip, first source frame, frames, zoom start, zoom end, x-bias)
+# x-bias: 0 = crop anchored left (pushes the subject right, away from the
+# hero text), 0.5 = centred, 1 = anchored right.
 SHOTS = [
-    # ── 1. macro inserts ───────────────────────────────────────────────
-    ("01", 20, 34, 1.00, 1.04),   # Ethernet into PLC module, LED turns green
-    ("02", 10, 19, 1.02, 1.05),   # edge-device board, data LEDs
-    ("03", 0, 22, 1.00, 1.03),   # measured signal waveform
-    ("04", 24, 24, 1.00, 1.03),   # cabinet door, light slit
-    ("05", 39, 34, 1.00, 1.04),   # gripper picks a battery cell
-    # ── 2. hero macro ─────────────────────────────────────────────────
-    ("06", 12, 53, 1.00, 1.05),   # HMI trend + AI forecast band
-    # ── 3. wide site shots ────────────────────────────────────────────
-    ("07", 20, 46, 1.00, 1.03),   # battery cell line
-    ("08", 15, 46, 1.00, 1.03),   # EV e-compressor robot cell
-    ("09", 15, 48, 1.00, 1.03),   # catalyst plant, engineer with tablet
-    ("10", 15, 46, 1.00, 1.03),   # central control room
-    ("11", 10, 60, 1.04, 1.00),   # smart factory, AMR — widest, eases out
+    ("01", 0, 86, 1.12, 1.16, 0.0),   # process plant: engineers, PLC panel, tablet data
+    ("02", 18, 87, 1.00, 1.04, 0.6),   # FA line: compressor housings, HMI touch
+    ("03", 0, 86, 1.00, 1.04, 0.6),   # robotics: cobot hands part to technician
+    ("04", 18, 87, 1.00, 1.04, 0.6),   # logistics: AMR with battery modules
+    ("05", 30, 86, 1.04, 1.00, 0.5),   # smart factory overview, eases out
 ]
 
 
 def grade(img: np.ndarray) -> np.ndarray:
-    """Reference-style cinematic grade: cool teal shadows, restrained
-    saturation, soft S-curve, slightly lifted blacks for a filmic base."""
+    """Bright, clean corporate grade: keeps the daylight high-key look,
+    gentle contrast, slightly cool whites, a hint of brand teal in shadows."""
     x = img.astype(np.float32) / 255.0
     luma = x @ np.array([0.2126, 0.7152, 0.0722], np.float32)
-    x = luma[..., None] + (x - luma[..., None]) * 0.84            # desaturate 16 %
-    sh = (1.0 - luma)[..., None] ** 2.2
-    hi = luma[..., None] ** 2.0
-    x = x + sh * np.array([-0.020, 0.010, 0.022], np.float32)      # teal shadows
-    x = x + hi * np.array([0.010, 0.004, -0.008], np.float32)      # neutral-warm highlights
+    x = luma[..., None] + (x - luma[..., None]) * 0.95             # keep colour, tame peaks
+    sh = (1.0 - luma)[..., None] ** 3
+    x = x + sh * np.array([-0.010, 0.008, 0.012], np.float32)       # teal in deep shadows
+    x = x * np.array([0.992, 1.0, 1.008], np.float32)               # slightly cool whites
     x = np.clip(x, 0, 1)
-    x = x + 0.07 * (x - 0.5) * (1 - np.abs(2 * x - 1))            # soft contrast
-    x = 0.018 + x * 0.975                                           # filmic black lift
+    x = x + 0.04 * (x - 0.5) * (1 - np.abs(2 * x - 1))             # gentle contrast
     return np.clip(x * 255.0 + 0.5, 0, 255).astype(np.uint8)
 
 
@@ -88,7 +81,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--width", type=int, default=1280)
     ap.add_argument("--height", type=int, default=720)
-    ap.add_argument("--grain", type=float, default=2.0)
+    ap.add_argument("--grain", type=float, default=1.2)
     ap.add_argument("--out", default="dist")
     args = ap.parse_args()
     OW, OH = args.width, args.height
@@ -102,14 +95,14 @@ def main():
         "-c:v", "ffv1", "-level", "3", "-pix_fmt", "bgr0", str(tmp)], stdin=subprocess.PIPE)
     rng = np.random.default_rng(7)
     t = 0
-    for clip, src_in, frames, z0, z1 in SHOTS:
+    for clip, src_in, frames, z0, z1, xb in SHOTS:
         print(f"{t / FPS:6.2f}s  shot {clip}  {frames / FPS:.2f}s")
         for i, fr in enumerate(read_frames(CLIPS / f"{clip}.mp4", src_in, frames)):
             u = i / max(frames - 1, 1)
             u = u * u * (3 - 2 * u) * 0.35 + u * 0.65                 # mostly linear, soft ends
             z = z0 + (z1 - z0) * u
             cw, ch = SRC_W / z, SRC_H / z
-            x0 = (SRC_W - cw) * 0.62                                     # bias toward right-side subject
+            x0 = (SRC_W - cw) * xb
             y0 = (SRC_H - ch) * 0.5
             img = Image.fromarray(grade(fr)).transform(
                 (OW, OH), Image.Transform.AFFINE, (cw / OW, 0, x0, 0, ch / OH, y0),

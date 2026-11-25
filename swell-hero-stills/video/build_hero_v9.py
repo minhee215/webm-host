@@ -11,9 +11,14 @@ RES = int(os.environ.get("RES", "1080"))
 os.makedirs("tmp", exist_ok=True); os.makedirs("out", exist_ok=True)
 
 # (clip, start, length, grade strength)
-SEG = [("clips/c1.mp4", 0.3, 2.4, 0.45), ("clips/v9_a.mp4", 0.4, 3.6, 1.0), ("clips/v9_b.mp4", 0.6, 3.9, 1.0),
-       ("clips/v9_c.mp4", 0.5, 4.0, 1.0), ("clips/v9_d.mp4", 0.0, 4.6, 1.0), ("clips/v9_e.mp4", 0.0, 4.9, 1.0)]
-LOGO_SEG, LOGO_T0 = 5, 1.4
+# (clip, src start, src length, grade, setpts expr mapping source T -> output time)
+SEG = [("clips/c1.mp4", 0.3, 2.4, 0.45, "T"),
+       ("clips/v9_a.mp4", 0.4, 3.6, 1.0, "T"),
+       ("clips/v9_b.mp4", 0.3, 4.7, 1.0, "T/1.8"),
+       ("clips/v9_c.mp4", 0.2, 4.8, 1.0, "T/1.8"),
+       ("clips/v9_d.mp4", 0.0, 5.0, 1.0, "T/1.8"),
+       ("clips/v9_e.mp4", 0.0, 5.0, 1.0, "if(lt(T,2.7),T/1.8,1.5+(T-2.7))")]   # fast crane-up, settles for the logo
+LOGO_SEG, LOGO_T0 = 5, 1.1
 
 
 def tame_cyan(a, w):
@@ -30,11 +35,16 @@ def dur(p):
 
 
 parts = []
-for i, (src, ss, ln, k) in enumerate(SEG):
+def out_len(expr, ln):
+    T = ln
+    return eval(expr.replace("if(lt(T,2.7),T/1.8,1.5+(T-2.7))", "(T/1.8 if T < 2.7 else 1.5 + (T - 2.7))"))
+
+
+for i, (src, ss, ln, k, pts) in enumerate(SEG):
     o = f"tmp/v9_p{i}.mp4"
-    n = int(round(ln * FPS))
-    dec = subprocess.Popen(["ffmpeg", "-v", "error", "-ss", str(ss), "-t", str(ln + 0.2), "-i", src, "-vf",
-                            f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}",
+    n = int(round(out_len(pts, ln) * FPS)) - 1
+    dec = subprocess.Popen(["ffmpeg", "-v", "error", "-ss", str(ss), "-t", str(ln), "-i", src, "-vf",
+                            f"setpts='({pts})/TB',scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}",
                             "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
     enc = subprocess.Popen(["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
                             "-r", str(FPS), "-i", "-", "-an", "-c:v", "libx264", "-crf", "14", "-pix_fmt", "yuv420p", o],
@@ -46,7 +56,7 @@ for i, (src, ss, ln, k) in enumerate(SEG):
         last = b
         a = np.frombuffer(b, np.uint8).reshape(H, W, 3)
         t = f / FPS
-        if i == 1:   # rail scene: flash around 2.2-3.2 s of the source
+        if i == 1:   # rail scene: flash around 2.2-3.2 s of the source (native speed)
             st = ss + t
             w = v6.win(st, 1.8, 2.3) * (1 - v6.win(st, 3.0, 3.6))
             if w > 0: a = tame_cyan(a, w)

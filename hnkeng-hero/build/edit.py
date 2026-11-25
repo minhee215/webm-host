@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
 """
-HNKENG main hero background film — edit & encode (v3, bright, 5 scenes).
+HNKENG main hero background film — edit & encode (v4, moodboard).
 
-Brand direction: people, data, robots and automation connected.
-Five scenes, one per business pillar, each ~3.6 s, hard cuts, the camera
-always travelling right so the scenes read as one continuous flow:
+Built from the HNK ENG moodboard (AI · ROBOTICS · AUTOMATION):
+  1 AMR            — autonomous mobile robot in a bright automated plant
+  2 Data center    — server aisle, infrastructure & data
+  3 MCC / PLC      — row of motor control / PLC panels
+  4 Monitoring     — plant dashboard with a 3D digital twin
+  5 Human control  — engineer seen from behind, tablet in hand, robots ahead
+People never show their faces. Cool blue-white industrial light, hard cuts,
+~3.6 s per scene, 18 s loop.
 
-  1 process plant  — engineers + PLC panel + live data on a tablet
-  2 FA line        — EV compressor line, operator on the HMI
-  3 robotics       — collaborative robot hands a part to a technician
-  4 logistics      — AMR moves battery modules past robot cells
-  5 smart factory  — engineers overlook the connected plant (widest)
+Input : clips/NN.mp4 (Kling 3.0, 720p 24 fps) animated from stills/NN.jpg
+Output: dist/ — hero-video.mp4, hero-video-web.mp4/.webm, hero-video-mobile.mp4,
+        hero-poster.jpg/.webp  (default 854x480 sample)
 
-Input : clips/NN.mp4 — 5 s image-to-video clips (Kling 3.0, 720p 24 fps)
-        animated from stills/NN.jpg.
-Output: dist/hero-video.mp4 (master), hero-video-web.mp4/.webm,
-        hero-video-mobile.mp4 (640x360), hero-poster.jpg/.webp
-
-Usage:  python3 build/edit.py
+Usage:  python3 build/edit.py [--width 1280 --height 720]
 """
 import argparse
 import subprocess
@@ -35,25 +33,25 @@ SRC_W, SRC_H = 1280, 720
 # x-bias: 0 = crop anchored left (pushes the subject right, away from the
 # hero text), 0.5 = centred, 1 = anchored right.
 SHOTS = [
-    ("01", 0, 86, 1.12, 1.16, 0.0),   # process plant: engineers, PLC panel, tablet data
-    ("02", 18, 87, 1.00, 1.04, 0.6),   # FA line: compressor housings, HMI touch
-    ("03", 0, 86, 1.00, 1.04, 0.6),   # robotics: cobot hands part to technician
-    ("04", 18, 87, 1.00, 1.04, 0.6),   # logistics: AMR with battery modules
-    ("05", 30, 86, 1.04, 1.00, 0.5),   # smart factory overview, eases out
+    ("01", 10, 90, 1.00, 1.03, 0.6),   # AMR in a bright automated plant
+    ("02", 10, 88, 1.00, 1.03, 0.5),   # data center aisle
+    ("03", 10, 87, 1.00, 1.03, 0.6),   # MCC / PLC panel row
+    ("04",  0, 79, 1.00, 1.04, 0.6),   # monitoring dashboard, digital twin (cut before model drift)
+    ("05", 15, 88, 1.00, 1.03, 0.6),   # engineer from behind, tablet, robots ahead
 ]
 
 
 def grade(img: np.ndarray) -> np.ndarray:
-    """Bright, clean corporate grade: keeps the daylight high-key look,
-    gentle contrast, slightly cool whites, a hint of brand teal in shadows."""
+    """Moodboard grade: crisp cool blue-white light, navy shadows,
+    clean contrast, colour kept natural."""
     x = img.astype(np.float32) / 255.0
     luma = x @ np.array([0.2126, 0.7152, 0.0722], np.float32)
-    x = luma[..., None] + (x - luma[..., None]) * 0.95             # keep colour, tame peaks
-    sh = (1.0 - luma)[..., None] ** 3
-    x = x + sh * np.array([-0.010, 0.008, 0.012], np.float32)       # teal in deep shadows
-    x = x * np.array([0.992, 1.0, 1.008], np.float32)               # slightly cool whites
+    x = luma[..., None] + (x - luma[..., None]) * 0.96
+    sh = (1.0 - luma)[..., None] ** 2.5
+    x = x + sh * np.array([-0.014, 0.000, 0.024], np.float32)       # navy shadows
+    x = x * np.array([0.980, 0.995, 1.020], np.float32)             # cool whites
     x = np.clip(x, 0, 1)
-    x = x + 0.04 * (x - 0.5) * (1 - np.abs(2 * x - 1))             # gentle contrast
+    x = x + 0.06 * (x - 0.5) * (1 - np.abs(2 * x - 1))             # crisp contrast
     return np.clip(x * 255.0 + 0.5, 0, 255).astype(np.uint8)
 
 
@@ -79,12 +77,13 @@ def read_frames(path, start, count):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--width", type=int, default=1280)
-    ap.add_argument("--height", type=int, default=720)
+    ap.add_argument("--width", type=int, default=854)
+    ap.add_argument("--height", type=int, default=480)
     ap.add_argument("--grain", type=float, default=1.2)
     ap.add_argument("--out", default="dist")
     args = ap.parse_args()
-    OW, OH = args.width, args.height
+    FW, FH = args.width, args.height     # final size
+    OW, OH = SRC_W, SRC_H                # internal master size
     out_dir = ROOT / args.out
     out_dir.mkdir(parents=True, exist_ok=True)
     tmp = out_dir / "_master_lossless.mkv"
@@ -118,7 +117,7 @@ def main():
     print(f"total {t / FPS:.3f}s ({t} frames)")
 
     color = ["-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv"]
-    vf = "scale=out_color_matrix=bt709:out_range=tv:flags=lanczos,format=yuv420p"
+    vf = f"scale={FW}:{FH}:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuv420p"
     gop = ["-g", str(FPS * 2), "-keyint_min", str(FPS // 2)]
 
     def run(cmd):
@@ -126,8 +125,8 @@ def main():
 
     run(["-vf", vf, "-c:v", "libx264", "-preset", "slow", "-crf", "17", "-profile:v", "high",
          "-level", "4.0", *gop, *color, "-movflags", "+faststart", "-an", str(out_dir / "hero-video.mp4")])
-    run(["-vf", vf, "-c:v", "libx264", "-preset", "veryslow", "-crf", "24", "-maxrate", "2.6M",
-         "-bufsize", "3M", "-profile:v", "high", "-level", "4.0", *gop, *color,
+    run(["-vf", vf, "-c:v", "libx264", "-preset", "veryslow", "-crf", "24", "-maxrate", "1.6M",
+         "-bufsize", "2M", "-profile:v", "high", "-level", "4.0", *gop, *color,
          "-movflags", "+faststart", "-an", str(out_dir / "hero-video-web.mp4")])
     run(["-vf", "scale=640:360:flags=lanczos," + vf, "-c:v", "libx264", "-preset", "veryslow",
          "-crf", "25", "-maxrate", "1M", "-bufsize", "1.2M", "-profile:v", "main", *gop, *color,
@@ -139,8 +138,8 @@ def main():
          "-f", "webm", "/dev/null"])
     run([*vp9, "-pass", "2", "-passlogfile", passlog, "-deadline", "good", "-cpu-used", "1",
          str(out_dir / "hero-video-web.webm")])
-    run(["-frames:v", "1", "-q:v", "3", str(out_dir / "hero-poster.jpg")])
-    run(["-frames:v", "1", "-c:v", "libwebp", "-quality", "82", str(out_dir / "hero-poster.webp")])
+    run(["-frames:v", "1", "-vf", f"scale={FW}:{FH}:flags=lanczos", "-q:v", "3", str(out_dir / "hero-poster.jpg")])
+    run(["-frames:v", "1", "-vf", f"scale={FW}:{FH}:flags=lanczos", "-c:v", "libwebp", "-quality", "82", str(out_dir / "hero-poster.webp")])
     for p in out_dir.glob("_vp9pass*"):
         p.unlink()
     tmp.unlink()

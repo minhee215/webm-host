@@ -10,6 +10,8 @@ HNK ENG 무드보드(AI · ROBOTICS · AUTOMATION / Engineering a Smarter Tomorr
 | `stills/01~05.jpg` | 장면별 실사풍 스틸 (GPT Image 2.6, 2688×1520에서 JPG 변환) |
 | `clips/01~05.mp4` | 스틸을 첫 프레임으로 생성한 5초 동작 클립 (Kling 3.0 Standard, 720p 24fps, 무음) |
 | `build/edit.py` | 편집·색보정·그레인·인코딩 스크립트 (Pillow/NumPy + FFmpeg) |
+| `build/stabilize.py` | 서브픽셀 위상상관 기반 손떨림 보정 (생성 클립의 미세 흔들림 제거) |
+| `build/dashboard.py` | 4번 대시보드 장면: 스틸 기반, KPI 숫자를 Inter Display로 다시 조판하고 매끄러운 디지털 카메라 무빙 적용 |
 | `dist/hero-video.mp4` | 마스터 H.264 (샘플 854×480) |
 | `dist/hero-video-web.mp4` | 웹용 H.264 (샘플 854×480) |
 | `dist/hero-video-web.webm` | 웹용 VP9 (샘플 854×480) |
@@ -22,9 +24,9 @@ HNK ENG 무드보드(AI · ROBOTICS · AUTOMATION / Engineering a Smarter Tomorr
 
 | 구간 | 장면 | 무드보드 항목 | 동작 / 카메라 |
 |---|---|---|---|
-| 0.00–3.58 | 01 | AMR 자율주행로봇 | AMR이 상자를 싣고 주행, 배경 로봇 작업 / 로우앵글 트래킹 |
-| 3.58–7.21 | 02 | 데이터 센터 | 서버 LED 점멸 / 통로를 따라 전진 |
-| 7.21–10.79 | 03 | MCC 제어반 | 표시등 점멸, HMI 갱신 / 패널을 따라 측면 이동 |
+| 0.00–3.83 | 01 | AMR 자율주행로봇 | AMR이 상자를 싣고 주행, 배경 로봇 작업 / 로우앵글 트래킹 |
+| 3.83–7.62 | 02 | 데이터 센터 | 서버 LED 점멸 / 통로를 따라 전진 |
+| 7.62–11.50 | 03 | MCC 제어반 | 표시등 점멸, HMI 갱신 / 패널을 따라 측면 이동 |
 | 10.79–14.42 | 04 | 현장설비 소프트웨어(대시보드) | 디지털 트윈 회전, KPI·그래프 갱신 / 모니터로 푸시 인 |
 | 14.42–18.00 | 05 | 사람이 제어하는 모습 | 엔지니어(뒷모습)가 태블릿 조작, 로봇 라인 가동 / 어깨 너머로 전진 |
 

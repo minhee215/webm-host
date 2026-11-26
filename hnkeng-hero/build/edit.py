@@ -15,6 +15,9 @@ Input : clips/NN.mp4 (Kling 3.0, 720p 24 fps) animated from stills/NN.jpg
 Output: dist/ — hero-video.mp4, hero-video-web.mp4/.webm, hero-video-mobile.mp4,
         hero-poster.jpg/.webp  (default 854x480 sample)
 
+Camera jitter in the generated clips is removed with a sub-pixel stabiliser;
+the dashboard shot is rendered from its still so the numbers stay crisp.
+
 Usage:  python3 build/edit.py [--width 1280 --height 720]
 """
 import argparse
@@ -24,20 +27,23 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+import dashboard
+from stabilize import stabilize, jitter
+
 ROOT = Path(__file__).resolve().parent.parent
 CLIPS = ROOT / "clips"
 FPS = 24
 SRC_W, SRC_H = 1280, 720
 
-# (clip, first source frame, frames, zoom start, zoom end, x-bias)
-# x-bias: 0 = crop anchored left (pushes the subject right, away from the
-# hero text), 0.5 = centred, 1 = anchored right.
+# (source, first source frame, frames)
+# source "dash" = scene 4 rendered from the still (crisp digits, see dashboard.py);
+# every generated clip is stabilised (see stabilize.py) before trimming.
 SHOTS = [
-    ("01", 10, 90, 1.00, 1.03, 0.6),   # AMR in a bright automated plant
-    ("02", 10, 88, 1.00, 1.03, 0.5),   # data center aisle
-    ("03", 10, 87, 1.00, 1.03, 0.6),   # MCC / PLC panel row
-    ("04",  0, 79, 1.00, 1.04, 0.6),   # monitoring dashboard, digital twin (cut before model drift)
-    ("05", 15, 88, 1.00, 1.03, 0.6),   # engineer from behind, tablet, robots ahead
+    ("01",   10, 92),   # AMR in a bright automated plant
+    ("02",   10, 91),   # data center aisle
+    ("03",   10, 93),   # MCC / PLC panel row
+    ("dash",  0, 79),   # monitoring dashboard, digital twin, live KPI digits
+    ("05",    0, 77),   # engineer from behind, tablet held steady (cut before the swipe)
 ]
 
 
@@ -79,7 +85,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--width", type=int, default=854)
     ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--grain", type=float, default=1.2)
+    ap.add_argument("--grain", type=float, default=0.8)
     ap.add_argument("--out", default="dist")
     args = ap.parse_args()
     FW, FH = args.width, args.height     # final size
@@ -94,19 +100,20 @@ def main():
         "-c:v", "ffv1", "-level", "3", "-pix_fmt", "bgr0", str(tmp)], stdin=subprocess.PIPE)
     rng = np.random.default_rng(7)
     t = 0
-    for clip, src_in, frames, z0, z1, xb in SHOTS:
-        print(f"{t / FPS:6.2f}s  shot {clip}  {frames / FPS:.2f}s")
-        for i, fr in enumerate(read_frames(CLIPS / f"{clip}.mp4", src_in, frames)):
-            u = i / max(frames - 1, 1)
-            u = u * u * (3 - 2 * u) * 0.35 + u * 0.65                 # mostly linear, soft ends
-            z = z0 + (z1 - z0) * u
-            cw, ch = SRC_W / z, SRC_H / z
-            x0 = (SRC_W - cw) * xb
-            y0 = (SRC_H - ch) * 0.5
-            img = Image.fromarray(grade(fr)).transform(
-                (OW, OH), Image.Transform.AFFINE, (cw / OW, 0, x0, 0, ch / OH, y0),
-                resample=Image.Resampling.BICUBIC)
-            arr = np.asarray(img).astype(np.float32)
+    for clip, src_in, frames in SHOTS:
+        if clip == "dash":
+            seq = dashboard.render(frames, OW, OH)
+            note = "rendered from still"
+        else:
+            raw = list(read_frames(CLIPS / f"{clip}.mp4", 0, 121))
+            j0 = jitter(raw)
+            st, _, _ = stabilize(raw)
+            j1 = jitter(st)
+            seq = st[src_in:src_in + frames]
+            note = f"jitter {j0[0]:.2f}px -> {j1[0]:.2f}px RMS"
+        print(f"{t / FPS:6.2f}s  shot {clip}  {frames / FPS:.2f}s  ({note})")
+        for fr in seq:
+            arr = grade(fr).astype(np.float32)
             if args.grain > 0:
                 arr += rng.normal(0, args.grain, (OH, OW, 1)).astype(np.float32)
             ff.stdin.write(np.clip(arr + 0.5, 0, 255).astype(np.uint8).tobytes())

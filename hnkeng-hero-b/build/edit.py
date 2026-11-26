@@ -15,8 +15,8 @@ Input : clips/NN.mp4 (Kling 3.0, 720p 24 fps) animated from stills/NN.jpg
 Generated clips are stabilised (stabilize.py) and get a gentle constant-speed
 digital move along their own direction in the same resample.
 
-Usage:  python3 build/edit.py              # 854x480 sample
-        python3 build/edit.py --width 1280 --height 720
+Usage:  python3 build/edit.py              # 1280x720 (default)
+        python3 build/edit.py --width 854 --height 480   # 480p sample
 """
 import argparse
 import subprocess
@@ -78,8 +78,8 @@ def read_frames(path, start, count):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--width", type=int, default=854)
-    ap.add_argument("--height", type=int, default=480)
+    ap.add_argument("--width", type=int, default=1280)
+    ap.add_argument("--height", type=int, default=720)
     ap.add_argument("--grain", type=float, default=0.8)
     ap.add_argument("--out", default="dist")
     args = ap.parse_args()

@@ -30,6 +30,6 @@
 
 ```bash
 pip install pillow numpy
-python3 build/edit.py                              # 854x480 샘플 (기본)
-python3 build/edit.py --width 1280 --height 720    # 720p
+python3 build/edit.py                              # 1280x720 (기본)
+python3 build/edit.py --width 854 --height 480     # 480p 샘플
 ```

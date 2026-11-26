@@ -70,21 +70,35 @@ def _gauss_smooth(x, sigma):
     return np.convolve(np.pad(x, r, mode="edge"), k, "valid")
 
 
-def stabilize(frames, sigma=10.0, margin=1.04):
-    """Remove high-frequency camera jitter; keep the smooth intended move.
-    margin: fixed zoom so corrections never expose the frame edge."""
+def stabilize(frames, sigma=10.0, margin=1.04, start=0, count=None, move=(1.0, 1.0, 0.0, 0.0)):
+    """Remove high-frequency camera jitter, keep the smooth intended move, and
+    optionally add a constant-speed digital camera move on top — all in one
+    resample. Returns only frames[start:start+count].
+
+    margin: fixed zoom so corrections never expose the frame edge.
+    move:   (start zoom, end zoom, end pan x, end pan y), linear over the window;
+            pan is a fraction of the spare margin (-1..1, + = view moves right/down).
+    """
     m = motion(frames)
     path = np.cumsum(m, axis=0)                     # x, y, log-zoom
     smooth = np.stack([_gauss_smooth(path[:, i], sigma) for i in range(3)], 1)
     corr = smooth - path                             # what to add back
     h, w = frames[0].shape[:2]
+    count = len(frames) - start if count is None else count
+    z0f, z1f, px, py = move
     out = []
-    for f, (cx, cy, cz) in zip(frames, corr):
-        z = margin * np.exp(cz)
-        # output pixel (u,v) samples input at centre + (u-centre)/z - shift
+    for k in range(count):
+        f = frames[start + k]
+        cx, cy, cz = corr[start + k]
+        u = k / max(count - 1, 1)
+        ez = z0f + (z1f - z0f) * u
+        z = margin * np.exp(cz) * ez
+        spare_x = (w - w / (margin * ez)) / 2 - 2.0     # keep room for jitter correction
+        spare_y = (h - h / (margin * ez)) / 2 - 2.0
+        ox, oy = px * u * spare_x, py * u * spare_y
         a = 1 / z
-        tx = w / 2 - a * w / 2 - cx
-        ty = h / 2 - a * h / 2 - cy
+        tx = w / 2 - a * w / 2 - cx + ox
+        ty = h / 2 - a * h / 2 - cy + oy
         img = Image.fromarray(f).transform((w, h), Image.Transform.AFFINE, (a, 0, tx, 0, a, ty),
                                            resample=Image.Resampling.BICUBIC)
         out.append(np.asarray(img))

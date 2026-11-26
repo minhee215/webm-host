@@ -117,8 +117,8 @@ def render(n_frames, out_w=1280, out_h=720):
         # smooth push-in toward the monitor (ease-in-out, sub-pixel)
         u = i / max(n_frames - 1, 1)
         u = u * u * (3 - 2 * u) * 0.5 + u * 0.5
-        z = 1.0 + 0.08 * u
-        cx = W * (0.50 + 0.06 * u)
+        z = 1.0 + 0.095 * u
+        cx = W * (0.50 + 0.065 * u)
         cy = H * 0.50
         cw, ch = W / z, H / z
         x0 = min(max(cx - cw / 2, 0), W - cw)

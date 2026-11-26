@@ -35,15 +35,18 @@ CLIPS = ROOT / "clips"
 FPS = 24
 SRC_W, SRC_H = 1280, 720
 
-# (source, first source frame, frames)
+# (source, first source frame, frames, extra camera move)
 # source "dash" = scene 4 rendered from the still (crisp digits, see dashboard.py);
 # every generated clip is stabilised (see stabilize.py) before trimming.
+# extra camera move = (start zoom, end zoom, end pan x, end pan y), constant speed,
+# added in the direction each clip already travels so the camera reads ~30 %
+# faster without speeding up the machines themselves.
 SHOTS = [
-    ("01",   10, 92),   # AMR in a bright automated plant
-    ("02",   10, 91),   # data center aisle
-    ("03",   10, 93),   # MCC / PLC panel row
-    ("dash",  0, 79),   # monitoring dashboard, digital twin, live KPI digits
-    ("05",    0, 77),   # engineer from behind, tablet held steady (cut before the swipe)
+    ("01",   10, 92, (1.09, 1.00, -0.60, 0.0)),   # AMR — camera pulls back & left, a bit faster
+    ("02",   10, 91, (1.00, 1.12,  0.00, 0.0)),   # data center — dolly forward, faster
+    ("03",   10, 93, (1.03, 1.03, -0.42, 0.0)),   # MCC row — camera trucks left, faster
+    ("dash",  0, 79, None),                        # dashboard — digital push (dashboard.py)
+    ("05",    0, 77, (1.00, 1.025, 0.08, 0.04)),  # engineer — push in over the shoulder
 ]
 
 
@@ -100,16 +103,16 @@ def main():
         "-c:v", "ffv1", "-level", "3", "-pix_fmt", "bgr0", str(tmp)], stdin=subprocess.PIPE)
     rng = np.random.default_rng(7)
     t = 0
-    for clip, src_in, frames in SHOTS:
+    for clip, src_in, frames, move in SHOTS:
         if clip == "dash":
             seq = dashboard.render(frames, OW, OH)
             note = "rendered from still"
         else:
             raw = list(read_frames(CLIPS / f"{clip}.mp4", 0, 121))
             j0 = jitter(raw)
-            st, _, _ = stabilize(raw)
-            j1 = jitter(st)
-            seq = st[src_in:src_in + frames]
+            plain, _, _ = stabilize(raw, start=src_in, count=frames)
+            j1 = jitter(plain)
+            seq, _, _ = stabilize(raw, start=src_in, count=frames, move=move)
             note = f"jitter {j0[0]:.2f}px -> {j1[0]:.2f}px RMS"
         print(f"{t / FPS:6.2f}s  shot {clip}  {frames / FPS:.2f}s  ({note})")
         for fr in seq:

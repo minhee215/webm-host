@@ -1,7 +1,7 @@
 # HNKENG 메인 히어로 배경 영상 (2026 리뉴얼, 무드보드 v4)
 
 HNK ENG 무드보드(AI · ROBOTICS · AUTOMATION / Engineering a Smarter Tomorrow)의 핵심 이미지 5종을 실사풍 18초 영상으로 만들었습니다.
-인물은 뒷모습으로만 등장하고, 텍스트·로고는 HTML로 분리했습니다. 현재 출력은 480p 샘플입니다.
+인물은 뒷모습으로만 등장하고, 텍스트·로고는 HTML로 분리했습니다. 현재 출력은 720p입니다.
 
 ## 폴더 구성
 
@@ -12,10 +12,10 @@ HNK ENG 무드보드(AI · ROBOTICS · AUTOMATION / Engineering a Smarter Tomorr
 | `build/edit.py` | 편집·색보정·그레인·인코딩 스크립트 (Pillow/NumPy + FFmpeg) |
 | `build/stabilize.py` | 서브픽셀 위상상관 기반 손떨림 보정 (생성 클립의 미세 흔들림 제거) |
 | `build/dashboard.py` | 4번 대시보드 장면: 스틸 기반, KPI 숫자를 Inter Display로 다시 조판하고 매끄러운 디지털 카메라 무빙 적용 |
-| `dist/hero-video.mp4` | 마스터 H.264 (샘플 854×480) |
-| `dist/hero-video-web.mp4` | 웹용 H.264 (샘플 854×480) |
-| `dist/hero-video-web.webm` | 웹용 VP9 (샘플 854×480) |
-| `dist/hero-video-mobile.mp4` | 모바일용 H.264 640×360 (767px 이하에서 자동 선택) |
+| `dist/hero-video.mp4` | 마스터 H.264 1280×720 (12.6MB) |
+| `dist/hero-video-web.mp4` | 웹용 H.264 1280×720 (3.8MB) |
+| `dist/hero-video-web.webm` | 웹용 VP9 1280×720 (3.6MB) |
+| `dist/hero-video-mobile.mp4` | 모바일용 H.264 640×360 (1.3MB, 767px 이하에서 자동 선택) |
 | `dist/hero-poster.jpg / .webp` | 첫 프레임 포스터 |
 | `component/hero-section.html` | 아임웹 코드 위젯용 반응형 히어로 컴포넌트 |
 | `index.html` | 미리보기 페이지 |
@@ -36,8 +36,8 @@ HNK ENG 무드보드(AI · ROBOTICS · AUTOMATION / Engineering a Smarter Tomorr
 
 ```bash
 pip install pillow numpy
-python3 build/edit.py                              # 854x480 샘플
-python3 build/edit.py --width 1280 --height 720    # 720p
+python3 build/edit.py                              # 1280x720 (기본)
+python3 build/edit.py --width 854 --height 480     # 480p 샘플
 ```
 
 컷 길이와 시작 프레임은 `build/edit.py`의 `SHOTS` 표에서 조정합니다. 1080p 본편은 클립을 Kling Pro 등 1080p로 다시 생성한 뒤 `--width 1920 --height 1080`으로 렌더링합니다.

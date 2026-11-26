@@ -13,12 +13,12 @@ People never show their faces. Cool blue-white industrial light, hard cuts,
 
 Input : clips/NN.mp4 (Kling 3.0, 720p 24 fps) animated from stills/NN.jpg
 Output: dist/ — hero-video.mp4, hero-video-web.mp4/.webm, hero-video-mobile.mp4,
-        hero-poster.jpg/.webp  (default 854x480 sample)
+        hero-poster.jpg/.webp  (default 1280x720)
 
 Camera jitter in the generated clips is removed with a sub-pixel stabiliser;
 the dashboard shot is rendered from its still so the numbers stay crisp.
 
-Usage:  python3 build/edit.py [--width 1280 --height 720]
+Usage:  python3 build/edit.py [--width 854 --height 480]
 """
 import argparse
 import subprocess
@@ -86,8 +86,8 @@ def read_frames(path, start, count):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--width", type=int, default=854)
-    ap.add_argument("--height", type=int, default=480)
+    ap.add_argument("--width", type=int, default=1280)
+    ap.add_argument("--height", type=int, default=720)
     ap.add_argument("--grain", type=float, default=0.8)
     ap.add_argument("--out", default="dist")
     args = ap.parse_args()
@@ -135,10 +135,10 @@ def main():
 
     run(["-vf", vf, "-c:v", "libx264", "-preset", "slow", "-crf", "17", "-profile:v", "high",
          "-level", "4.0", *gop, *color, "-movflags", "+faststart", "-an", str(out_dir / "hero-video.mp4")])
-    run(["-vf", vf, "-c:v", "libx264", "-preset", "veryslow", "-crf", "24", "-maxrate", "1.6M",
-         "-bufsize", "2M", "-profile:v", "high", "-level", "4.0", *gop, *color,
+    run(["-vf", vf, "-c:v", "libx264", "-preset", "veryslow", "-crf", "24", "-maxrate", "1.6M" if FW <= 1000 else "2.8M",
+         "-bufsize", "2M" if FW <= 1000 else "3.4M", "-profile:v", "high", "-level", "4.0", *gop, *color,
          "-movflags", "+faststart", "-an", str(out_dir / "hero-video-web.mp4")])
-    run(["-vf", "scale=640:360:flags=lanczos," + vf, "-c:v", "libx264", "-preset", "veryslow",
+    run(["-vf", "scale=640:360:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuv420p", "-c:v", "libx264", "-preset", "veryslow",
          "-crf", "25", "-maxrate", "1M", "-bufsize", "1.2M", "-profile:v", "main", *gop, *color,
          "-movflags", "+faststart", "-an", str(out_dir / "hero-video-mobile.mp4")])
     passlog = str(out_dir / "_vp9pass")
